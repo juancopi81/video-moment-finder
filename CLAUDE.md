@@ -54,3 +54,8 @@ python --version  # Must be 3.11+
 - YouTube videos only (MVP)
 - Max 30-minute videos
 - Credit-based pricing model
+
+## Project Planning
+
+- **ROADMAP.md**: Phased development plan with gates
+- **STATUS.md**: Progress tracking and metrics
