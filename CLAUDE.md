@@ -42,11 +42,19 @@ Next.js → FastAPI → Modal (GPU)
 ## Development Commands
 
 ```bash
+# Package manager: uv (not pip)
+uv add <package>          # Add dependencies
+uv run <command>          # Run commands in the virtual environment
+
 # Run the main entry point
-python main.py
+uv run python main.py
 
 # Python version requirement
 python --version  # Must be 3.11+
+
+# Modal CLI (after adding modal)
+uv run modal setup        # Authenticate with Modal
+uv run modal run --help   # Test Modal CLI
 ```
 
 ## Key Constraints
