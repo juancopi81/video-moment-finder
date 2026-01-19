@@ -59,3 +59,10 @@ python --version  # Must be 3.11+
 
 - **ROADMAP.md**: Phased development plan with gates
 - **STATUS.md**: Progress tracking and metrics
+
+## Workflow
+
+After completing significant work, update STATUS.md with:
+- Progress log entry (date, phase, task, status, notes)
+- Any new blockers or decisions
+- Metrics if measured during the task

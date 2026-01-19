@@ -7,7 +7,9 @@
 
 | Date | Phase | Task | Status | Notes |
 |------|-------|------|--------|-------|
-| - | - | - | - | - |
+| 2026-01-19 | Setup | Create ROADMAP.md | Done | Phased plan with gates |
+| 2026-01-19 | Setup | Create STATUS.md | Done | Progress tracking |
+| 2026-01-19 | Setup | Update README.md & CLAUDE.md | Done | Added doc links |
 
 ## Blockers
 None yet.
