@@ -32,14 +32,12 @@ def smoke_test():
 
     import torch
     import torch.nn.functional as F
-    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder
+    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     t0 = time.perf_counter()
     model_name_or_path = "Qwen/Qwen3-VL-Embedding-2B"
     model = Qwen3VLEmbedder(model_name_or_path=model_name_or_path)
     load_s = time.perf_counter() - t0
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     inputs = [
         {"text": "a person holding a phone"},
