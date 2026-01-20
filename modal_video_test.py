@@ -10,7 +10,6 @@ Then run:
     uv run modal run modal_video_test.py --max-frames 100
 """
 
-import os
 from pathlib import Path
 
 import modal
@@ -122,7 +121,7 @@ def process_video_test(max_frames: int = 100) -> dict:
 
     import torch
     from PIL import Image
-    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder
+    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     total_start = time.perf_counter()
 
@@ -170,7 +169,13 @@ def process_video_test(max_frames: int = 100) -> dict:
             print(f"  Embedded {i + 1}/{len(frames_to_embed)} frames...")
 
     # Stack all embeddings
-    embeddings = torch.cat([torch.tensor(e) if not isinstance(e, torch.Tensor) else e for e in all_embeddings], dim=0)
+    embeddings = torch.cat(
+        [
+            torch.tensor(e) if not isinstance(e, torch.Tensor) else e
+            for e in all_embeddings
+        ],
+        dim=0,
+    )
 
     embed_time_total = time.perf_counter() - embed_start
     embed_time_per_frame = embed_time_total / len(frames_to_embed)
@@ -236,10 +241,12 @@ def main(max_frames: int = 100):
     if not LOCAL_VIDEO_PATH.exists():
         print("ERROR: No test video found!")
         print("Download a video first:")
-        print('  uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "YOUTUBE_URL"')
+        print(
+            '  uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "YOUTUBE_URL"'
+        )
         return
 
-    print(f"Starting video processing test...")
+    print("Starting video processing test...")
     print(f"Using video: {LOCAL_VIDEO_PATH}")
     print(f"Max frames: {max_frames}")
     print()
