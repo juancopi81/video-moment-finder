@@ -12,4 +12,6 @@ dependencies = [
     "pillow",
     "torch",
     "torchvision",
+    "yt-dlp>=2025.12.8",
+    "opencv-python>=4.13.0.90",
 ]
