@@ -1,0 +1,67 @@
+{
+  "video_id": "RmXOoJXBYLk",
+  "video_url": "https://www.youtube.com/watch?v=RmXOoJXBYLk",
+  "description": "Reachy humanoid robot unboxing video (~32s)",
+  "queries": [
+    {
+      "id": 1,
+      "query": "An elevator",
+      "timestamp_s": 2,
+      "tolerance_s": 3
+    },
+    {
+      "id": 2,
+      "query": "Two people unpacking a large box",
+      "timestamp_s": 6,
+      "tolerance_s": 3
+    },
+    {
+      "id": 3,
+      "query": "Four people lifting a large object out of a wooden crate",
+      "timestamp_s": 20,
+      "tolerance_s": 3
+    },
+    {
+      "id": 4,
+      "query": "A hand adjusting the antennas of a humanoid robot wearing a striped shirt",
+      "timestamp_s": 27,
+      "tolerance_s": 3
+    },
+    {
+      "id": 5,
+      "query": "A humanoid robot in a blue hoodie",
+      "timestamp_s": 32,
+      "tolerance_s": 3
+    },
+    {
+      "id": 6,
+      "query": "Two men near a wooden crate, one holding a red pry bar",
+      "timestamp_s": 15,
+      "tolerance_s": 3
+    },
+    {
+      "id": 7,
+      "query": "A humanoid robot in a striped tank top inside a foam mold in a shipping crate",
+      "timestamp_s": 18,
+      "tolerance_s": 3
+    },
+    {
+      "id": 8,
+      "query": "Two men positioning a humanoid robot on its base",
+      "timestamp_s": 25,
+      "tolerance_s": 3
+    },
+    {
+      "id": 9,
+      "query": "A humanoid robot with a colorful hexagonal logo on its chest",
+      "timestamp_s": 29,
+      "tolerance_s": 3
+    },
+    {
+      "id": 10,
+      "query": "Text overlay saying \"Unboxing: Humanoider Roboter Reachy\"",
+      "timestamp_s": 0,
+      "tolerance_s": 3
+    }
+  ]
+}
