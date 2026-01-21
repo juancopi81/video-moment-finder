@@ -15,6 +15,7 @@
 | 2026-01-21 | Phase 0 | 0.3 Vector Search Validation | Done | **GATE PASSED.** Recall@5 = 90% (9/10 queries). In-memory Qdrant validated. |
 | 2026-01-21 | Phase 1 | 1.1 Video Download Module | Done | Added fail-fast yt-dlp wrapper in src/video. |
 | 2026-01-21 | Phase 1 | 1.2 Frame Extraction Module | Done | Added fail-fast ffmpeg wrapper with timestamps + thumbnails; refactored tests to use it. |
+| 2026-01-21 | Phase 1 | 1.3 Batch Embedding Pipeline | Done | Modal-only validation passed with batch=8. |
 
 ## Blockers
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
