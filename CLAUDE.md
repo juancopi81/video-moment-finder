@@ -65,6 +65,7 @@ uv run modal run --help   # Test Modal CLI
 
 ## Project Planning
 
+- **PROJECT_SPEC.md**: Project specifications
 - **ROADMAP.md**: Phased development plan with gates
 - **STATUS.md**: Progress tracking and metrics
 
