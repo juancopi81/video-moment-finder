@@ -7,12 +7,14 @@ Due to YouTube bot detection on cloud IPs, download the video locally first:
     uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "YOUTUBE_URL"
 
 Then run:
-    uv run modal run modal_video_test.py --max-frames 100
+    uv run modal run scripts/phase0/modal_video_test.py --max-frames 100
 """
 
 from pathlib import Path
 
 import modal
+
+from src.video.frames import extract_frames
 
 APP_NAME = "video-moment-finder-video-test"
 APP_PATH = Path("/root/app")
@@ -33,12 +35,13 @@ base_image = (
     .workdir(APP_PATH)
     .add_local_file("pyproject.toml", str(APP_PATH / "pyproject.toml"), copy=True)
     .add_local_file("uv.lock", str(APP_PATH / "uv.lock"), copy=True)
+    .add_local_dir("src", str(APP_PATH / "src"), copy=True)
     .env({"UV_PROJECT_ENVIRONMENT": "/usr/local"})
     .run_commands(
         "uv sync --frozen --compile-bytecode --python-preference=only-system",
         "git clone --depth 1 https://github.com/QwenLM/Qwen3-VL-Embedding.git /root/qwen3-vl-embedding",
     )
-    .env({"PYTHONPATH": "/root/qwen3-vl-embedding"})
+    .env({"PYTHONPATH": "/root/qwen3-vl-embedding/src"})
 )
 
 # Add video file if it exists
@@ -75,37 +78,6 @@ def get_video_duration(video_path: Path) -> float:
     return float(data["format"]["duration"])
 
 
-def extract_frames(
-    video_path: Path, output_dir: Path, fps: int = 1
-) -> tuple[list[Path], float]:
-    """Extract frames at specified fps. Returns (frame_paths, extraction_time)."""
-    import subprocess
-    import time
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_pattern = str(output_dir / "frame_%05d.jpg")
-
-    t0 = time.perf_counter()
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-i",
-            str(video_path),
-            "-vf",
-            f"fps={fps}",
-            "-q:v",
-            "2",  # High quality JPEG
-            output_pattern,
-        ],
-        check=True,
-        capture_output=True,
-    )
-    extraction_time = time.perf_counter() - t0
-
-    frame_paths = sorted(output_dir.glob("frame_*.jpg"))
-    return frame_paths, extraction_time
-
-
 @app.function(image=image, gpu="A10G", timeout=1800)
 def process_video_test(max_frames: int = 100) -> dict:
     """
@@ -121,7 +93,7 @@ def process_video_test(max_frames: int = 100) -> dict:
 
     import torch
     from PIL import Image
-    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     total_start = time.perf_counter()
 
@@ -141,8 +113,11 @@ def process_video_test(max_frames: int = 100) -> dict:
     # Step 1: Extract frames at 1 fps
     print("Extracting frames at 1 fps...")
     frames_dir = Path("/tmp/frames")
-    frame_paths, extraction_time = extract_frames(video_path, frames_dir, fps=1)
-    total_frames = len(frame_paths)
+    extraction_start = time.perf_counter()
+    frames = extract_frames(video_path, frames_dir, fps=1)
+    extraction_time = time.perf_counter() - extraction_start
+    frame_paths = [f.path for f in frames]
+    total_frames = len(frames)
     print(f"Extracted {total_frames} frames in {extraction_time:.2f}s")
 
     # Limit frames for embedding test
@@ -236,7 +211,7 @@ def main(max_frames: int = 100):
     Download first with: uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "URL"
 
     Usage:
-        uv run modal run modal_video_test.py --max-frames 100
+        uv run modal run scripts/phase0/modal_video_test.py --max-frames 100
     """
     if not LOCAL_VIDEO_PATH.exists():
         print("ERROR: No test video found!")

@@ -1,7 +1,7 @@
 # Video Moment Finder - Status
 
 ## Current Phase
-**Phase 0: Core Validation** - In Progress
+**Phase 1: Processing Pipeline** - In Progress
 
 ## Progress Log
 
@@ -13,6 +13,8 @@
 | 2026-01-20 | Phase 0 | 0.1 Modal + Qwen3 Setup | Done | A10G smoke test OK. Qwen3-VL-Embedding-2B loads and embeds text+image. |
 | 2026-01-20 | Phase 0 | 0.2 Video Processing Test | Done | **GATE PASSED.** Initial: 0.766s/frame (batch=1). Later optimized to 0.146s/frame (batch=8). |
 | 2026-01-21 | Phase 0 | 0.3 Vector Search Validation | Done | **GATE PASSED.** Recall@5 = 90% (9/10 queries). In-memory Qdrant validated. |
+| 2026-01-21 | Phase 1 | 1.1 Video Download Module | Done | Added fail-fast yt-dlp wrapper in src/video. |
+| 2026-01-21 | Phase 1 | 1.2 Frame Extraction Module | Done | Added fail-fast ffmpeg wrapper with timestamps + thumbnails; refactored tests to use it. |
 
 ## Blockers
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.

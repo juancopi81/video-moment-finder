@@ -7,7 +7,7 @@ Due to YouTube bot detection on cloud IPs, download the video locally first:
     uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "https://www.youtube.com/watch?v=RmXOoJXBYLk"
 
 Then run:
-    uv run modal run modal_search_test.py
+    uv run modal run scripts/phase0/modal_search_test.py
 
 Gate: >70% of queries should return the correct frame in top 5 results.
 """
@@ -16,6 +16,8 @@ import json
 from pathlib import Path
 
 import modal
+
+from src.video.frames import extract_frames
 
 APP_NAME = "video-moment-finder-search-test"
 APP_PATH = Path("/root/app")
@@ -35,6 +37,7 @@ base_image = (
     .workdir(APP_PATH)
     .add_local_file("pyproject.toml", str(APP_PATH / "pyproject.toml"), copy=True)
     .add_local_file("uv.lock", str(APP_PATH / "uv.lock"), copy=True)
+    .add_local_dir("src", str(APP_PATH / "src"), copy=True)
     .add_local_file(
         str(LOCAL_GROUND_TRUTH_PATH.resolve()),
         remote_path=str(GROUND_TRUTH_PATH),
@@ -45,7 +48,7 @@ base_image = (
         "uv sync --frozen --compile-bytecode --python-preference=only-system",
         "git clone --depth 1 https://github.com/QwenLM/Qwen3-VL-Embedding.git /root/qwen3-vl-embedding",
     )
-    .env({"PYTHONPATH": "/root/qwen3-vl-embedding"})
+    .env({"PYTHONPATH": "/root/qwen3-vl-embedding/src"})
 )
 
 # Add video file if it exists
@@ -55,37 +58,6 @@ if LOCAL_VIDEO_PATH.exists():
     )
 else:
     image = base_image
-
-
-def extract_frames(
-    video_path: Path, output_dir: Path, fps: int = 1
-) -> tuple[list[Path], float]:
-    """Extract frames at specified fps. Returns (frame_paths, extraction_time)."""
-    import subprocess
-    import time
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_pattern = str(output_dir / "frame_%05d.jpg")
-
-    t0 = time.perf_counter()
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-i",
-            str(video_path),
-            "-vf",
-            f"fps={fps}",
-            "-q:v",
-            "2",
-            output_pattern,
-        ],
-        check=True,
-        capture_output=True,
-    )
-    extraction_time = time.perf_counter() - t0
-
-    frame_paths = sorted(output_dir.glob("frame_*.jpg"))
-    return frame_paths, extraction_time
 
 
 @app.function(image=image, gpu="A10G", timeout=1800)
@@ -105,7 +77,7 @@ def search_validation_test() -> dict:
     from PIL import Image
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, PointStruct, VectorParams
-    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     total_start = time.perf_counter()
 
@@ -126,7 +98,10 @@ def search_validation_test() -> dict:
     # Step 1: Extract frames
     print("\n=== Step 1: Extracting frames ===")
     frames_dir = Path("/tmp/frames")
-    frame_paths, extraction_time = extract_frames(VIDEO_PATH, frames_dir, fps=1)
+    extraction_start = time.perf_counter()
+    frames = extract_frames(VIDEO_PATH, frames_dir, fps=1)
+    extraction_time = time.perf_counter() - extraction_start
+    frame_paths = [f.path for f in frames]
     print(f"Extracted {len(frame_paths)} frames in {extraction_time:.2f}s")
 
     # Step 2: Load embedding model
