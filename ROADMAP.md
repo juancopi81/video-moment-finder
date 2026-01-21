@@ -23,15 +23,15 @@
 - Calculate cost extrapolation for 30-min video
 
 ### 0.3 Search Quality Validation
-- Set up Qdrant Cloud (free tier)
-- Upload 100 frame embeddings
-- Test 10 text queries - record relevance scores
-- **Decision point**: Is search quality good enough?
+- Test with in-memory Qdrant (no external service needed for validation)
+- Embed all frames from test video
+- Test 10 ground truth queries - measure Recall@5
+- **Decision point**: Is search quality good enough? (Gate: >70%)
 
 ---
 
 ## Phase 1: Processing Pipeline
-**GATE**: Can process a 30-min video end-to-end, cost < $1
+**GATE**: Can process a 30-min video end-to-end, cost < $1 (Phase 0 validated ~$0.14)
 
 ### 1.1 Video Download Module
 - yt-dlp wrapper with error handling
@@ -44,7 +44,7 @@
 - Frame timestamp mapping
 
 ### 1.3 Batch Embedding Pipeline
-- Modal function for batch processing
+- Modal function for batch processing (batch=8 optimal, validated in Phase 0.3)
 - Progress tracking / status updates
 - Error recovery for failed frames
 
