@@ -162,7 +162,9 @@ def search_validation_test() -> dict:
             for emb in batch_embeddings:
                 embeddings.append(emb.tolist())
 
-            print(f"  Embedded {min(i + batch_size, len(frame_paths))}/{len(frame_paths)} frames (batch={batch_size})...")
+            print(
+                f"  Embedded {min(i + batch_size, len(frame_paths))}/{len(frame_paths)} frames (batch={batch_size})..."
+            )
 
         return embeddings, time.perf_counter() - t0
 
@@ -178,7 +180,9 @@ def search_validation_test() -> dict:
             print(f"Trying batch_size={batch_size}...")
             frame_embeddings, embed_time = embed_with_batch_size(batch_size)
             batch_size_used = batch_size
-            print(f"Embedded all frames in {embed_time:.2f}s with batch_size={batch_size}")
+            print(
+                f"Embedded all frames in {embed_time:.2f}s with batch_size={batch_size}"
+            )
             break
         except torch.cuda.OutOfMemoryError:
             print(f"OOM with batch_size={batch_size}, trying smaller batch...")
@@ -255,9 +259,7 @@ def search_validation_test() -> dict:
         result_timestamps = [r.payload["timestamp_s"] for r in search_response.points]
         result_scores = [r.score for r in search_response.points]
 
-        is_hit = any(
-            abs(ts - expected_ts) <= tolerance for ts in result_timestamps
-        )
+        is_hit = any(abs(ts - expected_ts) <= tolerance for ts in result_timestamps)
         if is_hit:
             hits += 1
 
@@ -273,11 +275,13 @@ def search_validation_test() -> dict:
         query_results.append(result)
 
         status = "HIT" if is_hit else "MISS"
-        print(f"  Q{query_id}: {status} - Expected: {expected_ts}s, Got: {result_timestamps}")
+        print(
+            f"  Q{query_id}: {status} - Expected: {expected_ts}s, Got: {result_timestamps}"
+        )
 
     # Calculate Recall@5
     recall_at_5 = hits / len(ground_truth["queries"])
-    print(f"\n=== Results ===")
+    print("=== Results ===")
     print(f"Hits: {hits}/{len(ground_truth['queries'])}")
     print(f"Recall@5: {recall_at_5:.1%}")
 
@@ -342,7 +346,9 @@ def main():
     print(f"Total frames: {results['total_frames']}")
     print(f"Embedding dimension: {results['embedding_dim']}")
     print(f"Batch size: {results['batch_size']}")
-    print(f"Embed time: {results['embed_time_s']:.2f}s ({results['embed_time_per_frame_s']:.3f}s/frame)")
+    print(
+        f"Embed time: {results['embed_time_s']:.2f}s ({results['embed_time_per_frame_s']:.3f}s/frame)"
+    )
     print(f"Total time: {results['total_time_s']:.2f}s")
     print()
     print(f"Queries: {results['total_queries']}")
@@ -357,7 +363,9 @@ def main():
         print(f"\nQ{qr['id']}: [{status}]")
         print(f"  Query: {qr['query']}")
         print(f"  Expected: {qr['expected_ts']}s (tolerance: +/-{qr['tolerance']}s)")
-        print(f"  Top 5 results: {qr['result_timestamps']} (scores: {[f'{s:.3f}' for s in qr['result_scores']]})")
+        print(
+            f"  Top 5 results: {qr['result_timestamps']} (scores: {[f'{s:.3f}' for s in qr['result_scores']]})"
+        )
 
     print("\n" + "=" * 60)
     if results["gate_passed"]:
