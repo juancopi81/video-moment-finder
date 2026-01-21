@@ -22,7 +22,7 @@ image = (
         # Bring the Qwen embedder script into PYTHONPATH (simple + reliable)
         "git clone --depth 1 https://github.com/QwenLM/Qwen3-VL-Embedding.git /root/qwen3-vl-embedding",
     )
-    .env({"PYTHONPATH": "/root/qwen3-vl-embedding"})
+    .env({"PYTHONPATH": "/root/qwen3-vl-embedding/src"})
 )
 
 
@@ -32,7 +32,7 @@ def smoke_test():
 
     import torch
     import torch.nn.functional as F
-    from src.models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     t0 = time.perf_counter()
     model_name_or_path = "Qwen/Qwen3-VL-Embedding-2B"
