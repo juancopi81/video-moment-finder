@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 test_video*
+
+# Environment variables
+.env

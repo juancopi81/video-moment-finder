@@ -17,6 +17,8 @@
 | 2026-01-21 | Phase 1 | 1.2 Frame Extraction Module | Done | Added fail-fast ffmpeg wrapper with timestamps + thumbnails; refactored tests to use it. |
 | 2026-01-21 | Phase 1 | 1.3 Batch Embedding Pipeline | Done | Modal-only validation passed with batch=8. |
 | 2026-01-22 | Phase 1 | Code cleanup | Done | Removed dead code, DRY refactor: -36 lines. Created src/utils/subprocess.py utility. |
+| 2026-01-22 | Phase 1 | 1.4 Storage Integration | Done | Added Qdrant + R2 storage modules, pipeline orchestrator, cleanup utils. Local test passed. |
+| 2026-01-22 | Phase 1 | 1.4 Storage Integration Tests | Done | Added unit tests for Qdrant/R2/cleanup/orchestrator. pytest: 16 passed. |
 
 ## Blockers
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
