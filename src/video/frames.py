@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
+from src.utils.subprocess import format_subprocess_error
+
 
 class FrameExtractionError(RuntimeError):
     """Raised when frame extraction fails."""
@@ -108,7 +110,5 @@ def _run_ffmpeg(cmd: list[str]) -> None:
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip()
-        stdout = exc.stdout.strip()
-        message = stderr or stdout or "ffmpeg failed with no output"
+        message = format_subprocess_error(exc, "ffmpeg failed with no output")
         raise FrameExtractionError(message) from exc

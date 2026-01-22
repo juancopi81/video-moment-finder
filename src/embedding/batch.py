@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from src.embedding.modal_app import embed_images_in_batches
 from src.video.frames import FrameInfo
 
@@ -14,7 +12,6 @@ def embed_frames(
     frames: list[FrameInfo],
     *,
     batch_size: int = 8,
-    on_progress: Callable[[int, int], None] | None = None,
 ) -> list[list[float]]:
     """
     Embed frames using Modal in fixed-size batches.
@@ -26,14 +23,11 @@ def embed_frames(
     """
     if not frames:
         raise EmbeddingError("frames must be a non-empty list")
-    if batch_size != 8:
-        raise ValueError("batch_size must be 8 (validated on A10G)")
 
     for frame in frames:
         if not frame.path.exists():
             raise EmbeddingError(f"Frame not found: {frame.path}")
 
-    total = len(frames)
     images = [frame.path.read_bytes() for frame in frames]
 
     try:
@@ -45,8 +39,5 @@ def embed_frames(
         raise EmbeddingError(
             f"Embedding count mismatch: {len(embeddings)} != {len(frames)}"
         )
-
-    if on_progress is not None:
-        on_progress(total, total)
 
     return embeddings

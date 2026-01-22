@@ -27,49 +27,6 @@ image = (
 )
 
 
-@app.function(image=image, gpu="A10G", timeout=1800)
-def embed_image_batch(images: list[bytes]) -> list[list[float]]:
-    """
-    Embed a batch of images on GPU and return normalized vectors.
-
-    Fail-fast behavior:
-    - Raises ValueError if images list is empty.
-    - Raises RuntimeError if embedding output size mismatches input.
-    """
-    if not images:
-        raise ValueError("images must be a non-empty list")
-
-    import torch
-    import torch.nn.functional as F
-    from PIL import Image
-    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
-
-    model = Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
-
-    pil_images = []
-    for img_bytes in images:
-        if not img_bytes:
-            raise ValueError("image bytes must be non-empty")
-        pil_images.append(Image.open(io.BytesIO(img_bytes)))
-
-    batch_input = [{"image": img} for img in pil_images]
-    batch_embeddings = model.process(batch_input)
-
-    if isinstance(batch_embeddings, torch.Tensor):
-        batch_embeddings = batch_embeddings.cpu()
-    else:
-        batch_embeddings = torch.tensor(batch_embeddings)
-
-    batch_embeddings = F.normalize(batch_embeddings.float(), dim=1)
-
-    if batch_embeddings.shape[0] != len(images):
-        raise RuntimeError(
-            f"Embedding count mismatch: {batch_embeddings.shape[0]} != {len(images)}"
-        )
-
-    return [emb.tolist() for emb in batch_embeddings]
-
-
 @app.function(image=image, timeout=1800)
 def extract_frame_bytes(
     video_bytes: bytes, *, fps: float = 1.0, max_frames: int = 64

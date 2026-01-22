@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
+from src.utils.subprocess import format_subprocess_error
+
 
 class DownloadError(RuntimeError):
     """Raised when yt-dlp fails to download a video."""
@@ -40,9 +42,7 @@ def download_video(
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip()
-        stdout = exc.stdout.strip()
-        message = stderr or stdout or "yt-dlp failed with no output"
+        message = format_subprocess_error(exc, "yt-dlp failed with no output")
         raise DownloadError(message) from exc
 
     matches = sorted(output_dir.glob(f"{output_basename}.*"))
