@@ -50,7 +50,7 @@ def _make_frames(tmp_path: Path, count: int) -> list[FrameInfo]:
 
 
 def test_process_video_in_memory_no_r2(tmp_path: Path) -> None:
-    config = QdrantConfig.in_memory_config(collection_name="orchestrator_test")
+    config = QdrantConfig.in_memory(collection_name="orchestrator_test")
     pipeline = StoragePipeline(config)
     pipeline.ensure_ready()
 
@@ -67,7 +67,7 @@ def test_process_video_in_memory_no_r2(tmp_path: Path) -> None:
 def test_process_video_with_r2_uploads(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("src.pipeline.orchestrator.R2Store", FakeR2Store)
 
-    qdrant_config = QdrantConfig.in_memory_config(collection_name="orchestrator_test_r2")
+    qdrant_config = QdrantConfig.in_memory(collection_name="orchestrator_test_r2")
     r2_config = R2Config(
         endpoint_url="https://r2.example.com",
         access_key_id="access",
@@ -91,7 +91,7 @@ def test_process_video_with_r2_uploads(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_process_video_cleanup_temp_dirs(tmp_path: Path) -> None:
-    config = QdrantConfig.in_memory_config(collection_name="orchestrator_cleanup")
+    config = QdrantConfig.in_memory(collection_name="orchestrator_cleanup")
     pipeline = StoragePipeline(config)
     pipeline.ensure_ready()
 
@@ -113,7 +113,7 @@ def test_process_video_cleanup_temp_dirs(tmp_path: Path) -> None:
 
 
 def test_process_video_mismatched_lengths_raises(tmp_path: Path) -> None:
-    config = QdrantConfig.in_memory_config(collection_name="orchestrator_mismatch")
+    config = QdrantConfig.in_memory(collection_name="orchestrator_mismatch")
     pipeline = StoragePipeline(config)
 
     frames = _make_frames(tmp_path, 2)

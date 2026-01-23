@@ -13,6 +13,7 @@ Usage:
     uv run python scripts/phase1/storage_integration_test.py
     uv run python scripts/phase1/storage_integration_test.py --max-frames 30
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,13 +22,17 @@ import tempfile
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from src.embedding.batch import embed_frames
+from src.embedding.modal_app import app
 from src.pipeline.orchestrator import StoragePipeline
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
 from src.video.frames import extract_frames
 
-
 LOCAL_VIDEO_PATH = Path("test_video.mp4")
+
+load_dotenv()
 
 
 def load_configs() -> tuple[QdrantConfig, R2Config | None]:
@@ -57,7 +62,9 @@ def main(max_frames: int = 30) -> None:
 
     if not LOCAL_VIDEO_PATH.exists():
         print(f"ERROR: No test video found at {LOCAL_VIDEO_PATH}")
-        print('Download a video first: uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "URL"')
+        print(
+            'Download a video first: uv run yt-dlp -f "best[height<=720]" -o "test_video.mp4" "URL"'
+        )
         sys.exit(1)
 
     # Load configs
@@ -94,7 +101,8 @@ def main(max_frames: int = 30) -> None:
         # Step 2: Embed frames
         print("\n2. Embedding frames (Modal GPU)...")
         start = time.time()
-        embeddings = embed_frames(frames, batch_size=8)
+        with app.run():
+            embeddings = embed_frames(frames, batch_size=8)
         embed_time = time.time() - start
         print(f"   Embedded {len(embeddings)} frames in {embed_time:.2f}s")
 
@@ -114,14 +122,22 @@ def main(max_frames: int = 30) -> None:
         search_results = pipeline._qdrant.search(query_vector, video_id, limit=5)
         print(f"   Found {len(search_results)} results:")
         for r in search_results:
-            url_preview = r.thumbnail_url[:50] + "..." if len(r.thumbnail_url) > 50 else r.thumbnail_url
-            print(f"   - Frame {r.frame_index} @ {r.timestamp_s:.1f}s (score: {r.score:.4f})")
+            url_preview = (
+                r.thumbnail_url[:50] + "..."
+                if len(r.thumbnail_url) > 50
+                else r.thumbnail_url
+            )
+            print(
+                f"   - Frame {r.frame_index} @ {r.timestamp_s:.1f}s (score: {r.score:.4f})"
+            )
             print(f"     URL: {url_preview}")
 
         # Step 5: Cleanup
         print("\n5. Cleaning up test data...")
         deleted_embeddings, deleted_thumbnails = pipeline.delete_video(video_id)
-        print(f"   Deleted {deleted_embeddings} embeddings, {deleted_thumbnails} thumbnails")
+        print(
+            f"   Deleted {deleted_embeddings} embeddings, {deleted_thumbnails} thumbnails"
+        )
 
     # Summary
     print("\n" + "=" * 60)
@@ -135,6 +151,8 @@ def main(max_frames: int = 30) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Storage integration test")
-    parser.add_argument("--max-frames", type=int, default=30, help="Maximum frames to process")
+    parser.add_argument(
+        "--max-frames", type=int, default=30, help="Maximum frames to process"
+    )
     args = parser.parse_args()
     main(max_frames=args.max_frames)

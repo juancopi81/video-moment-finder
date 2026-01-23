@@ -45,7 +45,7 @@ def main() -> None:
     print("=" * 50)
 
     # Use in-memory Qdrant
-    qdrant_config = QdrantConfig.in_memory_config()
+    qdrant_config = QdrantConfig.in_memory()
     pipeline = StoragePipeline(qdrant_config, r2_config=None)
 
     print("\n1. Ensuring collection exists...")
