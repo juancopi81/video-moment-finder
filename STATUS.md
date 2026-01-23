@@ -19,6 +19,7 @@
 | 2026-01-22 | Phase 1 | Code cleanup | Done | Removed dead code, DRY refactor: -36 lines. Created src/utils/subprocess.py utility. |
 | 2026-01-22 | Phase 1 | 1.4 Storage Integration | Done | Added Qdrant + R2 storage modules, pipeline orchestrator, cleanup utils. Local test passed. |
 | 2026-01-22 | Phase 1 | 1.4 Storage Integration Tests | Done | Added unit tests for Qdrant/R2/cleanup/orchestrator. pytest: 16 passed. |
+| 2026-01-22 | Phase 1 | 1.4 Storage Integration (Cloud) | Done | Full Qdrant+R2 integration test passed via scripts/phase1/storage_integration_test.py |
 
 ## Blockers
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.

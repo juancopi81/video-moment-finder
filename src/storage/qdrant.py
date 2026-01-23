@@ -112,33 +112,45 @@ class QdrantStore:
         limit: int = 5,
     ) -> list[SearchResult]:
         """Search for similar frames within a video."""
+        query_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="video_id",
+                    match=models.MatchValue(value=video_id),
+                )
+            ]
+        )
+
         try:
-            response = self._client.query_points(
-                collection_name=self._config.collection_name,
-                query=query_vector,
-                query_filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="video_id",
-                            match=models.MatchValue(value=video_id),
-                        )
-                    ]
-                ),
-                limit=limit,
-                with_payload=True,
-            )
+            if hasattr(self._client, "query_points"):
+                response = self._client.query_points(
+                    collection_name=self._config.collection_name,
+                    query=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                    with_payload=True,
+                )
+                points = response.points
+            else:
+                points = self._client.search(
+                    collection_name=self._config.collection_name,
+                    query_vector=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                    with_payload=True,
+                )
         except Exception as exc:
             raise QdrantStorageError(f"Search failed: {exc}") from exc
 
         return [
             SearchResult(
-                video_id=r.payload["video_id"],  # type: ignore[index]
-                frame_index=r.payload["frame_index"],  # type: ignore[index]
-                timestamp_s=r.payload["timestamp_s"],  # type: ignore[index]
-                thumbnail_url=r.payload["thumbnail_url"],  # type: ignore[index]
-                score=r.score,
+                video_id=point.payload["video_id"],  # type: ignore[index]
+                frame_index=point.payload["frame_index"],  # type: ignore[index]
+                timestamp_s=point.payload["timestamp_s"],  # type: ignore[index]
+                thumbnail_url=point.payload["thumbnail_url"],  # type: ignore[index]
+                score=point.score,
             )
-            for r in response.points
+            for point in points
         ]
 
     def delete_video(self, video_id: str) -> int:

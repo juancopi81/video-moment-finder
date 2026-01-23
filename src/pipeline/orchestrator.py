@@ -107,7 +107,15 @@ class StoragePipeline:
             ]
 
             # Store embeddings in Qdrant
-            embeddings_stored = self._qdrant.upsert_frames(frame_vectors)
+            try:
+                embeddings_stored = self._qdrant.upsert_frames(frame_vectors)
+            except Exception:
+                if self._r2 is not None and thumbnails_uploaded:
+                    try:
+                        self._r2.delete_video_thumbnails(video_id)
+                    except Exception:
+                        pass
+                raise
 
             return ProcessingResult(
                 video_id=video_id,

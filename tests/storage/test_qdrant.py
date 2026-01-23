@@ -22,7 +22,7 @@ def test_generate_point_id_deterministic() -> None:
 
 
 def test_upsert_search_delete_in_memory() -> None:
-    config = QdrantConfig.in_memory_config(collection_name="test_frames")
+    config = QdrantConfig.in_memory(collection_name="test_frames")
     store = QdrantStore(config)
     store.ensure_collection()
 
@@ -65,7 +65,7 @@ def test_upsert_search_delete_in_memory() -> None:
 
 
 def test_upsert_empty_returns_zero() -> None:
-    config = QdrantConfig.in_memory_config(collection_name="empty_frames")
+    config = QdrantConfig.in_memory(collection_name="empty_frames")
     store = QdrantStore(config)
     store.ensure_collection()
 
