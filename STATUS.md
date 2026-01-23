@@ -1,7 +1,7 @@
 # Video Moment Finder - Status
 
 ## Current Phase
-**Phase 1: Processing Pipeline** - In Progress
+**Phase 2: End-to-End Skeleton** - In Progress
 
 ## Progress Log
 
@@ -20,6 +20,8 @@
 | 2026-01-22 | Phase 1 | 1.4 Storage Integration | Done | Added Qdrant + R2 storage modules, pipeline orchestrator, cleanup utils. Local test passed. |
 | 2026-01-22 | Phase 1 | 1.4 Storage Integration Tests | Done | Added unit tests for Qdrant/R2/cleanup/orchestrator. pytest: 16 passed. |
 | 2026-01-22 | Phase 1 | 1.4 Storage Integration (Cloud) | Done | Full Qdrant+R2 integration test passed via scripts/phase1/storage_integration_test.py |
+| 2026-01-23 | Phase 1 | Phase 1 Gate Check (Cost) | Done | Extrapolated 30-min cost $0.1263 (1871s video, 0.1317s/frame). **GATE PASSED** |
+| 2026-01-23 | Phase 1 | Phase 1 Gate Check (End-to-End) | Done | 1800 frames processed end-to-end (Qdrant+R2). Embed 357.36s, process 889.62s, total 1254.02s. |
 
 ## Blockers
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
@@ -33,11 +35,11 @@
 | Metric | Target | Actual | Notes |
 |--------|--------|--------|-------|
 | Search quality (Recall@5) | >70% | **90%** | **GATE PASSED** - 9/10 queries found correct frame in top 5 |
-| Cost per 30-min video | <$1 | **~$0.14** | **GATE PASSED** - With batch=8: 1800 frames × 0.146s + 30s load = ~307s GPU |
-| Processing time (30-min) | <20 min | **~5 min** | **GATE PASSED** - With batch=8: ~307s total GPU time |
-| Single embed latency | - | **0.146s** | Per-frame with batch=8 (was 0.205s with batch=1) |
-| Model load time | - | ~23s | Cold load in container |
-| Frame extraction | - | 1.53s/193 frames | ffmpeg at 1 fps |
+| Cost per 30-min video | <$1 | **~$0.13** | **GATE PASSED** - Extrapolated from 1871s video, 0.1317s/frame, 25.7s load |
+| Processing time (30-min) | <20 min | **~20.9 min** | Full pipeline: 1800 frames end-to-end (embed+upload+store) |
+| Single embed latency | - | **0.1317s** | Per-frame with batch=8 (1871s video sample) |
+| Model load time | - | ~25.7s | Cold load in container |
+| Frame extraction | - | 10.46s/1871 frames | ffmpeg at 1 fps |
 | GPU device | - | NVIDIA A10 | Modal A10G (24GB VRAM) |
 | Embedding dim | - | 2048 | Qwen3-VL-Embedding-2B |
 | GPU cost rate | - | $0.000463/s | A10G pricing |
