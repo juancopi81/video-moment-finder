@@ -14,8 +14,10 @@ from pathlib import Path
 from src.pipeline.orchestrator import StoragePipeline
 from src.storage.config import QdrantConfig
 from src.storage.qdrant import EMBEDDING_DIM
+from src.utils.logging import Timer, get_logger
 from src.video.frames import FrameInfo
 
+logger = get_logger(__name__)
 
 def create_mock_frames(count: int, temp_dir: Path) -> list[FrameInfo]:
     """Create mock frame info for testing."""
@@ -41,16 +43,16 @@ def create_mock_embeddings(count: int) -> list[list[float]]:
 
 
 def main() -> None:
-    print("Phase 1.4: Local Storage Test")
-    print("=" * 50)
+    logger.info("Phase 1.4: Local Storage Test")
+    logger.info("=" * 50)
 
     # Use in-memory Qdrant
     qdrant_config = QdrantConfig.in_memory()
     pipeline = StoragePipeline(qdrant_config, r2_config=None)
 
-    print("\n1. Ensuring collection exists...")
+    logger.info("1. Ensuring collection exists...")
     pipeline.ensure_ready()
-    print("   Collection ready.")
+    logger.info("Collection ready.")
 
     # Create mock data
     video_id = "test_video_123"
@@ -58,36 +60,52 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        print(f"\n2. Creating {frame_count} mock frames...")
+        logger.info("2. Creating %d mock frames...", frame_count)
         frames = create_mock_frames(frame_count, temp_path)
         embeddings = create_mock_embeddings(frame_count)
 
-        print(f"\n3. Processing video '{video_id}'...")
-        result = pipeline.process_video(video_id, frames, embeddings)
+        logger.info("3. Processing video '%s'...", video_id)
+        with Timer("Process video", logger) as process_timer:
+            result = pipeline.process_video(video_id, frames, embeddings)
 
-        print(f"   Frames processed: {result.frames_processed}")
-        print(f"   Embeddings stored: {result.embeddings_stored}")
-        print(f"   Thumbnails uploaded: {result.thumbnails_uploaded} (R2 disabled)")
+        logger.info("Frames processed: %d", result.frames_processed)
+        logger.info("Embeddings stored: %d", result.embeddings_stored)
+        logger.info(
+            "Thumbnails uploaded: %d (R2 disabled)", result.thumbnails_uploaded
+        )
+        logger.info("Process time: %.2fs", process_timer.elapsed or 0.0)
 
     # Test search
-    print("\n4. Testing search...")
+    logger.info("4. Testing search...")
     query_vector = create_mock_embeddings(1)[0]
-    search_results = pipeline._qdrant.search(query_vector, video_id, limit=3)
-    print(f"   Found {len(search_results)} results:")
+    with Timer("Search test", logger, level="debug"):
+        search_results = pipeline._qdrant.search(query_vector, video_id, limit=3)
+    logger.info("Found %d results:", len(search_results))
     for r in search_results:
-        print(f"   - Frame {r.frame_index} @ {r.timestamp_s:.1f}s (score: {r.score:.4f})")
+        logger.info(
+            "- Frame %d @ %.1fs (score: %.4f)",
+            r.frame_index,
+            r.timestamp_s,
+            r.score,
+        )
 
     # Test delete
-    print("\n5. Testing delete...")
-    deleted_embeddings, deleted_thumbnails = pipeline.delete_video(video_id)
-    print(f"   Deleted {deleted_embeddings} embeddings, {deleted_thumbnails} thumbnails")
+    logger.info("5. Testing delete...")
+    with Timer("Delete video", logger) as delete_timer:
+        deleted_embeddings, deleted_thumbnails = pipeline.delete_video(video_id)
+    logger.info(
+        "Deleted %d embeddings, %d thumbnails in %.2fs",
+        deleted_embeddings,
+        deleted_thumbnails,
+        delete_timer.elapsed or 0.0,
+    )
 
     # Verify deletion
     search_results = pipeline._qdrant.search(query_vector, video_id, limit=3)
-    print(f"   Search after delete: {len(search_results)} results")
+    logger.info("Search after delete: %d results", len(search_results))
 
-    print("\n" + "=" * 50)
-    print("Local storage test PASSED!")
+    logger.info("=" * 50)
+    logger.info("Local storage test PASSED!")
 
 
 if __name__ == "__main__":

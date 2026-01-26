@@ -50,6 +50,8 @@ def test_thumbnail_key() -> None:
 
 def test_upload_thumbnail_builds_url(tmp_path, monkeypatch) -> None:
     fake_client = FakeClient()
+    monkeypatch.setenv("R2_UPLOAD_WORKERS", "1")
+    monkeypatch.setenv("TQDM_DISABLE", "1")
 
     def fake_boto_client(*args, **kwargs):
         return fake_client
@@ -71,6 +73,8 @@ def test_upload_thumbnail_builds_url(tmp_path, monkeypatch) -> None:
 
 def test_upload_thumbnails_multiple(tmp_path, monkeypatch) -> None:
     fake_client = FakeClient()
+    monkeypatch.setenv("R2_UPLOAD_WORKERS", "1")
+    monkeypatch.setenv("TQDM_DISABLE", "1")
 
     def fake_boto_client(*args, **kwargs):
         return fake_client
@@ -96,6 +100,8 @@ def test_delete_video_thumbnails(monkeypatch) -> None:
         {"Contents": [{"Key": "video_a/thumb_00001.jpg"}]},
     ]
     fake_client = FakeClient(pages)
+    monkeypatch.setenv("R2_UPLOAD_WORKERS", "1")
+    monkeypatch.setenv("TQDM_DISABLE", "1")
 
     def fake_boto_client(*args, **kwargs):
         return fake_client
@@ -111,6 +117,8 @@ def test_delete_video_thumbnails(monkeypatch) -> None:
 
 def test_delete_video_thumbnails_no_objects(monkeypatch) -> None:
     fake_client = FakeClient(pages=[])
+    monkeypatch.setenv("R2_UPLOAD_WORKERS", "1")
+    monkeypatch.setenv("TQDM_DISABLE", "1")
 
     def fake_boto_client(*args, **kwargs):
         return fake_client
