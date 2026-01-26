@@ -22,18 +22,17 @@ import tempfile
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 from src.embedding.batch import embed_frames
 from src.embedding.modal_app import app
 from src.pipeline.orchestrator import StoragePipeline
+from src.config.env import load_env
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
 from src.utils.logging import Timer, get_logger
 from src.video.frames import extract_frames
 
 LOCAL_VIDEO_PATH = Path("test_video.mp4")
 
-load_dotenv()
+load_env()
 logger = get_logger(__name__)
 
 
