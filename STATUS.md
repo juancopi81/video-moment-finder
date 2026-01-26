@@ -22,6 +22,7 @@
 | 2026-01-22 | Phase 1 | 1.4 Storage Integration (Cloud) | Done | Full Qdrant+R2 integration test passed via scripts/phase1/storage_integration_test.py |
 | 2026-01-23 | Phase 1 | Phase 1 Gate Check (Cost) | Done | Extrapolated 30-min cost $0.1263 (1871s video, 0.1317s/frame). **GATE PASSED** |
 | 2026-01-23 | Phase 1 | Phase 1 Gate Check (End-to-End) | Done | 1800 frames processed end-to-end (Qdrant+R2). Embed 357.36s, process 889.62s, total 1254.02s. |
+| 2026-01-26 | Phase 1 | R2 Parallel Uploads | Done | 1800 thumbnails uploaded in 68.25s (26.37 thumbs/s) with 16 workers. Total pipeline 429.74s. |
 
 ## Blockers
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
