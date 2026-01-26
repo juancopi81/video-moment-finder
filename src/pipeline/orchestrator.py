@@ -8,11 +8,14 @@ from src.storage.config import QdrantConfig, R2Config
 from src.storage.qdrant import FrameVector, QdrantStore
 from src.storage.r2 import R2Store
 from src.utils.cleanup import cleanup_paths
+from src.utils.logging import Timer, get_logger
 from src.video.frames import FrameInfo
 
 
 class PipelineError(RuntimeError):
     """Raised when pipeline operations fail."""
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,10 @@ class StoragePipeline:
                 thumbnails_uploaded=0,
             )
 
+        logger.info(
+            "Processing video_id=%s with %d frames", video_id, len(frames)
+        )
+
         try:
             # Upload thumbnails if R2 is configured and thumbnails exist
             thumbnail_urls: dict[int, str] = {}
@@ -86,13 +93,19 @@ class StoragePipeline:
                 ]
 
                 if thumbnails_to_upload:
-                    results = self._r2.upload_thumbnails(
-                        video_id,
-                        [(idx, path) for idx, path in thumbnails_to_upload],
-                    )
+                    with Timer("Upload thumbnails", logger, level="debug") as upload_timer:
+                        results = self._r2.upload_thumbnails(
+                            video_id,
+                            [(idx, path) for idx, path in thumbnails_to_upload],
+                        )
                     thumbnails_uploaded = len(results)
                     for (idx, _), result in zip(thumbnails_to_upload, results):
                         thumbnail_urls[idx] = result.url
+                    logger.info(
+                        "Uploaded %d thumbnails in %.2fs",
+                        thumbnails_uploaded,
+                        upload_timer.elapsed or 0.0,
+                    )
 
             # Build frame vectors with thumbnail URLs
             frame_vectors = [
@@ -108,7 +121,13 @@ class StoragePipeline:
 
             # Store embeddings in Qdrant
             try:
-                embeddings_stored = self._qdrant.upsert_frames(frame_vectors)
+                with Timer("Upsert embeddings", logger, level="debug") as upsert_timer:
+                    embeddings_stored = self._qdrant.upsert_frames(frame_vectors)
+                logger.info(
+                    "Stored %d embeddings in %.2fs",
+                    embeddings_stored,
+                    upsert_timer.elapsed or 0.0,
+                )
             except Exception:
                 if self._r2 is not None and thumbnails_uploaded:
                     try:
@@ -135,10 +154,23 @@ class StoragePipeline:
         Returns:
             Tuple of (embeddings_deleted, thumbnails_deleted)
         """
-        embeddings_deleted = self._qdrant.delete_video(video_id)
+        logger.info("Deleting data for video_id=%s", video_id)
+        with Timer("Delete embeddings", logger, level="debug") as delete_timer:
+            embeddings_deleted = self._qdrant.delete_video(video_id)
+        logger.info(
+            "Deleted %d embeddings in %.2fs",
+            embeddings_deleted,
+            delete_timer.elapsed or 0.0,
+        )
 
         thumbnails_deleted = 0
         if self._r2 is not None:
-            thumbnails_deleted = self._r2.delete_video_thumbnails(video_id)
+            with Timer("Delete thumbnails", logger, level="debug") as thumbs_timer:
+                thumbnails_deleted = self._r2.delete_video_thumbnails(video_id)
+            logger.info(
+                "Deleted %d thumbnails in %.2fs",
+                thumbnails_deleted,
+                thumbs_timer.elapsed or 0.0,
+            )
 
         return embeddings_deleted, thumbnails_deleted
