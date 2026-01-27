@@ -24,7 +24,7 @@
 | 2026-01-23 | Phase 1 | Phase 1 Gate Check (Cost)       | Done        | Extrapolated 30-min cost $0.1263 (1871s video, 0.1317s/frame). **GATE PASSED**                |
 | 2026-01-23 | Phase 1 | Phase 1 Gate Check (End-to-End) | Done        | 1800 frames processed end-to-end (Qdrant+R2). Embed 357.36s, process 889.62s, total 1254.02s. |
 | 2026-01-26 | Phase 1 | R2 Parallel Uploads             | Done        | 1800 thumbnails uploaded in 68.25s (26.37 thumbs/s) with 16 workers. Total pipeline 429.74s.  |
-| 2026-01-27 | Phase 2 | 2.2 Backend API (FastAPI)       | In Progress | Added mock FastAPI app with /videos and /search endpoints (Phase 2.2 skeleton).               |
+| 2026-01-27 | Phase 2 | 2.2 Backend API (FastAPI)       | Done        | Mock FastAPI app with /videos and /search endpoints validated locally.                        |
 
 ## Blockers
 

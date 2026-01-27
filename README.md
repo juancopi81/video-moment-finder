@@ -7,3 +7,9 @@ Semantic video frame search. Paste a YouTube URL, search for moments using text 
 - [ROADMAP.md](./ROADMAP.md) - Development phases and tasks
 - [STATUS.md](./STATUS.md) - Current progress and metrics
 - [CLAUDE.md](./CLAUDE.md) - AI assistant context
+
+## Run API (Phase 2 Mock)
+
+```bash
+uv run uvicorn src.api.app:app --reload --port 8000
+```
