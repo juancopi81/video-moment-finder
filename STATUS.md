@@ -25,6 +25,7 @@
 | 2026-01-23 | Phase 1 | Phase 1 Gate Check (End-to-End) | Done        | 1800 frames processed end-to-end (Qdrant+R2). Embed 357.36s, process 889.62s, total 1254.02s. |
 | 2026-01-26 | Phase 1 | R2 Parallel Uploads             | Done        | 1800 thumbnails uploaded in 68.25s (26.37 thumbs/s) with 16 workers. Total pipeline 429.74s.  |
 | 2026-01-27 | Phase 2 | 2.2 Backend API (FastAPI)       | Done        | Mock FastAPI app with /videos and /search endpoints validated locally.                        |
+| 2026-01-27 | Phase 2 | 2.3 Frontend Shell (scaffold)   | Done        | Next.js 14 with 2 routes: `/` (landing) and `/video/[id]` (status/search/results).            |
 
 ## Blockers
 
@@ -34,6 +35,7 @@
 
 - **Batch=8 is optimal for A10G** - Tested batch sizes 1, 4, 8, 16, 32. All fit in 24GB VRAM. Batch=8 fastest (0.146s/frame), larger batches plateau (~0.15s/frame) due to GPU saturation.
 - **Qwen3-VL-Embedding-2B is suitable for semantic search** - 90% Recall@5 validates the model for finding video moments via text queries.
+- **2-route frontend structure** - Landing (`/`) + Video page (`/video/[id]`) that handles processing, search, and results based on state. Simpler than 3 separate pages.
 
 ## Metrics / Measurements
 

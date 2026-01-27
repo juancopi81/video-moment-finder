@@ -13,3 +13,9 @@ Semantic video frame search. Paste a YouTube URL, search for moments using text 
 ```bash
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
+
+## Run Frontend
+
+```bash
+cd frontend && npm run dev
+```
