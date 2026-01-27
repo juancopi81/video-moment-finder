@@ -32,7 +32,7 @@ from src.video.frames import extract_frames
 
 LOCAL_VIDEO_PATH = Path("test_video.mp4")
 
-load_env()
+load_env(required=True)
 logger = get_logger(__name__)
 
 
