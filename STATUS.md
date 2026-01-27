@@ -26,6 +26,7 @@
 | 2026-01-26 | Phase 1 | R2 Parallel Uploads             | Done        | 1800 thumbnails uploaded in 68.25s (26.37 thumbs/s) with 16 workers. Total pipeline 429.74s.  |
 | 2026-01-27 | Phase 2 | 2.2 Backend API (FastAPI)       | Done        | Mock FastAPI app with /videos and /search endpoints validated locally.                        |
 | 2026-01-27 | Phase 2 | 2.3 Frontend Shell (scaffold)   | Done        | Next.js 14 with 2 routes: `/` (landing) and `/video/[id]` (status/search/results).            |
+| 2026-01-27 | Phase 2 | 2.3 Landing Page Form Wiring    | Done        | Form submits to backend API, navigates to /video/{id} on success, handles errors.             |
 
 ## Blockers
 
