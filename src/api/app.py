@@ -7,6 +7,7 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl
 
 from src.config.env import load_env
@@ -94,6 +95,13 @@ def _mock_results(video_id: str, limit: int) -> list[SearchResult]:
 app = FastAPI(
     title="Video Moment Finder API",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type VideoPageProps = {
   params: Promise<{ id: string }>;
 };
@@ -61,12 +63,12 @@ export default async function VideoPage({ params }: VideoPageProps) {
         </div>
       )}
 
-      <a
+      <Link
         href="/"
         className="mt-8 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
       >
         &larr; Back to home
-      </a>
+      </Link>
     </main>
   );
 }
