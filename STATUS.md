@@ -28,6 +28,7 @@
 | 2026-01-27 | Phase 2 | 2.3 Frontend Shell (scaffold)   | Done        | Next.js 14 with 2 routes: `/` (landing) and `/video/[id]` (status/search/results).            |
 | 2026-01-27 | Phase 2 | 2.3 Landing Page Form Wiring    | Done        | Form submits to backend API, navigates to /video/{id} on success, handles errors.             |
 | 2026-01-27 | Phase 2 | 2.3 Video Page API Wiring       | Done        | Status polling (2s interval), search form submission, results grid with thumbnails/timestamps.|
+| 2026-01-27 | Phase 2 | 2.1 Supabase Database Schema    | Done        | Created videos/credits tables, Python client with CRUD. Manual + unit tests (5 passing).     |
 
 ## Blockers
 
