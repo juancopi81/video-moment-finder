@@ -128,17 +128,18 @@ def search_video(video_id, query_text=None, query_image=None):
 - **Pro**: $15 for 20 videos (~$0.75/video)
 
 **Unit economics**:
-- Cost per video: ~$0.50-1.00 (Modal GPU time)
+
+- Cost per video: ~$0.13 (Modal GPU time; 30-min extrapolation on A10G)
 - Break-even: Charge $1+ per video
 
 ## Success Metrics
 
-| Signal              | Target       | Notes                              |
-| ------------------- | ------------ | ---------------------------------- |
-| Search quality      | >70%         | Relevant result in top 3          |
-| Processing time     | <20 min      | For 30-min video                  |
-| Conversion          | >5%          | Free trial → paid                 |
-| Cost per video      | <$1          | Modal GPU + storage               |
+| Signal          | Target  | Notes                    |
+| --------------- | ------- | ------------------------ |
+| Search quality  | >70%    | Relevant result in top 3 |
+| Processing time | <20 min | For 30-min video         |
+| Conversion      | >5%     | Free trial → paid        |
+| Cost per video  | <$1     | Modal GPU + storage      |
 
 ## Risks & Unknowns
 
@@ -155,13 +156,12 @@ def search_video(video_id, query_text=None, query_image=None):
 
 ## Next Milestone
 
-**Goal**: Build and test the processing pipeline
+**Goal**: Phase 3 - Real implementation (replace mocks with real data flow)
 
 **Tasks**:
 
-- [ ] Set up Modal account and test Qwen3-VL-Embedding-2B on GPU
-- [ ] Implement video download (yt-dlp) and frame extraction (ffmpeg)
-- [ ] Test embedding 100 frames and storing in Qdrant
-- [ ] Test search with text queries - does it find relevant frames?
-- [ ] Calculate actual cost per video
-- [ ] If search quality is good and costs are acceptable → build full product
+- [ ] Replace mock API endpoints with real processing logic
+- [ ] Trigger Modal processing and persist status in Supabase
+- [ ] Query Qdrant for real search results
+- [ ] Wire frontend to real APIs with loading/error states
+- [ ] Add job completion webhook or polling + R2 thumbnail serving
