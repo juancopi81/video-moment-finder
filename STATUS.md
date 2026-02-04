@@ -2,35 +2,38 @@
 
 ## Current Phase
 
-**Phase 2: End-to-End Skeleton** - Complete
+**Phase 3: Real Integrations** - In Progress
 
 ## Progress Log
 
-| Date       | Phase   | Task                            | Status | Notes                                                                                                                                                              |
-| ---------- | ------- | ------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-01-19 | Setup   | Create ROADMAP.md               | Done   | Phased plan with gates                                                                                                                                             |
-| 2026-01-19 | Setup   | Create STATUS.md                | Done   | Progress tracking                                                                                                                                                  |
-| 2026-01-19 | Setup   | Update README.md & CLAUDE.md    | Done   | Added doc links                                                                                                                                                    |
-| 2026-01-20 | Phase 0 | 0.1 Modal + Qwen3 Setup         | Done   | A10G smoke test OK. Qwen3-VL-Embedding-2B loads and embeds text+image.                                                                                             |
-| 2026-01-20 | Phase 0 | 0.2 Video Processing Test       | Done   | **GATE PASSED.** Initial: 0.766s/frame (batch=1). Later optimized to 0.146s/frame (batch=8).                                                                       |
-| 2026-01-21 | Phase 0 | 0.3 Vector Search Validation    | Done   | **GATE PASSED.** Recall@5 = 90% (9/10 queries). In-memory Qdrant validated.                                                                                        |
-| 2026-01-21 | Phase 1 | 1.1 Video Download Module       | Done   | Added fail-fast yt-dlp wrapper in src/video.                                                                                                                       |
-| 2026-01-21 | Phase 1 | 1.2 Frame Extraction Module     | Done   | Added fail-fast ffmpeg wrapper with timestamps + thumbnails; refactored tests to use it.                                                                           |
-| 2026-01-21 | Phase 1 | 1.3 Batch Embedding Pipeline    | Done   | Modal-only validation passed with batch=8.                                                                                                                         |
-| 2026-01-22 | Phase 1 | Code cleanup                    | Done   | Removed dead code, DRY refactor: -36 lines. Created src/utils/subprocess.py utility.                                                                               |
-| 2026-01-22 | Phase 1 | 1.4 Storage Integration         | Done   | Added Qdrant + R2 storage modules, pipeline orchestrator, cleanup utils. Local test passed.                                                                        |
-| 2026-01-22 | Phase 1 | 1.4 Storage Integration Tests   | Done   | Added unit tests for Qdrant/R2/cleanup/orchestrator. pytest: 16 passed.                                                                                            |
-| 2026-01-22 | Phase 1 | 1.4 Storage Integration (Cloud) | Done   | Full Qdrant+R2 integration test passed via scripts/phase1/storage_integration_test.py                                                                              |
-| 2026-01-23 | Phase 1 | Phase 1 Gate Check (Cost)       | Done   | Extrapolated 30-min cost $0.1263 (1871s video, 0.1317s/frame). **GATE PASSED**                                                                                     |
-| 2026-01-23 | Phase 1 | Phase 1 Gate Check (End-to-End) | Done   | 1800 frames processed end-to-end (Qdrant+R2). Embed 357.36s, process 889.62s, total 1254.02s.                                                                      |
-| 2026-01-26 | Phase 1 | R2 Parallel Uploads             | Done   | 1800 thumbnails uploaded in 68.25s (26.37 thumbs/s) with 16 workers. Total pipeline 429.74s.                                                                       |
-| 2026-01-27 | Phase 2 | 2.2 Backend API (FastAPI)       | Done   | Mock FastAPI app with /videos and /search endpoints validated locally.                                                                                             |
-| 2026-01-27 | Phase 2 | 2.3 Frontend Shell (scaffold)   | Done   | Next.js 14 with 2 routes: `/` (landing) and `/video/[id]` (status/search/results).                                                                                 |
-| 2026-01-27 | Phase 2 | 2.3 Landing Page Form Wiring    | Done   | Form submits to backend API, navigates to /video/{id} on success, handles errors.                                                                                  |
-| 2026-01-27 | Phase 2 | 2.3 Video Page API Wiring       | Done   | Status polling (2s interval), search form submission, results grid with thumbnails/timestamps.                                                                     |
-| 2026-01-27 | Phase 2 | 2.1 Supabase Database Schema    | Done   | Created videos/credits tables, Python client with CRUD. Manual + unit tests (5 passing).                                                                           |
-| 2026-01-28 | Phase 2 | 2.4 Connect the Pieces          | Done   | **GATE PASSED.** Full flow verified: submit URL → poll status → search → mock results.                                                                             |
-| 2026-01-28 | Phase 1 | End-to-End Timing Recheck       | Done   | 1800 frames end-to-end: total 450.36s (~7.5 min). Extract 7.86s, embed 388.77s, process 53.73s. Test video: `https://www.youtube.com/watch?v=02YLwsCKUww` (31:11). |
+
+| Date       | Phase   | Task                              | Status | Notes                                                                                                                                                              |
+| ---------- | ------- | --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-01-19 | Setup   | Create ROADMAP.md                 | Done   | Phased plan with gates                                                                                                                                             |
+| 2026-01-19 | Setup   | Create STATUS.md                  | Done   | Progress tracking                                                                                                                                                  |
+| 2026-01-19 | Setup   | Update README.md & CLAUDE.md      | Done   | Added doc links                                                                                                                                                    |
+| 2026-01-20 | Phase 0 | 0.1 Modal + Qwen3 Setup           | Done   | A10G smoke test OK. Qwen3-VL-Embedding-2B loads and embeds text+image.                                                                                             |
+| 2026-01-20 | Phase 0 | 0.2 Video Processing Test         | Done   | **GATE PASSED.** Initial: 0.766s/frame (batch=1). Later optimized to 0.146s/frame (batch=8).                                                                       |
+| 2026-01-21 | Phase 0 | 0.3 Vector Search Validation      | Done   | **GATE PASSED.** Recall@5 = 90% (9/10 queries). In-memory Qdrant validated.                                                                                        |
+| 2026-01-21 | Phase 1 | 1.1 Video Download Module         | Done   | Added fail-fast yt-dlp wrapper in src/video.                                                                                                                       |
+| 2026-01-21 | Phase 1 | 1.2 Frame Extraction Module       | Done   | Added fail-fast ffmpeg wrapper with timestamps + thumbnails; refactored tests to use it.                                                                           |
+| 2026-01-21 | Phase 1 | 1.3 Batch Embedding Pipeline      | Done   | Modal-only validation passed with batch=8.                                                                                                                         |
+| 2026-01-22 | Phase 1 | Code cleanup                      | Done   | Removed dead code, DRY refactor: -36 lines. Created src/utils/subprocess.py utility.                                                                               |
+| 2026-01-22 | Phase 1 | 1.4 Storage Integration           | Done   | Added Qdrant + R2 storage modules, pipeline orchestrator, cleanup utils. Local test passed.                                                                        |
+| 2026-01-22 | Phase 1 | 1.4 Storage Integration Tests     | Done   | Added unit tests for Qdrant/R2/cleanup/orchestrator. pytest: 16 passed.                                                                                            |
+| 2026-01-22 | Phase 1 | 1.4 Storage Integration (Cloud)   | Done   | Full Qdrant+R2 integration test passed via scripts/phase1/storage_integration_test.py                                                                              |
+| 2026-01-23 | Phase 1 | Phase 1 Gate Check (Cost)         | Done   | Extrapolated 30-min cost $0.1263 (1871s video, 0.1317s/frame). **GATE PASSED**                                                                                     |
+| 2026-01-23 | Phase 1 | Phase 1 Gate Check (End-to-End)   | Done   | 1800 frames processed end-to-end (Qdrant+R2). Embed 357.36s, process 889.62s, total 1254.02s.                                                                      |
+| 2026-01-26 | Phase 1 | R2 Parallel Uploads               | Done   | 1800 thumbnails uploaded in 68.25s (26.37 thumbs/s) with 16 workers. Total pipeline 429.74s.                                                                       |
+| 2026-01-27 | Phase 2 | 2.2 Backend API (FastAPI)         | Done   | Mock FastAPI app with /videos and /search endpoints validated locally.                                                                                             |
+| 2026-01-27 | Phase 2 | 2.3 Frontend Shell (scaffold)     | Done   | Next.js 14 with 2 routes: `/` (landing) and `/video/[id]` (status/search/results).                                                                                 |
+| 2026-01-27 | Phase 2 | 2.3 Landing Page Form Wiring      | Done   | Form submits to backend API, navigates to /video/{id} on success, handles errors.                                                                                  |
+| 2026-01-27 | Phase 2 | 2.3 Video Page API Wiring         | Done   | Status polling (2s interval), search form submission, results grid with thumbnails/timestamps.                                                                     |
+| 2026-01-27 | Phase 2 | 2.1 Supabase Database Schema      | Done   | Created videos/credits tables, Python client with CRUD. Manual + unit tests (5 passing).                                                                           |
+| 2026-01-28 | Phase 2 | 2.4 Connect the Pieces            | Done   | **GATE PASSED.** Full flow verified: submit URL → poll status → search → mock results.                                                                             |
+| 2026-01-28 | Phase 1 | End-to-End Timing Recheck         | Done   | 1800 frames end-to-end: total 450.36s (~7.5 min). Extract 7.86s, embed 388.77s, process 53.73s. Test video: `https://www.youtube.com/watch?v=02YLwsCKUww` (31:11). |
+| 2026-01-28 | Phase 3 | 3.1 Wire FastAPI to Real Services | Done   | Added `embed_text` Modal function, video processing service, search service. Replaced mock endpoints with Supabase/Modal/Qdrant integrations.                      |
+
 
 ## Blockers
 
@@ -43,6 +46,7 @@
 - **2-route frontend structure** - Landing (`/`) + Video page (`/video/[id]`) that handles processing, search, and results based on state. Simpler than 3 separate pages.
 
 ## Metrics / Measurements
+
 
 | Metric                    | Target  | Actual             | Notes                                                                      |
 | ------------------------- | ------- | ------------------ | -------------------------------------------------------------------------- |
@@ -57,3 +61,5 @@
 | GPU cost rate             | -       | $0.000463/s        | A10G pricing                                                               |
 | Qdrant store time         | -       | 0.05s              | 40 vectors (in-memory)                                                     |
 | Query embedding time      | -       | ~0.2s              | Per text query                                                             |
+
+

@@ -1,32 +1,25 @@
-"""FastAPI app with mock endpoints for Phase 2.2."""
+"""FastAPI app with real Supabase, Modal, and Qdrant integrations."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Literal
-from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl
 
+from src.api.processing import process_video_task
+from src.api.search import search_video as search_video_service
 from src.config.env import load_env
+from src.db.supabase import (
+    VideoRecord,
+    create_video as db_create_video,
+    get_video as db_get_video,
+)
 
 load_env()
 
 StatusType = Literal["processing", "ready", "failed"]
-MOCK_PROCESSING_SECONDS = 3
-
-
-@dataclass
-class VideoRecord:
-    video_id: str
-    youtube_url: str
-    status: StatusType
-    created_at: datetime
-
-
-_VIDEO_STORE: dict[str, VideoRecord] = {}
 
 
 class VideoCreateRequest(BaseModel):
@@ -38,6 +31,7 @@ class VideoResponse(BaseModel):
     youtube_url: HttpUrl
     status: StatusType
     created_at: datetime
+    error_message: str | None = None
 
 
 class VideoSearchRequest(BaseModel):
@@ -58,43 +52,27 @@ class VideoSearchResponse(BaseModel):
     results: list[SearchResult]
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+def _parse_iso_datetime(iso_string: str | None) -> datetime:
+    """Parse ISO 8601 datetime string from Supabase."""
+    if not iso_string:
+        return datetime.now()
+    return datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
 
 
-def _ensure_mock_status(record: VideoRecord) -> None:
-    elapsed = (_now() - record.created_at).total_seconds()
-    if record.status == "processing" and elapsed >= MOCK_PROCESSING_SECONDS:
-        record.status = "ready"
-
-
-def _to_video_response(record: VideoRecord) -> VideoResponse:
+def _video_record_to_response(record: VideoRecord) -> VideoResponse:
+    """Convert VideoRecord to VideoResponse."""
     return VideoResponse(
-        id=record.video_id,
+        id=record.id,
         youtube_url=record.youtube_url,
         status=record.status,
-        created_at=record.created_at,
+        created_at=_parse_iso_datetime(record.created_at),
+        error_message=record.error_message,
     )
-
-
-def _mock_results(video_id: str, limit: int) -> list[SearchResult]:
-    base = abs(hash(video_id)) % 100
-    results: list[SearchResult] = []
-    for idx in range(limit):
-        timestamp_s = float(base + idx * 7)
-        results.append(
-            SearchResult(
-                timestamp_s=timestamp_s,
-                thumbnail_url=f"https://example.com/thumbs/{video_id}/{idx}.jpg",
-                score=max(0.1, 0.95 - idx * 0.05),
-            )
-        )
-    return results
 
 
 app = FastAPI(
     title="Video Moment Finder API",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -106,36 +84,65 @@ app.add_middleware(
 
 
 @app.post("/videos", response_model=VideoResponse)
-def create_video(request: VideoCreateRequest) -> VideoResponse:
-    video_id = uuid4().hex
-    record = VideoRecord(
-        video_id=video_id,
+def create_video(
+    request: VideoCreateRequest, background_tasks: BackgroundTasks
+) -> VideoResponse:
+    """Create a new video and start background processing."""
+    record = db_create_video(str(request.youtube_url))
+
+    background_tasks.add_task(
+        process_video_task,
+        video_id=record.id,
         youtube_url=str(request.youtube_url),
-        status="processing",
-        created_at=_now(),
     )
-    _VIDEO_STORE[video_id] = record
-    return _to_video_response(record)
+
+    return _video_record_to_response(record)
 
 
 @app.get("/videos/{video_id}", response_model=VideoResponse)
 def get_video(video_id: str) -> VideoResponse:
-    record = _VIDEO_STORE.get(video_id)
+    """Get video status and details."""
+    record = db_get_video(video_id)
     if not record:
         raise HTTPException(status_code=404, detail="Video not found")
-    _ensure_mock_status(record)
-    return _to_video_response(record)
+
+    return _video_record_to_response(record)
 
 
 @app.post("/videos/{video_id}/search", response_model=VideoSearchResponse)
 def search_video(video_id: str, request: VideoSearchRequest) -> VideoSearchResponse:
-    record = _VIDEO_STORE.get(video_id)
+    """Search for moments in a processed video."""
+    record = db_get_video(video_id)
     if not record:
         raise HTTPException(status_code=404, detail="Video not found")
-    if not request.query_text and not request.query_image_url:
+
+    if request.query_image_url:
+        raise HTTPException(status_code=501, detail="Image queries not yet supported")
+
+    if not request.query_text:
+        raise HTTPException(status_code=400, detail="Provide query_text or query_image_url")
+
+    if record.status != "ready":
         raise HTTPException(
-            status_code=400, detail="Provide query_text or query_image_url"
+            status_code=400,
+            detail=f"Video not ready for search (status: {record.status})",
         )
-    _ensure_mock_status(record)
-    results = _mock_results(video_id, request.limit)
-    return VideoSearchResponse(video_id=video_id, status=record.status, results=results)
+
+    results = search_video_service(
+        video_id=video_id,
+        query_text=request.query_text,
+        limit=request.limit,
+    )
+
+    return VideoSearchResponse(
+        video_id=video_id,
+        status=record.status,
+        results=[
+            SearchResult(
+                timestamp_s=r.timestamp_s,
+                thumbnail_url=r.thumbnail_url,
+                score=r.score,
+            )
+            for r in results
+        ],
+    )

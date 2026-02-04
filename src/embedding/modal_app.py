@@ -62,6 +62,18 @@ def extract_frame_bytes(
     return [frame.path.read_bytes() for frame in frames]
 
 
+def _normalize_embedding(embedding):
+    """Convert embedding to normalized tensor and return as CPU tensor."""
+    import torch
+    import torch.nn.functional as F
+
+    if isinstance(embedding, torch.Tensor):
+        embedding = embedding.cpu()
+    else:
+        embedding = torch.tensor(embedding)
+    return F.normalize(embedding.float(), dim=1)
+
+
 @app.function(image=image, gpu="A10G", timeout=1800)
 def embed_images_in_batches(
     images: list[bytes], *, batch_size: int = 8
@@ -79,8 +91,6 @@ def embed_images_in_batches(
     if batch_size != 8:
         raise ValueError("batch_size must be 8 (validated on A10G)")
 
-    import torch
-    import torch.nn.functional as F
     from PIL import Image
     from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
@@ -96,14 +106,7 @@ def embed_images_in_batches(
             pil_images.append(Image.open(io.BytesIO(img_bytes)))
 
         batch_input = [{"image": img} for img in pil_images]
-        batch_embeddings = model.process(batch_input)
-
-        if isinstance(batch_embeddings, torch.Tensor):
-            batch_embeddings = batch_embeddings.cpu()
-        else:
-            batch_embeddings = torch.tensor(batch_embeddings)
-
-        batch_embeddings = F.normalize(batch_embeddings.float(), dim=1)
+        batch_embeddings = _normalize_embedding(model.process(batch_input))
 
         if batch_embeddings.shape[0] != len(batch):
             raise RuntimeError(
@@ -116,3 +119,21 @@ def embed_images_in_batches(
         raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} != {len(images)}")
 
     return embeddings
+
+
+@app.function(image=image, gpu="A10G", timeout=300)
+def embed_text(text: str) -> list[float]:
+    """
+    Embed a text query and return normalized 2048-dim vector.
+
+    Fail-fast behavior:
+    - Raises ValueError if text is empty.
+    """
+    if not text or not text.strip():
+        raise ValueError("text must be non-empty")
+
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+
+    model = Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
+    embedding = _normalize_embedding(model.process([{"text": text}]))
+    return embedding[0].tolist()
