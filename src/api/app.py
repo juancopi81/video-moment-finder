@@ -17,6 +17,8 @@ from src.db.supabase import (
     get_video as db_get_video,
     update_video_status,
 )
+from src.storage.config import StorageConfigError
+from src.storage.qdrant import QdrantStorageError
 from src.utils.logging import get_logger
 
 load_env()
@@ -140,11 +142,18 @@ def search_video(video_id: str, request: VideoSearchRequest) -> VideoSearchRespo
             detail=f"Video not ready for search (status: {record.status})",
         )
 
-    results = search_video_service(
-        video_id=video_id,
-        query_text=request.query_text,
-        limit=request.limit,
-    )
+    try:
+        results = search_video_service(
+            video_id=video_id,
+            query_text=request.query_text,
+            limit=request.limit,
+        )
+    except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        logger.exception("Search backend failure for video_id=%s: %s", video_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Search is temporarily unavailable. Please try again.",
+        ) from exc
 
     return VideoSearchResponse(
         video_id=video_id,

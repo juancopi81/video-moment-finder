@@ -125,3 +125,23 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     assert payload["status"] == "ready"
     assert payload["results"][0]["thumbnail_url"] is None
     assert payload["results"][0]["timestamp_s"] == 12.5
+
+
+def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id: _video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.search_video_service",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("qdrant down")),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "an elevator"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Search is temporarily unavailable. Please try again."
