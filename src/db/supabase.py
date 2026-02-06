@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Literal
 
 from supabase import create_client, Client
 
 # Video status type
-VideoStatus = Literal["processing", "ready", "failed"]
+VideoStatus = Literal["queued", "processing", "ready", "failed"]
+JobStatus = Literal["queued", "processing", "completed", "failed"]
+TerminalJobStatus = Literal["completed", "failed"]
 
 
 @dataclass
@@ -34,6 +37,23 @@ class CreditRecord:
     balance: int
     created_at: str | None = None  # ISO 8601 string from Supabase
     updated_at: str | None = None  # ISO 8601 string from Supabase
+
+
+@dataclass
+class VideoJobRecord:
+    """Video processing job record."""
+
+    id: str
+    video_id: str
+    status: JobStatus
+    worker_id: str | None = None
+    attempt_count: int = 0
+    error_message: str | None = None
+    locked_at: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 # Singleton client
@@ -81,13 +101,39 @@ def _row_to_credit(row: dict) -> CreditRecord:
     )
 
 
+def _row_to_video_job(row: dict) -> VideoJobRecord:
+    """Convert database row to VideoJobRecord."""
+    return VideoJobRecord(
+        id=row["id"],
+        video_id=row["video_id"],
+        status=row["status"],
+        worker_id=row.get("worker_id"),
+        attempt_count=row.get("attempt_count", 0),
+        error_message=row.get("error_message"),
+        locked_at=row.get("locked_at"),
+        started_at=row.get("started_at"),
+        completed_at=row.get("completed_at"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _utc_now_iso() -> str:
+    """Return current UTC timestamp in ISO 8601 format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 # ---------------------------------------------------------------------------
 # Video CRUD
 # ---------------------------------------------------------------------------
 
 
-def create_video(youtube_url: str, user_id: str | None = None) -> VideoRecord:
-    """Create a new video record with status='processing'.
+def create_video(
+    youtube_url: str,
+    user_id: str | None = None,
+    status: VideoStatus = "queued",
+) -> VideoRecord:
+    """Create a new video record.
 
     Args:
         youtube_url: YouTube video URL.
@@ -97,7 +143,7 @@ def create_video(youtube_url: str, user_id: str | None = None) -> VideoRecord:
         Created VideoRecord with generated ID.
     """
     client = get_client()
-    data = {"youtube_url": youtube_url}
+    data = {"youtube_url": youtube_url, "status": status}
     if user_id is not None:
         data["user_id"] = user_id
 
@@ -140,8 +186,10 @@ def update_video_status(
     """
     client = get_client()
     data: dict = {"status": status}
-    if error_message is not None:
+    if status == "failed":
         data["error_message"] = error_message
+    else:
+        data["error_message"] = None
 
     result = client.table("videos").update(data).eq("id", video_id).execute()
     if not result.data:
@@ -165,6 +213,121 @@ def list_videos(user_id: str | None = None) -> list[VideoRecord]:
 
     result = query.execute()
     return [_row_to_video(row) for row in result.data]
+
+
+# ---------------------------------------------------------------------------
+# Video jobs (durable queue)
+# ---------------------------------------------------------------------------
+
+
+def enqueue_video_job(video_id: str) -> VideoJobRecord:
+    """Create a queued processing job for a video."""
+    client = get_client()
+    result = (
+        client.table("video_jobs")
+        .insert({"video_id": video_id, "status": "queued"})
+        .execute()
+    )
+    if not result.data:
+        raise RuntimeError("Failed to enqueue video job")
+    return _row_to_video_job(result.data[0])
+
+
+def list_queued_video_jobs(limit: int = 10) -> list[VideoJobRecord]:
+    """List queued jobs in FIFO order."""
+    if limit <= 0:
+        raise ValueError("limit must be > 0")
+
+    client = get_client()
+    result = (
+        client.table("video_jobs")
+        .select("*")
+        .eq("status", "queued")
+        .order("created_at")
+        .limit(limit)
+        .execute()
+    )
+    return [_row_to_video_job(row) for row in result.data]
+
+
+def claim_next_video_job(worker_id: str) -> VideoJobRecord | None:
+    """Claim the next queued job for processing.
+
+    Uses optimistic claiming with status guard to avoid duplicate claims.
+    """
+    if not worker_id.strip():
+        raise ValueError("worker_id must be non-empty")
+
+    client = get_client()
+    candidates = list_queued_video_jobs(limit=25)
+    now = _utc_now_iso()
+
+    for job in candidates:
+        result = (
+            client.table("video_jobs")
+            .update(
+                {
+                    "status": "processing",
+                    "worker_id": worker_id,
+                    "attempt_count": job.attempt_count + 1,
+                    "locked_at": now,
+                    "started_at": now,
+                    "error_message": None,
+                }
+            )
+            .eq("id", job.id)
+            .eq("status", "queued")
+            .execute()
+        )
+        if result.data:
+            return _row_to_video_job(result.data[0])
+    return None
+
+
+def complete_video_job(
+    job_id: str,
+    status: TerminalJobStatus,
+    *,
+    error_message: str | None = None,
+) -> VideoJobRecord | None:
+    """Mark a processing job as completed or failed."""
+    client = get_client()
+    data = {
+        "status": status,
+        "completed_at": _utc_now_iso(),
+        "locked_at": None,
+    }
+    if status == "failed":
+        data["error_message"] = error_message
+    else:
+        data["error_message"] = None
+
+    result = (
+        client.table("video_jobs")
+        .update(data)
+        .eq("id", job_id)
+        .eq("status", "processing")
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_video_job(result.data[0])
+
+
+def get_video_job(video_id: str) -> VideoJobRecord | None:
+    """Get latest job record for a video."""
+    client = get_client()
+    result = (
+        client.table("video_jobs")
+        .select("*")
+        .eq("video_id", video_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_video_job(result.data[0])
 
 
 # ---------------------------------------------------------------------------

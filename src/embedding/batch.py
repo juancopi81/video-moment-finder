@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from src.embedding.modal_app import embed_images_in_batches
+from src.config.modal import (
+    EMBED_IMAGES_FUNCTION_NAME,
+    get_embedding_modal_function,
+)
 from src.utils.logging import Timer, get_logger
 from src.video.frames import FrameInfo
 
@@ -36,7 +39,8 @@ def embed_frames(
     try:
         logger.info("Embedding %d frames (batch_size=%d)", len(images), batch_size)
         with Timer("Modal embedding call", logger) as embed_timer:
-            embeddings = embed_images_in_batches.remote(images, batch_size=batch_size)
+            embed_fn = get_embedding_modal_function(EMBED_IMAGES_FUNCTION_NAME)
+            embeddings = embed_fn.remote(images, batch_size=batch_size)
     except Exception as exc:  # modal can raise various transport errors
         raise EmbeddingError("Modal embedding failed") from exc
 

@@ -2,18 +2,22 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 type VideoPageProps = {
   params: Promise<{ id: string }>;
 };
 
-type VideoStatus = "processing" | "ready" | "failed";
+type VideoStatus = "queued" | "processing" | "ready" | "failed";
 
 type SearchResult = {
   timestamp_s: number;
-  thumbnail_url: string;
+  thumbnail_url: string | null;
   score: number;
 };
+
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 300; // 10 minutes at 2s interval
 
 function formatTimestamp(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -24,7 +28,7 @@ function formatTimestamp(seconds: number): string {
 export default function VideoPage({ params }: VideoPageProps) {
   const { id } = use(params);
 
-  const [status, setStatus] = useState<VideoStatus>("processing");
+  const [status, setStatus] = useState<VideoStatus>("queued");
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -34,9 +38,24 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   // Poll for video status
   useEffect(() => {
-    if (status !== "processing") return;
+    if (status !== "queued" && status !== "processing") return;
+
+    let attempts = 0;
+    let stopped = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const poll = async () => {
+      if (stopped) return;
+      if (attempts >= MAX_POLL_ATTEMPTS) {
+        setError(
+          "Processing is taking longer than expected. Please refresh in a bit."
+        );
+        stopped = true;
+        if (interval) clearInterval(interval);
+        return;
+      }
+      attempts += 1;
+
       try {
         const res = await fetch(`${apiUrl}/videos/${id}`);
         if (!res.ok) {
@@ -49,9 +68,15 @@ export default function VideoPage({ params }: VideoPageProps) {
       }
     };
 
-    poll(); // Initial fetch
-    const interval = setInterval(poll, 2000);
-    return () => clearInterval(interval);
+    interval = setInterval(() => {
+      void poll();
+    }, POLL_INTERVAL_MS);
+    void poll(); // Initial fetch
+
+    return () => {
+      stopped = true;
+      if (interval) clearInterval(interval);
+    };
   }, [id, status, apiUrl]);
 
   async function handleSearch(e: React.FormEvent) {
@@ -90,10 +115,10 @@ export default function VideoPage({ params }: VideoPageProps) {
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <h1 className="text-2xl font-bold mb-2">Video: {id}</h1>
 
-      {status === "processing" && (
+      {(status === "queued" || status === "processing") && (
         <div className="text-center">
           <p className="text-zinc-600 dark:text-zinc-400 mb-4">
-            Processing your video...
+            {status === "queued" ? "Queued for processing..." : "Processing your video..."}
           </p>
           <div className="w-64 h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
             <div className="w-1/2 h-full bg-zinc-900 dark:bg-zinc-100 animate-pulse" />
@@ -146,11 +171,20 @@ export default function VideoPage({ params }: VideoPageProps) {
               {results.map((result, index) => (
                 <div key={index} className="relative">
                   <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden">
-                    <img
-                      src={result.thumbnail_url}
-                      alt={`Result at ${formatTimestamp(result.timestamp_s)}`}
-                      className="w-full h-full object-cover"
-                    />
+                    {result.thumbnail_url ? (
+                      <Image
+                        src={result.thumbnail_url}
+                        alt={`Result at ${formatTimestamp(result.timestamp_s)}`}
+                        width={320}
+                        height={180}
+                        unoptimized
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
+                        No thumbnail
+                      </div>
+                    )}
                   </div>
                   <p className="mt-1 text-sm text-center text-zinc-600 dark:text-zinc-400">
                     {formatTimestamp(result.timestamp_s)}

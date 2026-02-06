@@ -1,6 +1,6 @@
 # Video Moment Finder
 
-> One-line pitch: Paste a YouTube URL, search for any moment using text or images
+> One-line pitch: Paste a YouTube URL, process it, and search moments with semantic queries
 
 ## Goals
 
@@ -34,8 +34,8 @@ Content creators and researchers struggle to find specific moments in videos:
 
 - **Required**: YouTube video URL
 - **Query options**:
-  - Text: "person holding a phone", "code editor on screen"
-  - Image: upload a reference image to find similar frames
+  - Text: "person holding a phone", "code editor on screen" (implemented)
+  - Image: upload a reference image to find similar frames (planned)
 
 ## Outputs
 
@@ -49,7 +49,8 @@ Content creators and researchers struggle to find specific moments in videos:
 
 - YouTube videos only (via yt-dlp)
 - Max 30-minute videos
-- Text search and image search
+- Text search (implemented)
+- Image search (planned)
 - Top 5 results with thumbnails
 - Credit-based payments (Stripe)
 - User accounts (Clerk)
@@ -65,8 +66,9 @@ Content creators and researchers struggle to find specific moments in videos:
 ## Tech Stack / Learning Goals
 
 - **Stack**:
-  - Next.js 14 + Clerk + Stripe (frontend)
+  - Next.js 16 + Clerk + Stripe (frontend)
   - FastAPI (backend API)
+  - Durable queue worker (Supabase-backed job table + Python worker)
   - Modal (serverless GPU for processing)
   - Qwen3-VL-Embedding-2B (frame embeddings)
   - Qdrant Cloud (vector database)
@@ -87,35 +89,37 @@ User Flow:
 1. Paste YouTube URL → 2. Wait for processing → 3. Search with text/image → 4. Get timestamped results
 
 Technical Flow:
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Next.js   │────▶│   FastAPI   │────▶│    Modal    │
-│  (Frontend) │     │  (Backend)  │     │    (GPU)    │
-└─────────────┘     └─────────────┘     └─────────────┘
-                           │                   │
-                           ▼                   ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │  Supabase   │     │   Qdrant    │
-                    │ (Users/DB)  │     │  (Vectors)  │
-                    └─────────────┘     └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Next.js   │────▶│   FastAPI   │────▶│ Queue Worker │────▶│    Modal    │
+│  (Frontend) │     │  (Backend)  │     │  (Python)    │     │    (GPU)    │
+└─────────────┘     └─────────────┘     └──────────────┘     └─────────────┘
+                          │                    │                    │
+                          ▼                    ▼                    ▼
+                   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+                   │  Supabase   │      │   Qdrant    │      │     R2      │
+                   │ (DB + Jobs) │      │  (Vectors)  │      │ (Thumbnails)│
+                   └─────────────┘      └─────────────┘      └─────────────┘
 ```
 
 ### Processing Pipeline (Modal GPU)
 
 ```python
 def process_video(youtube_url, video_id):
-    # 1. Download video with yt-dlp
-    # 2. Extract frames at 1 fps with ffmpeg
-    # 3. Embed each frame with Qwen3-VL-Embedding-2B
-    # 4. Upload embeddings to Qdrant with timestamp metadata
-    # 5. Upload thumbnails to R2
-    # 6. Update video status in Supabase
+    # 1. API writes video row + queued job in Supabase
+    # 2. Worker claims queued job and marks video as processing
+    # 3. Download video with yt-dlp
+    # 4. Extract frames at 1 fps with ffmpeg
+    # 5. Embed each frame with Qwen3-VL-Embedding-2B
+    # 6. Upload embeddings to Qdrant with timestamp metadata
+    # 7. Upload thumbnails to R2 (optional)
+    # 8. Mark video ready/failed and complete job
 ```
 
 ### Search Flow
 
 ```python
 def search_video(video_id, query_text=None, query_image=None):
-    # 1. Embed the query (text or image) with Qwen3-VL-Embedding-2B
+    # 1. Embed query text with Qwen3-VL-Embedding-2B
     # 2. Search Qdrant for similar frames (filtered by video_id)
     # 3. Return top 5 results with timestamps and thumbnails
 ```
@@ -156,12 +160,12 @@ def search_video(video_id, query_text=None, query_image=None):
 
 ## Next Milestone
 
-**Goal**: Phase 3 - Real implementation (replace mocks with real data flow)
+**Goal**: Complete the remaining MVP product features on top of real data flow
 
 **Tasks**:
 
-- [ ] Replace mock API endpoints with real processing logic
-- [ ] Trigger Modal processing and persist status in Supabase
-- [ ] Query Qdrant for real search results
-- [ ] Wire frontend to real APIs with loading/error states
-- [ ] Add job completion webhook or polling + R2 thumbnail serving
+- [ ] Implement image query search end-to-end (frontend + backend embedding flow)
+- [ ] Integrate Clerk auth and tie videos/jobs to authenticated user_id
+- [ ] Add Stripe credit purchase + deduction on video submission
+- [ ] Add retry/backoff strategy for failed queued jobs
+- [ ] Add request validation hardening (YouTube URL checks, query trimming, limits)

@@ -4,22 +4,25 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl
 
-from src.api.processing import process_video_task
 from src.api.search import search_video as search_video_service
 from src.config.env import load_env
 from src.db.supabase import (
     VideoRecord,
     create_video as db_create_video,
+    enqueue_video_job,
     get_video as db_get_video,
+    update_video_status,
 )
+from src.utils.logging import get_logger
 
 load_env()
+logger = get_logger(__name__)
 
-StatusType = Literal["processing", "ready", "failed"]
+StatusType = Literal["queued", "processing", "ready", "failed"]
 
 
 class VideoCreateRequest(BaseModel):
@@ -42,7 +45,7 @@ class VideoSearchRequest(BaseModel):
 
 class SearchResult(BaseModel):
     timestamp_s: float
-    thumbnail_url: HttpUrl
+    thumbnail_url: HttpUrl | None = None
     score: float
 
 
@@ -84,17 +87,26 @@ app.add_middleware(
 
 
 @app.post("/videos", response_model=VideoResponse)
-def create_video(
-    request: VideoCreateRequest, background_tasks: BackgroundTasks
-) -> VideoResponse:
-    """Create a new video and start background processing."""
-    record = db_create_video(str(request.youtube_url))
-
-    background_tasks.add_task(
-        process_video_task,
-        video_id=record.id,
-        youtube_url=str(request.youtube_url),
-    )
+def create_video(request: VideoCreateRequest) -> VideoResponse:
+    """Create a new video and enqueue durable processing job."""
+    record = db_create_video(str(request.youtube_url), status="queued")
+    try:
+        enqueue_video_job(record.id)
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue processing job for video_id=%s: %s",
+            record.id,
+            exc,
+        )
+        update_video_status(
+            record.id,
+            "failed",
+            error_message=f"Failed to enqueue processing job: {exc}",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to enqueue processing job",
+        ) from exc
 
     return _video_record_to_response(record)
 

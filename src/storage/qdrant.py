@@ -26,7 +26,7 @@ class FrameVector:
     frame_index: int
     timestamp_s: float
     vector: list[float]
-    thumbnail_url: str
+    thumbnail_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,8 @@ class SearchResult:
     video_id: str
     frame_index: int
     timestamp_s: float
-    thumbnail_url: str
     score: float
+    thumbnail_url: str | None = None
 
 
 def generate_point_id(video_id: str, frame_index: int) -> str:
@@ -147,7 +147,7 @@ class QdrantStore:
                 video_id=point.payload["video_id"],  # type: ignore[index]
                 frame_index=point.payload["frame_index"],  # type: ignore[index]
                 timestamp_s=point.payload["timestamp_s"],  # type: ignore[index]
-                thumbnail_url=point.payload["thumbnail_url"],  # type: ignore[index]
+                thumbnail_url=point.payload.get("thumbnail_url"),  # type: ignore[union-attr]
                 score=point.score,
             )
             for point in points

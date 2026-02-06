@@ -1,7 +1,7 @@
 """Search service for video moment finder."""
 from __future__ import annotations
 
-from src.embedding.modal_app import embed_text
+from src.config.modal import EMBED_TEXT_FUNCTION_NAME, get_embedding_modal_function
 from src.storage.config import QdrantConfig
 from src.storage.qdrant import QdrantStore, SearchResult
 from src.utils.logging import get_logger
@@ -25,7 +25,8 @@ def search_video(video_id: str, query_text: str, limit: int = 5) -> list[SearchR
         "Searching video_id=%s query=%r limit=%d", video_id, query_text[:50], limit
     )
 
-    query_vector = embed_text.remote(query_text)
+    embed_fn = get_embedding_modal_function(EMBED_TEXT_FUNCTION_NAME)
+    query_vector = embed_fn.remote(query_text)
     logger.debug("Got query embedding with %d dimensions", len(query_vector))
 
     qdrant_config = QdrantConfig.from_env()
