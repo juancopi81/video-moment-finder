@@ -26,7 +26,7 @@ class FrameVector:
     frame_index: int
     timestamp_s: float
     vector: list[float]
-    thumbnail_url: str
+    thumbnail_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,8 @@ class SearchResult:
     video_id: str
     frame_index: int
     timestamp_s: float
-    thumbnail_url: str
     score: float
+    thumbnail_url: str | None = None
 
 
 def generate_point_id(video_id: str, frame_index: int) -> str:
@@ -51,7 +51,7 @@ class QdrantStore:
 
     def __init__(self, config: QdrantConfig) -> None:
         self._config = config
-        if config.in_memory:
+        if config.use_in_memory:
             self._client = QdrantClient(":memory:")
         else:
             self._client = QdrantClient(
@@ -75,6 +75,16 @@ class QdrantStore:
                 )
             except Exception as exc:
                 raise QdrantStorageError(f"Failed to create collection: {exc}") from exc
+
+        # Cloud clusters can require payload indexes for filtered queries.
+        try:
+            self._client.create_payload_index(
+                collection_name=self._config.collection_name,
+                field_name="video_id",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+        except Exception as exc:
+            raise QdrantStorageError(f"Failed to ensure payload index for video_id: {exc}") from exc
 
     def upsert_frames(self, frames: list[FrameVector]) -> int:
         """Upsert frame vectors to Qdrant. Returns count of upserted points."""
@@ -147,7 +157,7 @@ class QdrantStore:
                 video_id=point.payload["video_id"],  # type: ignore[index]
                 frame_index=point.payload["frame_index"],  # type: ignore[index]
                 timestamp_s=point.payload["timestamp_s"],  # type: ignore[index]
-                thumbnail_url=point.payload["thumbnail_url"],  # type: ignore[index]
+                thumbnail_url=point.payload.get("thumbnail_url"),  # type: ignore[union-attr]
                 score=point.score,
             )
             for point in points

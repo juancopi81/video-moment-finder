@@ -16,7 +16,7 @@ class QdrantConfig:
     url: str | None
     api_key: str | None
     collection_name: str
-    in_memory: bool = False
+    use_in_memory: bool = False
 
     @classmethod
     def from_env(cls, collection_name: str = "video_frames") -> QdrantConfig:
@@ -32,7 +32,7 @@ class QdrantConfig:
     @classmethod
     def in_memory(cls, collection_name: str = "video_frames") -> QdrantConfig:
         """Create in-memory config for testing."""
-        return cls(url=None, api_key=None, collection_name=collection_name, in_memory=True)
+        return cls(url=None, api_key=None, collection_name=collection_name, use_in_memory=True)
 
 
 @dataclass(frozen=True)

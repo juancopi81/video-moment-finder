@@ -114,7 +114,7 @@ class StoragePipeline:
                     frame_index=frame.index,
                     timestamp_s=frame.timestamp_s,
                     vector=embedding,
-                    thumbnail_url=thumbnail_urls.get(frame.index, ""),
+                    thumbnail_url=thumbnail_urls.get(frame.index),
                 )
                 for frame, embedding in zip(frames, embeddings)
             ]

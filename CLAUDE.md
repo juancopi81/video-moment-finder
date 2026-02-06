@@ -8,8 +8,9 @@ Video Moment Finder is a SaaS product for semantic video frame search. Users pas
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14 + Clerk (auth) + Stripe (payments)
+- **Frontend**: Next.js 16 + Clerk (auth) + Stripe (payments)
 - **Backend**: FastAPI
+- **Queue Worker**: Supabase-backed durable queue + Python worker
 - **GPU Processing**: Modal (serverless)
 - **AI Model**: Qwen3-VL-Embedding-2B for frame/query embeddings
 - **Vector DB**: Qdrant Cloud
@@ -20,11 +21,9 @@ Video Moment Finder is a SaaS product for semantic video frame search. Users pas
 ## Architecture
 
 ```
-Next.js → FastAPI → Modal (GPU)
-              ↓          ↓
-          Supabase    Qdrant
-              ↓
-        Cloudflare R2
+Next.js → FastAPI → Supabase job queue → Worker → Modal (GPU)
+              ↓                            ↓        ↓
+          Supabase                      Qdrant     Cloudflare R2
 ```
 
 **Processing Pipeline** (runs on Modal GPU):
@@ -35,7 +34,7 @@ Next.js → FastAPI → Modal (GPU)
 5. Upload thumbnails to R2
 
 **Search Flow**:
-1. Embed query (text or image) with Qwen3-VL-Embedding-2B
+1. Embed text query with Qwen3-VL-Embedding-2B
 2. Vector search in Qdrant filtered by video_id
 3. Return top 5 results with timestamps and thumbnails
 
@@ -46,8 +45,15 @@ Next.js → FastAPI → Modal (GPU)
 uv add <package>          # Add dependencies
 uv run <command>          # Run commands in the virtual environment
 
-# Run the main entry point
-uv run python main.py
+# One-command local setup (migrations + deps)
+set -a && source .env && set +a
+./scripts/setup_local.sh
+
+# Run API
+uv run uvicorn src.api.app:app --reload --port 8000
+
+# Run worker (required for queued processing)
+uv run python -m src.worker.runner
 
 # Python version requirement
 python --version  # Must be 3.11+
