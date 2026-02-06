@@ -51,7 +51,7 @@ class QdrantStore:
 
     def __init__(self, config: QdrantConfig) -> None:
         self._config = config
-        if config.in_memory:
+        if config.use_in_memory:
             self._client = QdrantClient(":memory:")
         else:
             self._client = QdrantClient(
@@ -75,6 +75,16 @@ class QdrantStore:
                 )
             except Exception as exc:
                 raise QdrantStorageError(f"Failed to create collection: {exc}") from exc
+
+        # Cloud clusters can require payload indexes for filtered queries.
+        try:
+            self._client.create_payload_index(
+                collection_name=self._config.collection_name,
+                field_name="video_id",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+        except Exception as exc:
+            raise QdrantStorageError(f"Failed to ensure payload index for video_id: {exc}") from exc
 
     def upsert_frames(self, frames: list[FrameVector]) -> int:
         """Upsert frame vectors to Qdrant. Returns count of upserted points."""

@@ -35,20 +35,11 @@ update public.videos set status = 'queued' where status is null;
 update public.videos set status = 'failed' where status not in ('queued', 'processing', 'ready', 'failed');
 alter table public.videos alter column status set not null;
 
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'videos_status_check'
-      and conrelid = 'public.videos'::regclass
-  ) then
-    alter table public.videos
-      add constraint videos_status_check
-      check (status in ('queued', 'processing', 'ready', 'failed'));
-  end if;
-end
-$$;
+alter table public.videos
+  drop constraint if exists videos_status_check;
+alter table public.videos
+  add constraint videos_status_check
+  check (status in ('queued', 'processing', 'ready', 'failed'));
 
 drop trigger if exists videos_set_updated_at on public.videos;
 create trigger videos_set_updated_at
@@ -128,20 +119,11 @@ alter table public.video_jobs alter column attempt_count set default 0;
 update public.video_jobs set attempt_count = 0 where attempt_count is null;
 alter table public.video_jobs alter column attempt_count set not null;
 
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_constraint
-    where conname = 'video_jobs_status_check'
-      and conrelid = 'public.video_jobs'::regclass
-  ) then
-    alter table public.video_jobs
-      add constraint video_jobs_status_check
-      check (status in ('queued', 'processing', 'completed', 'failed'));
-  end if;
-end
-$$;
+alter table public.video_jobs
+  drop constraint if exists video_jobs_status_check;
+alter table public.video_jobs
+  add constraint video_jobs_status_check
+  check (status in ('queued', 'processing', 'completed', 'failed'));
 
 do $$
 begin

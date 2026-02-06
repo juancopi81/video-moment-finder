@@ -70,3 +70,22 @@ def test_upsert_empty_returns_zero() -> None:
     store.ensure_collection()
 
     assert store.upsert_frames([]) == 0
+
+
+def test_ensure_collection_creates_video_id_payload_index(monkeypatch) -> None:
+    config = QdrantConfig.in_memory(collection_name="index_frames")
+    store = QdrantStore(config)
+
+    calls: list[tuple[str, str]] = []
+    original_create_payload_index = store._client.create_payload_index
+
+    def tracked_create_payload_index(*args, **kwargs):
+        calls.append((kwargs["collection_name"], kwargs["field_name"]))
+        return original_create_payload_index(*args, **kwargs)
+
+    monkeypatch.setattr(store._client, "create_payload_index", tracked_create_payload_index)
+
+    store.ensure_collection()
+
+    assert calls
+    assert calls[-1] == ("index_frames", "video_id")
