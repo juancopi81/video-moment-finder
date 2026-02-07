@@ -65,6 +65,12 @@ cd frontend && npm run lint && npm run build
 
 ## Search Latency Benchmark
 
+Deploy the current embedding app code before benchmarking:
+
+```bash
+uv run modal deploy src/embedding/modal_app.py
+```
+
 After a video reaches `ready`, run:
 
 ```bash
@@ -79,6 +85,12 @@ MODAL_TEXT_EMBED_MIN_CONTAINERS=1 .venv/bin/python scripts/phase3/search_latency
 
 Leave `MODAL_TEXT_EMBED_MIN_CONTAINERS` unset for normal development and default-cost behavior.
 
+If you test warm containers, redeploy with env set:
+
+```bash
+MODAL_TEXT_EMBED_MIN_CONTAINERS=1 uv run modal deploy src/embedding/modal_app.py
+```
+
 ## Temporary Benchmark Checklist (Delete After Tomorrow)
 
 1. Pick one `video_id` that is already `ready` and reuse it for all runs.
@@ -89,7 +101,15 @@ cd /Users/juanpineros/juancopi81/video-moment-finder
 git worktree add /tmp/vmf-main main
 ```
 
-3. Run **BEFORE (main)** API (Terminal A):
+3. Deploy **BEFORE (main)** embedding code:
+
+```bash
+cd /tmp/vmf-main
+set -a && source /Users/juanpineros/juancopi81/video-moment-finder/.env && set +a
+uv run modal deploy src/embedding/modal_app.py
+```
+
+4. Run **BEFORE (main)** API (Terminal A):
 
 ```bash
 cd /tmp/vmf-main
@@ -97,7 +117,7 @@ set -a && source /Users/juanpineros/juancopi81/video-moment-finder/.env && set +
 /Users/juanpineros/juancopi81/video-moment-finder/.venv/bin/uvicorn src.api.app:app --port 8001
 ```
 
-4. Run benchmark against `main` (Terminal B):
+5. Run benchmark against `main` (Terminal B):
 
 ```bash
 cd /Users/juanpineros/juancopi81/video-moment-finder
@@ -108,7 +128,15 @@ cd /Users/juanpineros/juancopi81/video-moment-finder
   --json-output /tmp/search_before.json
 ```
 
-5. Stop Terminal A, then run **AFTER (feature branch)** API (Terminal A):
+6. Deploy **AFTER (feature branch)** embedding code:
+
+```bash
+cd /Users/juanpineros/juancopi81/video-moment-finder
+set -a && source .env && set +a
+uv run modal deploy src/embedding/modal_app.py
+```
+
+7. Stop Terminal A, then run **AFTER (feature branch)** API (Terminal A):
 
 ```bash
 cd /Users/juanpineros/juancopi81/video-moment-finder
@@ -116,7 +144,7 @@ set -a && source .env && set +a
 .venv/bin/uvicorn src.api.app:app --port 8000
 ```
 
-6. Run benchmark against feature branch (Terminal B):
+8. Run benchmark against feature branch (Terminal B):
 
 ```bash
 cd /Users/juanpineros/juancopi81/video-moment-finder
@@ -127,10 +155,19 @@ cd /Users/juanpineros/juancopi81/video-moment-finder
   --json-output /tmp/search_after.json
 ```
 
-7. Optional warm-container cost experiment (after only):
+9. Optional warm-container cost experiment (after only):
 
 ```bash
-MODAL_TEXT_EMBED_MIN_CONTAINERS=1 .venv/bin/uvicorn src.api.app:app --port 8002
+cd /Users/juanpineros/juancopi81/video-moment-finder
+set -a && source .env && set +a
+MODAL_TEXT_EMBED_MIN_CONTAINERS=1 uv run modal deploy src/embedding/modal_app.py
+```
+
+10. Run warm benchmark against feature branch:
+
+```bash
+cd /Users/juanpineros/juancopi81/video-moment-finder
+.venv/bin/uvicorn src.api.app:app --port 8002
 ```
 
 ```bash

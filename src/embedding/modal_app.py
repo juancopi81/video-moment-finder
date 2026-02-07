@@ -50,9 +50,6 @@ def _optional_non_negative_int_env(name: str) -> int | None:
     return value
 
 
-_TEXT_EMBED_MODEL: Any | None = None
-
-
 def _resolve_text_embed_min_containers() -> int | None:
     """
     Resolve optional warm-container config for text embedding.
@@ -69,18 +66,72 @@ def _resolve_text_embed_min_containers() -> int | None:
 TEXT_EMBED_MIN_CONTAINERS = _resolve_text_embed_min_containers()
 
 
+def _resolve_text_embed_max_containers() -> int:
+    """
+    Resolve max text embed containers.
+
+    Defaults to 1 so repeated sequential searches hit a reused container/model.
+    """
+    max_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MAX_CONTAINERS")
+    if max_containers is None:
+        return 1
+    if max_containers == 0:
+        raise ValueError("MODAL_TEXT_EMBED_MAX_CONTAINERS must be >= 1")
+    return max_containers
+
+
+TEXT_EMBED_MAX_CONTAINERS = _resolve_text_embed_max_containers()
+
+
+def _validate_text_embed_container_bounds(
+    min_containers: int | None,
+    max_containers: int,
+) -> None:
+    if min_containers is not None and min_containers > max_containers:
+        raise ValueError(
+            "MODAL_TEXT_EMBED_MIN_CONTAINERS cannot exceed MODAL_TEXT_EMBED_MAX_CONTAINERS"
+        )
+
+
+_validate_text_embed_container_bounds(
+    TEXT_EMBED_MIN_CONTAINERS,
+    TEXT_EMBED_MAX_CONTAINERS,
+)
+
+
 def _create_qwen_embedder():
     from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     return Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
 
 
-def _get_text_embedder():
-    """Cache the text embedder per Modal container to avoid per-request reloads."""
-    global _TEXT_EMBED_MODEL
-    if _TEXT_EMBED_MODEL is None:
-        _TEXT_EMBED_MODEL = _create_qwen_embedder()
-    return _TEXT_EMBED_MODEL
+@app.cls(
+    image=image,
+    gpu="A10G",
+    timeout=300,
+    min_containers=TEXT_EMBED_MIN_CONTAINERS,
+    max_containers=TEXT_EMBED_MAX_CONTAINERS,
+)
+class TextEmbedder:
+    """Container-scoped text embedder with startup model preload."""
+
+    model: Any | None = None
+
+    @modal.enter()
+    def load_model(self) -> None:
+        self.model = _create_qwen_embedder()
+
+    @modal.method()
+    def embed(self, text: str) -> list[float]:
+        if not text or not text.strip():
+            raise ValueError("text must be non-empty")
+
+        # Fallback guard if a container enters without initialization.
+        if self.model is None:
+            self.model = _create_qwen_embedder()
+
+        embedding = _normalize_embedding(self.model.process([{"text": text.strip()}]))
+        return embedding[0].tolist()
 
 
 @app.function(image=image, timeout=1800)
@@ -175,24 +226,3 @@ def embed_images_in_batches(
         raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} != {len(images)}")
 
     return embeddings
-
-
-@app.function(
-    image=image,
-    gpu="A10G",
-    timeout=300,
-    min_containers=TEXT_EMBED_MIN_CONTAINERS,
-)
-def embed_text(text: str) -> list[float]:
-    """
-    Embed a text query and return normalized 2048-dim vector.
-
-    Fail-fast behavior:
-    - Raises ValueError if text is empty.
-    """
-    if not text or not text.strip():
-        raise ValueError("text must be non-empty")
-
-    model = _get_text_embedder()
-    embedding = _normalize_embedding(model.process([{"text": text.strip()}]))
-    return embedding[0].tolist()

@@ -5,7 +5,7 @@ import modal
 
 EMBEDDING_MODAL_APP_NAME = "video-moment-finder-embed"
 EMBED_IMAGES_FUNCTION_NAME = "embed_images_in_batches"
-EMBED_TEXT_FUNCTION_NAME = "embed_text"
+EMBED_TEXT_FUNCTION_NAME = "TextEmbedder.embed"
 
 
 def get_embedding_modal_function(function_name: str) -> modal.Function:

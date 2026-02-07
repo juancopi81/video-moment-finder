@@ -38,6 +38,7 @@
 | 2026-02-06 | Phase 3 | API + Queue Test Coverage         | Done   | Added API tests for submit/status/search plus worker and queue unit tests (`tests/api`, `tests/worker`, `tests/db/test_video_jobs.py`).                               |
 | 2026-02-06 | Phase 3 | CI + Setup Hardening              | Done   | Added GitHub Actions CI (pytest, frontend lint/build), Supabase migrations, and one-command local setup script (`scripts/setup_local.sh`).                            |
 | 2026-02-06 | Phase 3 | Search Latency Instrumentation    | Done   | Added search-stage timing logs, per-container text embedder cache, optional `MODAL_TEXT_EMBED_MIN_CONTAINERS` (default disabled), benchmark CLI, and unified `check_all` script. |
+| 2026-02-07 | Phase 3 | Search Latency Iteration (Preload) | Done  | Switched text embedding to Modal class with container-start preload (`@modal.enter`), default `MODAL_TEXT_EMBED_MAX_CONTAINERS=1` for cache reuse, and benchmark docs now require explicit Modal deploy per mode. |
 
 
 ## Blockers
