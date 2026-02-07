@@ -18,10 +18,17 @@ def test_search_video_logs_timing_and_returns_results(monkeypatch) -> None:
     info_calls: list[tuple[str, tuple[object, ...]]] = []
     captured_search_args: dict[str, object] = {}
 
-    class FakeEmbedFn:
+    class FakeEmbedMethod:
         def remote(self, query_text: str) -> list[float]:
             assert query_text == "find opening scene"
             return [0.1, 0.2, 0.3]
+
+    class FakeEmbedderInstance:
+        embed = FakeEmbedMethod()
+
+    class FakeEmbedderClass:
+        def __call__(self) -> FakeEmbedderInstance:
+            return FakeEmbedderInstance()
 
     class FakeQdrantStore:
         def __init__(self, config: object) -> None:
@@ -41,8 +48,8 @@ def test_search_video_logs_timing_and_returns_results(monkeypatch) -> None:
 
     monkeypatch.setattr(
         search_module,
-        "get_embedding_modal_function",
-        lambda function_name: FakeEmbedFn(),
+        "get_text_embedder_class",
+        lambda: FakeEmbedderClass(),
     )
     monkeypatch.setattr(
         search_module.QdrantConfig,
