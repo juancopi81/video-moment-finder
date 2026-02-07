@@ -23,6 +23,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from src.config.env import load_env
+from src.utils.logging import Timer, get_logger
 
 
 DEFAULT_QUERIES = [
@@ -30,6 +31,7 @@ DEFAULT_QUERIES = [
     "close up shot",
     "text on screen",
 ]
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -72,18 +74,18 @@ def _post_search(
         method="POST",
     )
 
-    start = time.perf_counter()
-    try:
-        with request.urlopen(req, timeout=timeout_s) as response:
-            body = response.read().decode("utf-8")
-            status_code = response.status
-    except error.HTTPError as exc:
-        body = exc.read().decode("utf-8")
-        status_code = exc.code
-    except error.URLError as exc:
-        raise RuntimeError(f"Failed to connect to API: {exc.reason}") from exc
+    with Timer("Benchmark API search request", logger, level="debug") as request_timer:
+        try:
+            with request.urlopen(req, timeout=timeout_s) as response:
+                body = response.read().decode("utf-8")
+                status_code = response.status
+        except error.HTTPError as exc:
+            body = exc.read().decode("utf-8")
+            status_code = exc.code
+        except error.URLError as exc:
+            raise RuntimeError(f"Failed to connect to API: {exc.reason}") from exc
 
-    latency_ms = (time.perf_counter() - start) * 1000
+    latency_ms = (request_timer.elapsed or 0.0) * 1000
 
     try:
         data = json.loads(body) if body else {}
@@ -151,7 +153,7 @@ def run_benchmark(
 
             samples.append(sample)
             status_label = "OK" if status_code == 200 else "ERR"
-            print(
+            logger.info(
                 f"[{status_label}] query={query_text!r} run={run_index + 1}/{runs_per_query} "
                 f"latency={latency_ms:.1f}ms status={status_code} results={sample.result_count}"
             )
@@ -171,12 +173,12 @@ def print_summary(samples: list[BenchmarkSample]) -> int:
     hot_latencies = [sample.latency_ms for sample in hot_samples]
     cold_latencies = [sample.latency_ms for sample in cold_samples]
 
-    print("\n=== Search Latency Summary ===")
-    print(f"Total requests: {len(samples)}")
-    print(f"Successful requests: {len(ok_samples)}")
+    logger.info("=== Search Latency Summary ===")
+    logger.info("Total requests: %d", len(samples))
+    logger.info("Successful requests: %d", len(ok_samples))
 
     if all_latencies:
-        print(
+        logger.info(
             "All successful: "
             f"mean={statistics.mean(all_latencies):.1f}ms "
             f"p50={_percentile(all_latencies, 0.50):.1f}ms "
@@ -184,14 +186,14 @@ def print_summary(samples: list[BenchmarkSample]) -> int:
         )
 
     if cold_latencies:
-        print(
+        logger.info(
             "Cold candidate (first run/query): "
             f"mean={statistics.mean(cold_latencies):.1f}ms "
             f"p50={_percentile(cold_latencies, 0.50):.1f}ms"
         )
 
     if hot_latencies:
-        print(
+        logger.info(
             "Hot path (run>1/query): "
             f"mean={statistics.mean(hot_latencies):.1f}ms "
             f"p50={_percentile(hot_latencies, 0.50):.1f}ms "
@@ -200,9 +202,9 @@ def print_summary(samples: list[BenchmarkSample]) -> int:
 
     failures = [sample for sample in samples if sample.status_code != 200]
     if failures:
-        print("\nFailures:")
+        logger.warning("Failures:")
         for sample in failures:
-            print(
+            logger.warning(
                 f"- query={sample.query_text!r} run={sample.run_index + 1} "
                 f"status={sample.status_code} error={sample.error}"
             )
@@ -257,7 +259,7 @@ def main() -> int:
         raise ValueError("--runs-per-query must be > 0")
 
     queries = _load_queries(args.queries_file)
-    print(
+    logger.info(
         "Running benchmark with "
         f"queries={len(queries)} runs_per_query={args.runs_per_query} api={args.api_url}"
     )
@@ -275,7 +277,7 @@ def main() -> int:
     if args.json_output is not None:
         payload = [asdict(sample) for sample in samples]
         args.json_output.write_text(json.dumps(payload, indent=2))
-        print(f"Saved raw samples to {args.json_output}")
+        logger.info("Saved raw samples to %s", args.json_output)
 
     return print_summary(samples)
 
