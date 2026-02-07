@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import io
+import os
+from pathlib import Path
+from typing import Any
 
 import modal
 
@@ -25,6 +27,60 @@ image = (
     )
     .env({"PYTHONPATH": "/root/qwen3-vl-embedding/src"})
 )
+
+
+def _optional_non_negative_int_env(name: str) -> int | None:
+    """
+    Parse an optional non-negative integer environment variable.
+
+    Returns None when unset/blank so Modal uses default scaling behavior.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+
+    if value < 0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+
+    return value
+
+
+_TEXT_EMBED_MODEL: Any | None = None
+
+
+def _resolve_text_embed_min_containers() -> int | None:
+    """
+    Resolve optional warm-container config for text embedding.
+
+    `MODAL_TEXT_EMBED_MIN_CONTAINERS` is preferred.
+    `MODAL_TEXT_EMBED_KEEP_WARM` remains as backward-compatible alias.
+    """
+    min_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MIN_CONTAINERS")
+    if min_containers is not None:
+        return min_containers
+    return _optional_non_negative_int_env("MODAL_TEXT_EMBED_KEEP_WARM")
+
+
+TEXT_EMBED_MIN_CONTAINERS = _resolve_text_embed_min_containers()
+
+
+def _create_qwen_embedder():
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+
+    return Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
+
+
+def _get_text_embedder():
+    """Cache the text embedder per Modal container to avoid per-request reloads."""
+    global _TEXT_EMBED_MODEL
+    if _TEXT_EMBED_MODEL is None:
+        _TEXT_EMBED_MODEL = _create_qwen_embedder()
+    return _TEXT_EMBED_MODEL
 
 
 @app.function(image=image, timeout=1800)
@@ -121,7 +177,12 @@ def embed_images_in_batches(
     return embeddings
 
 
-@app.function(image=image, gpu="A10G", timeout=300)
+@app.function(
+    image=image,
+    gpu="A10G",
+    timeout=300,
+    min_containers=TEXT_EMBED_MIN_CONTAINERS,
+)
 def embed_text(text: str) -> list[float]:
     """
     Embed a text query and return normalized 2048-dim vector.
@@ -132,8 +193,6 @@ def embed_text(text: str) -> list[float]:
     if not text or not text.strip():
         raise ValueError("text must be non-empty")
 
-    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
-
-    model = Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
-    embedding = _normalize_embedding(model.process([{"text": text}]))
+    model = _get_text_embedder()
+    embedding = _normalize_embedding(model.process([{"text": text.strip()}]))
     return embedding[0].tolist()

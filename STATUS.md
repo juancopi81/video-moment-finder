@@ -37,6 +37,7 @@
 | 2026-02-06 | Phase 3 | Thumbnail URL Contract Fix        | Done   | Made thumbnail URL nullable end-to-end (storage + API response model) so non-R2 setups do not fail response validation.                                               |
 | 2026-02-06 | Phase 3 | API + Queue Test Coverage         | Done   | Added API tests for submit/status/search plus worker and queue unit tests (`tests/api`, `tests/worker`, `tests/db/test_video_jobs.py`).                               |
 | 2026-02-06 | Phase 3 | CI + Setup Hardening              | Done   | Added GitHub Actions CI (pytest, frontend lint/build), Supabase migrations, and one-command local setup script (`scripts/setup_local.sh`).                            |
+| 2026-02-06 | Phase 3 | Search Latency Instrumentation    | Done   | Added search-stage timing logs, per-container text embedder cache, optional `MODAL_TEXT_EMBED_MIN_CONTAINERS` (default disabled), benchmark CLI, and unified `check_all` script. |
 
 
 ## Blockers
@@ -49,6 +50,7 @@
 - **Qwen3-VL-Embedding-2B is suitable for semantic search** - 90% Recall@5 validates the model for finding video moments via text queries.
 - **2-route frontend structure** - Landing (`/`) + Video page (`/video/[id]`) that handles processing, search, and results based on state. Simpler than 3 separate pages.
 - **Queue durability before feature expansion** - Added durable queue state in Supabase before continuing feature work to avoid fragile in-process job execution.
+- **Warm containers are opt-in for cost control** - Search latency now supports optional `MODAL_TEXT_EMBED_MIN_CONTAINERS` (plus legacy alias), but default behavior keeps it unset to avoid always-on GPU cost in dev.
 
 ## Metrics / Measurements
 
@@ -66,5 +68,3 @@
 | GPU cost rate             | -       | $0.000463/s        | A10G pricing                                                               |
 | Qdrant store time         | -       | 0.05s              | 40 vectors (in-memory)                                                     |
 | Query embedding time      | -       | ~0.2s              | Per text query                                                             |
-
-
