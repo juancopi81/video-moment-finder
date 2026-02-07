@@ -40,6 +40,7 @@
 | 2026-02-06 | Phase 3 | Search Latency Instrumentation    | Done   | Added search-stage timing logs, per-container text embedder cache, optional `MODAL_TEXT_EMBED_MIN_CONTAINERS` (default disabled), benchmark CLI, and unified `check_all` script. |
 | 2026-02-07 | Phase 3 | Search Latency Iteration (Preload) | Done  | Switched text embedding to Modal class with container-start preload (`@modal.enter`), default `MODAL_TEXT_EMBED_MAX_CONTAINERS=1` for cache reuse, and benchmark docs now require explicit Modal deploy per mode. |
 | 2026-02-07 | Phase 3 | Modal Class Lookup Deprecation Fix | Done  | Switched search text embedding handle to `modal.Cls.from_name(...).embed.remote(...)` to remove class-method lookup deprecation warning; removed temporary benchmark checklist notes from README. |
+| 2026-02-07 | Phase 3 | Queue Reliability Hardening         | Done   | Added worker retry cap (`max_attempts`), stale-lock recovery/requeue for stuck `processing` jobs, structured worker metric logs (`job_attempt_started`, `job_requeued`, terminal failures), and crash/restart-oriented queue tests. |
 
 
 ## Blockers

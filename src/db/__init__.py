@@ -1,21 +1,35 @@
 """Database modules (Supabase PostgreSQL)."""
 
 from src.db.supabase import (
-    get_client,
+    claim_next_video_job,
+    complete_video_job,
     create_video,
-    get_video,
-    update_video_status,
-    list_videos,
+    enqueue_video_job,
+    get_client,
     get_credits,
+    get_video,
+    get_video_job,
+    list_queued_video_jobs,
+    list_stale_processing_video_jobs,
+    list_videos,
+    requeue_video_job,
     update_credits,
+    update_video_status,
 )
 
 __all__ = [
+    "claim_next_video_job",
+    "complete_video_job",
     "get_client",
     "create_video",
+    "enqueue_video_job",
     "get_video",
+    "get_video_job",
+    "list_queued_video_jobs",
+    "list_stale_processing_video_jobs",
     "update_video_status",
     "list_videos",
+    "requeue_video_job",
     "get_credits",
     "update_credits",
 ]
