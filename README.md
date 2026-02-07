@@ -43,6 +43,14 @@ cd frontend && npm run dev
 
 ## Quality Checks
 
+Run all checks with one command:
+
+```bash
+./scripts/workflow/check_all.sh
+```
+
+Equivalent manual commands:
+
 Backend tests:
 
 ```bash
@@ -53,4 +61,32 @@ Frontend lint/build:
 
 ```bash
 cd frontend && npm run lint && npm run build
+```
+
+## Search Latency Benchmark
+
+Deploy the current embedding app code before benchmarking:
+
+```bash
+uv run modal deploy src/embedding/modal_app.py
+```
+
+After a video reaches `ready`, run:
+
+```bash
+.venv/bin/python scripts/phase3/search_latency_benchmark.py --video-id <VIDEO_ID>
+```
+
+Optional warm-container comparison (benchmark only):
+
+```bash
+MODAL_TEXT_EMBED_MIN_CONTAINERS=1 .venv/bin/python scripts/phase3/search_latency_benchmark.py --video-id <VIDEO_ID>
+```
+
+Leave `MODAL_TEXT_EMBED_MIN_CONTAINERS` unset for normal development and default-cost behavior.
+
+If you test warm containers, redeploy with env set:
+
+```bash
+MODAL_TEXT_EMBED_MIN_CONTAINERS=1 uv run modal deploy src/embedding/modal_app.py
 ```

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import io
+import os
+from pathlib import Path
+from typing import Any
 
 import modal
 
@@ -25,6 +27,111 @@ image = (
     )
     .env({"PYTHONPATH": "/root/qwen3-vl-embedding/src"})
 )
+
+
+def _optional_non_negative_int_env(name: str) -> int | None:
+    """
+    Parse an optional non-negative integer environment variable.
+
+    Returns None when unset/blank so Modal uses default scaling behavior.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+
+    if value < 0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+
+    return value
+
+
+def _resolve_text_embed_min_containers() -> int | None:
+    """
+    Resolve optional warm-container config for text embedding.
+
+    `MODAL_TEXT_EMBED_MIN_CONTAINERS` is preferred.
+    `MODAL_TEXT_EMBED_KEEP_WARM` remains as backward-compatible alias.
+    """
+    min_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MIN_CONTAINERS")
+    if min_containers is not None:
+        return min_containers
+    return _optional_non_negative_int_env("MODAL_TEXT_EMBED_KEEP_WARM")
+
+
+TEXT_EMBED_MIN_CONTAINERS = _resolve_text_embed_min_containers()
+
+
+def _resolve_text_embed_max_containers() -> int:
+    """
+    Resolve max text embed containers.
+
+    Defaults to 1 so repeated sequential searches hit a reused container/model.
+    """
+    max_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MAX_CONTAINERS")
+    if max_containers is None:
+        return 1
+    if max_containers == 0:
+        raise ValueError("MODAL_TEXT_EMBED_MAX_CONTAINERS must be >= 1")
+    return max_containers
+
+
+TEXT_EMBED_MAX_CONTAINERS = _resolve_text_embed_max_containers()
+
+
+def _validate_text_embed_container_bounds(
+    min_containers: int | None,
+    max_containers: int,
+) -> None:
+    if min_containers is not None and min_containers > max_containers:
+        raise ValueError(
+            "MODAL_TEXT_EMBED_MIN_CONTAINERS cannot exceed MODAL_TEXT_EMBED_MAX_CONTAINERS"
+        )
+
+
+_validate_text_embed_container_bounds(
+    TEXT_EMBED_MIN_CONTAINERS,
+    TEXT_EMBED_MAX_CONTAINERS,
+)
+
+
+def _create_qwen_embedder():
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+
+    return Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
+
+
+@app.cls(
+    image=image,
+    gpu="A10G",
+    timeout=300,
+    min_containers=TEXT_EMBED_MIN_CONTAINERS,
+    max_containers=TEXT_EMBED_MAX_CONTAINERS,
+)
+class TextEmbedder:
+    """Container-scoped text embedder with startup model preload."""
+
+    model: Any | None = None
+
+    @modal.enter()
+    def load_model(self) -> None:
+        self.model = _create_qwen_embedder()
+
+    @modal.method()
+    def embed(self, text: str) -> list[float]:
+        if not text or not text.strip():
+            raise ValueError("text must be non-empty")
+
+        # Fallback guard if a container enters without initialization.
+        if self.model is None:
+            self.model = _create_qwen_embedder()
+
+        embedding = _normalize_embedding(self.model.process([{"text": text.strip()}]))
+        return embedding[0].tolist()
 
 
 @app.function(image=image, timeout=1800)
@@ -119,21 +226,3 @@ def embed_images_in_batches(
         raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} != {len(images)}")
 
     return embeddings
-
-
-@app.function(image=image, gpu="A10G", timeout=300)
-def embed_text(text: str) -> list[float]:
-    """
-    Embed a text query and return normalized 2048-dim vector.
-
-    Fail-fast behavior:
-    - Raises ValueError if text is empty.
-    """
-    if not text or not text.strip():
-        raise ValueError("text must be non-empty")
-
-    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
-
-    model = Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
-    embedding = _normalize_embedding(model.process([{"text": text}]))
-    return embedding[0].tolist()
