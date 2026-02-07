@@ -78,3 +78,65 @@ MODAL_TEXT_EMBED_MIN_CONTAINERS=1 .venv/bin/python scripts/phase3/search_latency
 ```
 
 Leave `MODAL_TEXT_EMBED_MIN_CONTAINERS` unset for normal development and default-cost behavior.
+
+## Temporary Benchmark Checklist (Delete After Tomorrow)
+
+1. Pick one `video_id` that is already `ready` and reuse it for all runs.
+2. Create a separate `main` worktree (one time):
+
+```bash
+cd /Users/juanpineros/juancopi81/video-moment-finder
+git worktree add /tmp/vmf-main main
+```
+
+3. Run **BEFORE (main)** API (Terminal A):
+
+```bash
+cd /tmp/vmf-main
+set -a && source /Users/juanpineros/juancopi81/video-moment-finder/.env && set +a
+/Users/juanpineros/juancopi81/video-moment-finder/.venv/bin/uvicorn src.api.app:app --port 8001
+```
+
+4. Run benchmark against `main` (Terminal B):
+
+```bash
+cd /Users/juanpineros/juancopi81/video-moment-finder
+.venv/bin/python /Users/juanpineros/juancopi81/video-moment-finder/scripts/phase3/search_latency_benchmark.py \
+  --api-url http://localhost:8001 \
+  --video-id <VIDEO_ID> \
+  --runs-per-query 5 \
+  --json-output /tmp/search_before.json
+```
+
+5. Stop Terminal A, then run **AFTER (feature branch)** API (Terminal A):
+
+```bash
+cd /Users/juanpineros/juancopi81/video-moment-finder
+set -a && source .env && set +a
+.venv/bin/uvicorn src.api.app:app --port 8000
+```
+
+6. Run benchmark against feature branch (Terminal B):
+
+```bash
+cd /Users/juanpineros/juancopi81/video-moment-finder
+.venv/bin/python /Users/juanpineros/juancopi81/video-moment-finder/scripts/phase3/search_latency_benchmark.py \
+  --api-url http://localhost:8000 \
+  --video-id <VIDEO_ID> \
+  --runs-per-query 5 \
+  --json-output /tmp/search_after.json
+```
+
+7. Optional warm-container cost experiment (after only):
+
+```bash
+MODAL_TEXT_EMBED_MIN_CONTAINERS=1 .venv/bin/uvicorn src.api.app:app --port 8002
+```
+
+```bash
+.venv/bin/python /Users/juanpineros/juancopi81/video-moment-finder/scripts/phase3/search_latency_benchmark.py \
+  --api-url http://localhost:8002 \
+  --video-id <VIDEO_ID> \
+  --runs-per-query 5 \
+  --json-output /tmp/search_after_warm.json
+```

@@ -81,3 +81,10 @@ After completing significant work, update STATUS.md with:
 - Progress log entry (date, phase, task, status, notes)
 - Any new blockers or decisions
 - Metrics if measured during the task
+
+## Logging and Timing Conventions
+
+- Use `src.utils.logging.get_logger()` for runtime logs in app code and scripts.
+- Use `src.utils.logging.Timer` for duration measurements (stage timing, latency timing).
+- Prefer structured logger output over `print()` for operational/debug information.
+- Avoid ad-hoc `time.perf_counter()` timing in app code unless `Timer` cannot cover the use case.
