@@ -54,6 +54,8 @@ uv run uvicorn src.api.app:app --reload --port 8000
 
 # Run worker (required for queued processing)
 uv run python -m src.worker.runner
+# Optional reliability tuning
+uv run python -m src.worker.runner --max-attempts 3 --stale-lock-timeout 600
 
 # Python version requirement
 python --version  # Must be 3.11+
@@ -88,3 +90,8 @@ After completing significant work, update STATUS.md with:
 - Use `src.utils.logging.Timer` for duration measurements (stage timing, latency timing).
 - Prefer structured logger output over `print()` for operational/debug information.
 - Avoid ad-hoc `time.perf_counter()` timing in app code unless `Timer` cannot cover the use case.
+
+## Queue Reliability Defaults
+
+- `VIDEO_JOB_MAX_ATTEMPTS=3` controls terminal failure threshold.
+- `VIDEO_JOB_STALE_LOCK_TIMEOUT_S=600` controls stale `processing` lock recovery.
