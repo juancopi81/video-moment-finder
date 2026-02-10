@@ -35,6 +35,16 @@ Run worker (required for processing queue):
 uv run python -m src.worker.runner
 ```
 
+Optional reliability overrides:
+
+```bash
+uv run python -m src.worker.runner --max-attempts 3 --stale-lock-timeout 600
+```
+
+- Failed jobs are retried up to `VIDEO_JOB_MAX_ATTEMPTS` (default `3`).
+- `processing` jobs with stale locks older than `VIDEO_JOB_STALE_LOCK_TIMEOUT_S` seconds
+  (default `600`) are recovered and requeued.
+
 Run frontend:
 
 ```bash

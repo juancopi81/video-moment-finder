@@ -250,6 +250,29 @@ def list_queued_video_jobs(limit: int = 10) -> list[VideoJobRecord]:
     return [_row_to_video_job(row) for row in result.data]
 
 
+def list_stale_processing_video_jobs(
+    stale_before_iso: str,
+    limit: int = 25,
+) -> list[VideoJobRecord]:
+    """List processing jobs with stale locks in oldest-lock order."""
+    if not stale_before_iso.strip():
+        raise ValueError("stale_before_iso must be non-empty")
+    if limit <= 0:
+        raise ValueError("limit must be > 0")
+
+    client = get_client()
+    result = (
+        client.table("video_jobs")
+        .select("*")
+        .eq("status", "processing")
+        .lt("locked_at", stale_before_iso)
+        .order("locked_at")
+        .limit(limit)
+        .execute()
+    )
+    return [_row_to_video_job(row) for row in result.data]
+
+
 def claim_next_video_job(worker_id: str) -> VideoJobRecord | None:
     """Claim the next queued job for processing.
 
@@ -282,6 +305,34 @@ def claim_next_video_job(worker_id: str) -> VideoJobRecord | None:
         if result.data:
             return _row_to_video_job(result.data[0])
     return None
+
+
+def requeue_video_job(
+    job_id: str,
+    *,
+    error_message: str | None = None,
+) -> VideoJobRecord | None:
+    """Move a processing job back to queued state for retry."""
+    client = get_client()
+    result = (
+        client.table("video_jobs")
+        .update(
+            {
+                "status": "queued",
+                "worker_id": None,
+                "locked_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "error_message": error_message,
+            }
+        )
+        .eq("id", job_id)
+        .eq("status", "processing")
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_video_job(result.data[0])
 
 
 def complete_video_job(
