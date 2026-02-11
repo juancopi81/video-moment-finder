@@ -166,6 +166,8 @@ def search_video(video_id, query_text=None, query_image=None):
 
 - [ ] Implement image query search end-to-end (frontend + backend embedding flow)
 - [ ] Integrate Clerk auth and tie videos/jobs to authenticated user_id
+- [ ] Enable Supabase RLS on `videos`, `credits`, and `video_jobs` with per-user policies
+- [ ] Resolve Supabase "Function Search Path Mutable" warnings by setting explicit `search_path` on custom DB functions
 - [ ] Add Stripe credit purchase + deduction on video submission
 - [ ] Add retry/backoff strategy for failed queued jobs
 - [ ] Add request validation hardening (YouTube URL checks, query trimming, limits)

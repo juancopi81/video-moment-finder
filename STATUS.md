@@ -46,6 +46,8 @@
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
+- Pre-launch security gap: Supabase Security Advisor reports RLS disabled on `public.videos`, `public.credits`, and `public.video_jobs`; address in Phase 4 auth/hardening before production release.
+- Pre-launch security hardening item: Supabase Security Advisor warns "Function Search Path Mutable" for custom trigger functions (for example `public.set_updated_at`); resolve during Phase 4 database hardening.
 
 ## Decisions Made
 
