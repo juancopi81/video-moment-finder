@@ -16,6 +16,9 @@ It complements global guidance and takes precedence for project-specific executi
    - `git checkout main`
    - `git pull --ff-only`
    - `git checkout -b codex/<short-topic>`
+   - Worktree-safe alternative when `main` is already checked out in another worktree:
+     - `git fetch origin main`
+     - `git checkout -b codex/<short-topic> origin/main`
 2. Implement focused changes for a single concern per PR.
 3. Validate locally:
    - `./scripts/workflow/check_all.sh`
@@ -32,6 +35,24 @@ It complements global guidance and takes precedence for project-specific executi
 9. Local cleanup:
    - `git checkout main && git pull --ff-only`
    - `git branch -d codex/<short-topic>`
+
+## Automation PR Preflight (Required)
+
+Run this preflight before implementation work for automation-driven PRs:
+
+1. Authentication and API reachability:
+   - `gh auth status`
+   - `gh api user --jq '.login'`
+2. Repository permissions:
+   - `gh api repos/juancopi81/video-moment-finder --jq '.full_name + " push=" + (.permissions.push|tostring)'`
+3. Required labels exist:
+   - `gh label list --search "codex" --limit 20`
+   - Must include `codex` and `codex-automation`.
+4. Existing PR collision check:
+   - `gh pr list --head codex/<short-topic> --state all --json number,state,url,title,isDraft`
+   - If a PR already exists for the same head branch, update that PR instead of creating a duplicate.
+
+Fail-fast rule: if any preflight command fails, stop immediately and report Outcome B with exact unblock commands. Do not proceed into implementation or partial PR flow.
 
 ## Benchmark Protocol (Latency Changes)
 
