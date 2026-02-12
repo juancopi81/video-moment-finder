@@ -52,7 +52,10 @@ Run this preflight before implementation work for automation-driven PRs:
    - `gh pr list --head codex/<short-topic> --state all --json number,state,url,title,isDraft`
    - If a PR already exists for the same head branch, update that PR instead of creating a duplicate.
 
-Fail-fast rule: if any preflight command fails, stop immediately and report Outcome B with exact unblock commands. Do not proceed into implementation or partial PR flow.
+Graded preflight rule:
+- If a failure blocks implementation (for example cannot branch, cannot commit, cannot run required validation), stop and report Outcome B with exact unblock commands.
+- If a failure only blocks PR publication steps (for example GitHub auth/API/label/PR-create issues), continue implementation as far as possible, then report Outcome B with ready branch/commit state, PR writeup, and exact unblock commands.
+- Use Outcome C only when a defensible next PR cannot be chosen from repo evidence.
 
 ## Benchmark Protocol (Latency Changes)
 
