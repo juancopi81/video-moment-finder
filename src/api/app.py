@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from src.api.search import search_video as search_video_service
 from src.config.env import load_env
@@ -30,6 +30,19 @@ StatusType = Literal["queued", "processing", "ready", "failed"]
 class VideoCreateRequest(BaseModel):
     youtube_url: HttpUrl
 
+    @field_validator("youtube_url")
+    @classmethod
+    def validate_youtube_url(cls, value: HttpUrl) -> HttpUrl:
+        allowed_hosts = {
+            "youtube.com",
+            "www.youtube.com",
+            "m.youtube.com",
+            "youtu.be",
+        }
+        if value.host not in allowed_hosts:
+            raise ValueError("youtube_url must be a youtube.com or youtu.be URL")
+        return value
+
 
 class VideoResponse(BaseModel):
     id: str
@@ -40,9 +53,17 @@ class VideoResponse(BaseModel):
 
 
 class VideoSearchRequest(BaseModel):
-    query_text: str | None = None
+    query_text: str | None = Field(default=None, max_length=500)
     query_image_url: HttpUrl | None = None
     limit: int = Field(default=5, ge=1, le=20)
+
+    @field_validator("query_text")
+    @classmethod
+    def normalize_query_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class SearchResult(BaseModel):
