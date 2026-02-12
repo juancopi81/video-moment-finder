@@ -81,6 +81,17 @@ def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
     assert failure_updates[0][1] == "failed"
 
 
+def test_create_video_rejects_non_youtube_url() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://vimeo.com/123456"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_get_video_returns_status(monkeypatch) -> None:
     client = TestClient(app)
     monkeypatch.setattr(
@@ -145,3 +156,19 @@ def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Search is temporarily unavailable. Please try again."
+
+
+def test_search_video_rejects_blank_query_text(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id: _video_record(video_id, status="ready"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "   "},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Provide query_text or query_image_url"
