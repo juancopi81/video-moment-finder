@@ -36,9 +36,9 @@ It complements global guidance and takes precedence for project-specific executi
    - `git checkout main && git pull --ff-only`
    - `git branch -d codex/<short-topic>`
 
-## Automation Local Handoff Mode (Required)
+## Automation Hybrid Publish Mode (Required)
 
-Use this mode for repository automations that implement code locally and hand PR publication to the user.
+Use this mode for repository automations: implement locally, attempt publication automatically, and fall back to local handoff only when publication fails.
 
 Run this preflight before implementation work:
 
@@ -50,14 +50,19 @@ Run this preflight before implementation work:
    - If the branch already exists, continue on the existing branch instead of creating a duplicate.
 3. Validation readiness:
    - Ensure required local tooling for planned checks is installed.
+4. Skip GitHub API preflight checks for automation:
+   - Do not require `gh auth status`, `gh api ...`, label checks, or `gh pr list` before implementation.
+   - These checks are optional diagnostics and must not block implementation.
 
 Delivery rule:
-- Automation runs must always use Outcome B (local handoff):
+- First attempt Outcome A publication:
+  - `git push -u origin codex/<short-topic>`
+  - `gh pr create --draft --base main --head codex/<short-topic> --label codex --label codex-automation ...`
+- If publication succeeds, return Outcome A with PR link and writeup.
+- If publication fails due auth/network/permissions, return Outcome B:
   - Leave a ready-to-review branch + commit(s).
   - Provide a complete PR-ready writeup.
-  - Provide exact manual publication commands:
-    - `git push -u origin codex/<short-topic>`
-    - `gh pr create --draft --base main --head codex/<short-topic> --label codex --label codex-automation ...`
+  - Provide exact manual publication commands.
 
 Graded preflight rule:
 - If a failure blocks implementation (for example cannot branch, cannot commit, cannot run required validation), stop and report Outcome B with exact unblock commands.
