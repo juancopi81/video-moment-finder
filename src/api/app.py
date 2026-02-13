@@ -74,6 +74,7 @@ class SearchResult(BaseModel):
 
 class VideoSearchResponse(BaseModel):
     video_id: str
+    youtube_url: HttpUrl
     status: StatusType
     results: list[SearchResult]
 
@@ -178,6 +179,7 @@ def search_video(video_id: str, request: VideoSearchRequest) -> VideoSearchRespo
 
     return VideoSearchResponse(
         video_id=video_id,
+        youtube_url=record.youtube_url,
         status=record.status,
         results=[
             SearchResult(
