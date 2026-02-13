@@ -16,6 +16,11 @@ type SearchResult = {
   score: number;
 };
 
+type VideoStatusResponse = {
+  status: VideoStatus;
+  error_message: string | null;
+};
+
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 300; // 10 minutes at 2s interval
 
@@ -30,6 +35,7 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   const [status, setStatus] = useState<VideoStatus>("queued");
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -61,8 +67,9 @@ export default function VideoPage({ params }: VideoPageProps) {
         if (!res.ok) {
           throw new Error("Failed to fetch video status");
         }
-        const data = await res.json();
+        const data: VideoStatusResponse = await res.json();
         setStatus(data.status);
+        setStatusMessage(data.error_message);
       } catch (err) {
         console.error("Polling error:", err);
       }
@@ -129,7 +136,7 @@ export default function VideoPage({ params }: VideoPageProps) {
       {status === "failed" && (
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400 mb-4">
-            Failed to process video
+            {statusMessage ?? "Failed to process video"}
           </p>
           <Link
             href="/"
