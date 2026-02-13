@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app
+from src.api.app import app, _allowed_cors_origins, _extract_youtube_video_id
+from src.api.auth import get_current_user_id
 from src.db.supabase import VideoRecord
 from src.storage.qdrant import SearchResult
 
@@ -14,19 +16,54 @@ def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
         id=video_id,
         youtube_url="https://www.youtube.com/watch?v=abc123xyz45",
         status=status,  # type: ignore[arg-type]
-        user_id=None,
+        user_id="user_123",
         error_message=None,
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
     )
 
 
-def test_create_video_enqueues_job(monkeypatch) -> None:
+@pytest.fixture(autouse=True)
+def _clear_dependency_overrides() -> None:
+    app.dependency_overrides.clear()
+    yield
+    app.dependency_overrides.clear()
+
+
+def _authenticate(user_id: str = "user_123") -> None:
+    app.dependency_overrides[get_current_user_id] = lambda: user_id
+
+
+def test_create_video_requires_authentication(monkeypatch) -> None:
     client = TestClient(app)
+    called = False
+
+    def fake_create_video(*args, **kwargs) -> VideoRecord:
+        nonlocal called
+        called = True
+        return _video_record("video_unauth")
+
+    monkeypatch.setattr("src.api.app.db_create_video", fake_create_video)
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+    assert called is False
+
+
+def test_create_video_enqueues_job_for_authenticated_owner(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
     enqueue_calls: list[str] = []
+    create_calls: list[tuple[str, str | None, str]] = []
 
     def fake_create_video(youtube_url: str, user_id=None, status="queued") -> VideoRecord:
-        assert status == "queued"
+        create_calls.append((youtube_url, user_id, status))
         return _video_record("video_123", status=status)
 
     def fake_enqueue(video_id: str) -> object:
@@ -38,24 +75,30 @@ def test_create_video_enqueues_job(monkeypatch) -> None:
 
     response = client.post(
         "/videos",
-        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+        json={"youtube_url": "https://youtu.be/abc123xyz45"},
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == "video_123"
     assert payload["status"] == "queued"
+    assert payload["youtube_url"] == "https://www.youtube.com/watch?v=abc123xyz45"
     assert enqueue_calls == ["video_123"]
+    assert create_calls == [
+        ("https://www.youtube.com/watch?v=abc123xyz45", "user_123", "queued")
+    ]
 
 
 def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
     client = TestClient(app)
+    _authenticate("user_123")
     failure_updates: list[tuple[str, str, str | None]] = []
 
     monkeypatch.setattr(
         "src.api.app.db_create_video",
         lambda youtube_url, user_id=None, status="queued": _video_record(
-            "video_500", status=status
+            "video_500",
+            status=status,
         ),
     )
 
@@ -81,23 +124,28 @@ def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
     assert failure_updates[0][1] == "failed"
 
 
-def test_create_video_rejects_non_youtube_url() -> None:
+def test_create_video_rejects_non_video_youtube_url() -> None:
     client = TestClient(app)
+    _authenticate("user_123")
 
     response = client.post(
         "/videos",
-        json={"youtube_url": "https://vimeo.com/123456"},
+        json={"youtube_url": "https://www.youtube.com/channel/UC12345"},
     )
 
     assert response.status_code == 422
 
 
-def test_get_video_returns_status(monkeypatch) -> None:
+def test_get_video_requires_owner_scope(monkeypatch) -> None:
     client = TestClient(app)
-    monkeypatch.setattr(
-        "src.api.app.db_get_video",
-        lambda video_id: _video_record(video_id, status="processing"),
-    )
+    _authenticate("user_123")
+    calls: list[tuple[str, str | None]] = []
+
+    def fake_get_video(video_id: str, user_id: str | None = None) -> VideoRecord | None:
+        calls.append((video_id, user_id))
+        return _video_record(video_id, status="processing")
+
+    monkeypatch.setattr("src.api.app.db_get_video", fake_get_video)
 
     response = client.get("/videos/video_status")
 
@@ -105,13 +153,37 @@ def test_get_video_returns_status(monkeypatch) -> None:
     payload = response.json()
     assert payload["id"] == "video_status"
     assert payload["status"] == "processing"
+    assert calls == [("video_status", "user_123")]
+
+
+def test_get_video_returns_404_for_non_owner(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: None,
+    )
+
+    response = client.get("/videos/video_status")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Video not found"
+
+
+def test_get_video_requires_authentication() -> None:
+    client = TestClient(app)
+    response = client.get("/videos/video_status")
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
 
 
 def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     client = TestClient(app)
+    _authenticate("user_123")
     monkeypatch.setattr(
         "src.api.app.db_get_video",
-        lambda video_id: _video_record(video_id, status="ready"),
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
     )
     monkeypatch.setattr(
         "src.api.app.search_video_service",
@@ -139,11 +211,40 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     assert payload["results"][0]["timestamp_s"] == 12.5
 
 
-def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
+def test_search_video_requires_authentication() -> None:
     client = TestClient(app)
+    response = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "an elevator"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_search_video_returns_404_when_video_not_owned(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
     monkeypatch.setattr(
         "src.api.app.db_get_video",
-        lambda video_id: _video_record(video_id, status="ready"),
+        lambda video_id, user_id=None: None,
+    )
+
+    response = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "an elevator"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Video not found"
+
+
+def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
     )
     monkeypatch.setattr(
         "src.api.app.search_video_service",
@@ -161,9 +262,10 @@ def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
 
 def test_search_video_rejects_blank_query_text(monkeypatch) -> None:
     client = TestClient(app)
+    _authenticate("user_123")
     monkeypatch.setattr(
         "src.api.app.db_get_video",
-        lambda video_id: _video_record(video_id, status="ready"),
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
     )
 
     response = client.post(
@@ -173,3 +275,49 @@ def test_search_video_rejects_blank_query_text(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Provide query_text or query_image_url"
+
+
+@pytest.mark.parametrize(
+    ("url", "expected_video_id"),
+    [
+        ("https://www.youtube.com/watch?v=abc123xyz45", "abc123xyz45"),
+        ("https://youtu.be/abc123xyz45", "abc123xyz45"),
+        ("https://www.youtube.com/shorts/abc123xyz45", "abc123xyz45"),
+        ("https://www.youtube.com/live/abc123xyz45", "abc123xyz45"),
+    ],
+)
+def test_extract_youtube_video_id_supported_formats(
+    url: str,
+    expected_video_id: str,
+) -> None:
+    assert _extract_youtube_video_id(url) == expected_video_id
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.youtube.com/watch?v=too_short",
+        "https://www.youtube.com/channel/UC12345",
+        "https://www.youtube.com/playlist?list=abc123xyz45",
+        "https://vimeo.com/123456",
+    ],
+)
+def test_extract_youtube_video_id_rejects_invalid_urls(url: str) -> None:
+    assert _extract_youtube_video_id(url) is None
+
+
+def test_allowed_cors_origins_uses_env(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "https://app.example.com, https://staging.example.com ",
+    )
+
+    assert _allowed_cors_origins() == [
+        "https://app.example.com",
+        "https://staging.example.com",
+    ]
+
+
+def test_allowed_cors_origins_defaults_to_localhost(monkeypatch) -> None:
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
+    assert _allowed_cors_origins() == ["http://localhost:3000"]

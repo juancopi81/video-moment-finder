@@ -153,17 +153,21 @@ def create_video(
     return _row_to_video(result.data[0])
 
 
-def get_video(video_id: str) -> VideoRecord | None:
+def get_video(video_id: str, user_id: str | None = None) -> VideoRecord | None:
     """Get video by ID.
 
     Args:
         video_id: UUID of the video.
+        user_id: Optional Clerk user ID to enforce ownership.
 
     Returns:
         VideoRecord if found, None otherwise.
     """
     client = get_client()
-    result = client.table("videos").select("*").eq("id", video_id).execute()
+    query = client.table("videos").select("*").eq("id", video_id)
+    if user_id is not None:
+        query = query.eq("user_id", user_id)
+    result = query.execute()
     if not result.data:
         return None
     return _row_to_video(result.data[0])

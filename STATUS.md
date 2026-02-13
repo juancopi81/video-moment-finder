@@ -42,13 +42,13 @@
 | 2026-02-07 | Phase 3 | Modal Class Lookup Deprecation Fix | Done  | Switched search text embedding handle to `modal.Cls.from_name(...).embed.remote(...)` to remove class-method lookup deprecation warning; removed temporary benchmark checklist notes from README. |
 | 2026-02-07 | Phase 3 | Queue Reliability Hardening         | Done   | Added worker retry cap (`max_attempts`), stale-lock recovery/requeue for stuck `processing` jobs, structured worker metric logs (`job_attempt_started`, `job_requeued`, terminal failures), and crash/restart-oriented queue tests. |
 | 2026-02-13 | Phase 3 | Search Result Deep Links            | Done   | API now returns `youtube_url` on search; frontend renders "Open at timestamp" links for each result.                                                                    |
+| 2026-02-13 | Phase 4 | Auth Ownership + RLS Hardening      | Done   | Added Clerk JWT auth on create/get/search routes, owner-scoped video access (404 for non-owner), env-driven CORS origins, stricter YouTube URL normalization, frontend Bearer token wiring, and Supabase migration for RLS + function `search_path`. |
 
 
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
-- Pre-launch security gap: Supabase Security Advisor reports RLS disabled on `public.videos`, `public.credits`, and `public.video_jobs`; address in Phase 4 auth/hardening before production release.
-- Pre-launch security hardening item: Supabase Security Advisor warns "Function Search Path Mutable" for custom trigger functions (for example `public.set_updated_at`); resolve during Phase 4 database hardening.
+- Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
 
 ## Decisions Made
 
