@@ -36,25 +36,37 @@ It complements global guidance and takes precedence for project-specific executi
    - `git checkout main && git pull --ff-only`
    - `git branch -d codex/<short-topic>`
 
-## Automation PR Preflight (Required)
+## Automation Hybrid Publish Mode (Required)
 
-Run this preflight before implementation work for automation-driven PRs:
+Use this mode for repository automations: implement locally, attempt publication automatically, and fall back to local handoff only when publication fails.
 
-1. Authentication and API reachability:
-   - `gh auth status`
-   - `gh api user --jq '.login'`
-2. Repository permissions:
-   - `gh api repos/juancopi81/video-moment-finder --jq '.full_name + " push=" + (.permissions.push|tostring)'`
-3. Required labels exist:
-   - `gh label list --search "codex" --limit 20`
-   - Must include `codex` and `codex-automation`.
-4. Existing PR collision check:
-   - `gh pr list --head codex/<short-topic> --state all --json number,state,url,title,isDraft`
-   - If a PR already exists for the same head branch, update that PR instead of creating a duplicate.
+Run this preflight before implementation work:
+
+1. Local git readiness:
+   - `git status -sb`
+   - `git fetch origin main`
+2. Branch base selection:
+   - `git checkout -b codex/<short-topic> origin/main`
+   - If the branch already exists, continue on the existing branch instead of creating a duplicate.
+3. Validation readiness:
+   - Ensure required local tooling for planned checks is installed.
+4. Skip GitHub API preflight checks for automation:
+   - Do not require `gh auth status`, `gh api ...`, label checks, or `gh pr list` before implementation.
+   - These checks are optional diagnostics and must not block implementation.
+
+Delivery rule:
+- First attempt Outcome A publication:
+  - `git push -u origin codex/<short-topic>`
+  - `gh pr create --draft --base main --head codex/<short-topic> --label codex --label codex-automation ...`
+- If publication succeeds, return Outcome A with PR link and writeup.
+- If publication fails due auth/network/permissions, return Outcome B:
+  - Leave a ready-to-review branch + commit(s).
+  - Provide a complete PR-ready writeup.
+  - Provide exact manual publication commands.
 
 Graded preflight rule:
 - If a failure blocks implementation (for example cannot branch, cannot commit, cannot run required validation), stop and report Outcome B with exact unblock commands.
-- If a failure only blocks PR publication steps (for example GitHub auth/API/label/PR-create issues), continue implementation as far as possible, then report Outcome B with ready branch/commit state, PR writeup, and exact unblock commands.
+- If a failure only blocks PR publication steps (for example GitHub auth/API/permissions issues), continue implementation as far as possible and return manual publication commands in Outcome B.
 - Use Outcome C only when a defensible next PR cannot be chosen from repo evidence.
 
 ## Benchmark Protocol (Latency Changes)
