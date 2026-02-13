@@ -134,6 +134,7 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ready"
+    assert payload["youtube_url"] == "https://www.youtube.com/watch?v=abc123xyz45"
     assert payload["results"][0]["thumbnail_url"] is None
     assert payload["results"][0]["timestamp_s"] == 12.5
 

@@ -17,8 +17,17 @@ type SearchResult = {
 };
 
 type VideoStatusResponse = {
+  id: string;
+  youtube_url: string;
   status: VideoStatus;
   error_message: string | null;
+};
+
+type VideoSearchResponse = {
+  video_id: string;
+  youtube_url: string;
+  status: VideoStatus;
+  results: SearchResult[];
 };
 
 const POLL_INTERVAL_MS = 2000;
@@ -30,12 +39,23 @@ function formatTimestamp(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+function buildTimestampUrl(baseUrl: string, seconds: number): string | null {
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.set("t", Math.floor(seconds).toString());
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export default function VideoPage({ params }: VideoPageProps) {
   const { id } = use(params);
 
   const [status, setStatus] = useState<VideoStatus>("queued");
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -70,6 +90,9 @@ export default function VideoPage({ params }: VideoPageProps) {
         const data: VideoStatusResponse = await res.json();
         setStatus(data.status);
         setStatusMessage(data.error_message);
+        if (data.youtube_url) {
+          setVideoUrl(data.youtube_url);
+        }
       } catch (err) {
         console.error("Polling error:", err);
       }
@@ -105,8 +128,11 @@ export default function VideoPage({ params }: VideoPageProps) {
         throw new Error("Search failed");
       }
 
-      const data = await res.json();
+      const data: VideoSearchResponse = await res.json();
       setResults(data.results);
+      if (data.youtube_url) {
+        setVideoUrl(data.youtube_url);
+      }
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -175,29 +201,45 @@ export default function VideoPage({ params }: VideoPageProps) {
 
           {results.length > 0 && (
             <div className="mt-8 grid grid-cols-3 gap-4">
-              {results.map((result, index) => (
-                <div key={index} className="relative">
-                  <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden">
-                    {result.thumbnail_url ? (
-                      <Image
-                        src={result.thumbnail_url}
-                        alt={`Result at ${formatTimestamp(result.timestamp_s)}`}
-                        width={320}
-                        height={180}
-                        unoptimized
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
-                        No thumbnail
-                      </div>
+              {results.map((result, index) => {
+                const timestampUrl = videoUrl
+                  ? buildTimestampUrl(videoUrl, result.timestamp_s)
+                  : null;
+
+                return (
+                  <div key={index} className="relative">
+                    <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden">
+                      {result.thumbnail_url ? (
+                        <Image
+                          src={result.thumbnail_url}
+                          alt={`Result at ${formatTimestamp(result.timestamp_s)}`}
+                          width={320}
+                          height={180}
+                          unoptimized
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
+                          No thumbnail
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-center text-zinc-600 dark:text-zinc-400">
+                      {formatTimestamp(result.timestamp_s)}
+                    </p>
+                    {timestampUrl && (
+                      <a
+                        href={timestampUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 block text-xs text-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                      >
+                        Open at timestamp
+                      </a>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-center text-zinc-600 dark:text-zinc-400">
-                    {formatTimestamp(result.timestamp_s)}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
