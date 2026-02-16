@@ -11,8 +11,14 @@ Semantic video frame search. Paste a YouTube URL, process it, and search moments
 
 ## Local Setup (One Command)
 
-1. Copy `.env.example` to `.env` and fill values (including `SUPABASE_DB_URL`).
-2. Run:
+1. Copy `.env.example` to `.env` and fill backend/infrastructure values (including `SUPABASE_DB_URL`, `CLERK_ISSUER`, and `CORS_ALLOWED_ORIGINS`).
+2. Copy `frontend/.env.example` to `frontend/.env.local` and set frontend values (especially `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`).
+3. Run:
+
+```bash
+cp .env.example .env
+cp frontend/.env.example frontend/.env.local
+```
 
 ```bash
 set -a && source .env && set +a
@@ -23,9 +29,15 @@ This applies SQL migrations in `supabase/migrations`, installs Python deps with 
 
 Required auth/CORS env for local API + frontend:
 
-- `CLERK_ISSUER` (backend JWT issuer verification)
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (frontend Clerk initialization)
+Backend (`.env`):
+- `CLERK_ISSUER` (JWT issuer verification)
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
+
+Frontend (`frontend/.env.local`):
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (Clerk initialization)
+- `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`)
+
+If `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is missing in the frontend env, Clerk can run in keyless mode and API calls will fail with `Invalid authentication token`.
 
 ## Run Services
 
