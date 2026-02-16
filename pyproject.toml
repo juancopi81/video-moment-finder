@@ -32,3 +32,8 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::pyparsing.exceptions.PyparsingDeprecationWarning",
+    "ignore:Using `@model_validator`:DeprecationWarning:pyiceberg",
+    "ignore:Payload indexes have no effect in the local Qdrant:UserWarning:src.storage.qdrant",
+]
