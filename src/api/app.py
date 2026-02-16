@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
+import re
 from typing import Literal
+from urllib.parse import parse_qs, urlparse
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
+from src.api.auth import get_current_user_id
 from src.api.search import search_video as search_video_service
 from src.config.env import load_env
 from src.db.supabase import (
@@ -25,23 +29,50 @@ load_env()
 logger = get_logger(__name__)
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
+YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def _allowed_cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        return ["http://localhost:3000"]
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or ["http://localhost:3000"]
+
+
+def _extract_youtube_video_id(youtube_url: str) -> str | None:
+    parsed = urlparse(youtube_url.strip())
+    host = parsed.netloc.lower()
+    path_parts = [part for part in parsed.path.split("/") if part]
+    video_id: str | None = None
+
+    if host in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
+        if parsed.path == "/watch":
+            query = parse_qs(parsed.query)
+            video_id = query.get("v", [None])[0]
+        elif path_parts and path_parts[0] in {"shorts", "live"}:
+            video_id = path_parts[1] if len(path_parts) > 1 else None
+    elif host == "youtu.be":
+        video_id = path_parts[0] if path_parts else None
+
+    if video_id is None:
+        return None
+    video_id = video_id.strip()
+    if not YOUTUBE_VIDEO_ID_RE.fullmatch(video_id):
+        return None
+    return video_id
 
 
 class VideoCreateRequest(BaseModel):
-    youtube_url: HttpUrl
+    youtube_url: str = Field(min_length=1, max_length=500)
 
     @field_validator("youtube_url")
     @classmethod
-    def validate_youtube_url(cls, value: HttpUrl) -> HttpUrl:
-        allowed_hosts = {
-            "youtube.com",
-            "www.youtube.com",
-            "m.youtube.com",
-            "youtu.be",
-        }
-        if value.host not in allowed_hosts:
-            raise ValueError("youtube_url must be a youtube.com or youtu.be URL")
-        return value
+    def normalize_youtube_url(cls, value: str) -> str:
+        video_id = _extract_youtube_video_id(value)
+        if video_id is None:
+            raise ValueError("youtube_url must be a valid YouTube video URL")
+        return f"https://www.youtube.com/watch?v={video_id}"
 
 
 class VideoResponse(BaseModel):
@@ -104,16 +135,19 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allowed_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
 @app.post("/videos", response_model=VideoResponse)
-def create_video(request: VideoCreateRequest) -> VideoResponse:
+def create_video(
+    request: VideoCreateRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
     """Create a new video and enqueue durable processing job."""
-    record = db_create_video(str(request.youtube_url), status="queued")
+    record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
     try:
         enqueue_video_job(record.id)
     except Exception as exc:
@@ -136,9 +170,12 @@ def create_video(request: VideoCreateRequest) -> VideoResponse:
 
 
 @app.get("/videos/{video_id}", response_model=VideoResponse)
-def get_video(video_id: str) -> VideoResponse:
+def get_video(
+    video_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
     """Get video status and details."""
-    record = db_get_video(video_id)
+    record = db_get_video(video_id, user_id=user_id)
     if not record:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -146,9 +183,13 @@ def get_video(video_id: str) -> VideoResponse:
 
 
 @app.post("/videos/{video_id}/search", response_model=VideoSearchResponse)
-def search_video(video_id: str, request: VideoSearchRequest) -> VideoSearchResponse:
+def search_video(
+    video_id: str,
+    request: VideoSearchRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> VideoSearchResponse:
     """Search for moments in a processed video."""
-    record = db_get_video(video_id)
+    record = db_get_video(video_id, user_id=user_id)
     if not record:
         raise HTTPException(status_code=404, detail="Video not found")
 

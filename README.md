@@ -21,6 +21,12 @@ set -a && source .env && set +a
 
 This applies SQL migrations in `supabase/migrations`, installs Python deps with `uv`, and installs frontend deps with `npm ci`.
 
+Required auth/CORS env for local API + frontend:
+
+- `CLERK_ISSUER` (backend JWT issuer verification)
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (frontend Clerk initialization)
+- `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
+
 ## Run Services
 
 Run API:
@@ -28,6 +34,8 @@ Run API:
 ```bash
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
+
+Protected API routes (`POST /videos`, `GET /videos/{id}`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
 
 Run worker (required for processing queue):
 
