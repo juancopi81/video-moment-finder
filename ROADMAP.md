@@ -133,6 +133,9 @@
 
 ### 4.2 Payments
 
+- **Preflight gate (before implementation)**: confirm payment-provider availability for a Colombia-based business account.
+- Investigate Stripe availability for Colombia and document the result before coding this phase (as of 2026-02-16, direct Stripe accounts appear unavailable in Colombia).
+- If direct Stripe account creation is not available, choose and document a workaround path (for example: local PSP such as Wompi/PayU, or US-entity/Atlas path) before implementation.
 - Stripe integration
 - Credit purchase flow
 - Credit deduction on video process
@@ -148,6 +151,7 @@
 ### 4.4 Launch Checklist
 
 - Environment variables secured
+- Payment provider decision documented for Colombia launch context (direct Stripe vs approved workaround), with implementation plan reflected in docs/config.
 - Supabase Security Advisor errors and warnings resolved (including RLS disabled in `public` schema tables and mutable function `search_path` warnings)
 - Database backups configured
 - Monitoring dashboards
