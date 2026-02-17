@@ -44,6 +44,7 @@
 | 2026-02-13 | Phase 3 | Search Result Deep Links            | Done   | API now returns `youtube_url` on search; frontend renders "Open at timestamp" links for each result.                                                                    |
 | 2026-02-13 | Phase 4 | Auth Ownership + RLS Hardening      | Done   | Added Clerk JWT auth on create/get/search routes, owner-scoped video access (404 for non-owner), env-driven CORS origins, stricter YouTube URL normalization, frontend Bearer token wiring, and Supabase migration for RLS + function `search_path`. |
 | 2026-02-16 | Phase 4 | 4.2 Payment Provider Feasibility (Colombia) | In Progress | Added launch gate to validate Stripe account availability for Colombia and choose documented workaround path before implementing payments. See [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md). |
+| 2026-02-17 | Phase 4 | Input Validation (Video Length)    | Done   | Validate YouTube metadata on submit, reject live streams and videos over configured duration. |
 
 
 ## Blockers

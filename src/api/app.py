@@ -24,12 +24,14 @@ from src.db.supabase import (
 from src.storage.config import StorageConfigError
 from src.storage.qdrant import QdrantStorageError
 from src.utils.logging import get_logger
+from src.video.download import VideoMetadataError, fetch_video_metadata
 
 load_env()
 logger = get_logger(__name__)
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
 YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 
 
 def _allowed_cors_origins() -> list[str]:
@@ -61,6 +63,45 @@ def _extract_youtube_video_id(youtube_url: str) -> str | None:
     if not YOUTUBE_VIDEO_ID_RE.fullmatch(video_id):
         return None
     return video_id
+
+
+def _max_video_duration_s() -> int:
+    raw = os.environ.get("VIDEO_MAX_DURATION_S", "").strip()
+    if not raw:
+        return DEFAULT_MAX_VIDEO_DURATION_S
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid VIDEO_MAX_DURATION_S=%r; using default", raw)
+        return DEFAULT_MAX_VIDEO_DURATION_S
+    if value <= 0:
+        logger.warning("VIDEO_MAX_DURATION_S must be positive; using default")
+        return DEFAULT_MAX_VIDEO_DURATION_S
+    return value
+
+
+def _validate_video_duration(youtube_url: str) -> None:
+    try:
+        metadata = fetch_video_metadata(youtube_url)
+    except VideoMetadataError as exc:
+        logger.warning("Failed to fetch YouTube metadata for %s: %s", youtube_url, exc)
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to fetch YouTube metadata for this URL",
+        ) from exc
+
+    if metadata.is_live:
+        raise HTTPException(status_code=400, detail="Live streams are not supported")
+    if metadata.duration_s is None:
+        raise HTTPException(status_code=400, detail="Unable to determine video duration")
+
+    max_duration_s = _max_video_duration_s()
+    if metadata.duration_s > max_duration_s:
+        max_minutes = max_duration_s // 60
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video exceeds {max_minutes}-minute limit",
+        )
 
 
 class VideoCreateRequest(BaseModel):
@@ -147,6 +188,7 @@ def create_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Create a new video and enqueue durable processing job."""
+    _validate_video_duration(request.youtube_url)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
     try:
         enqueue_video_job(record.id)
