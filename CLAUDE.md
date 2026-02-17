@@ -73,10 +73,11 @@ uv run modal run --help   # Test Modal CLI
 
 ## Project Planning
 
-- **PROJECT_SPEC.md**: Project specifications
-- **ROADMAP.md**: Phased development plan with gates
-- **STATUS.md**: Progress tracking and metrics
-- **RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md**: Payment-provider alternatives for Colombia-based global launch
+- **PROJECT_SPEC.md**: Stable product charter only (vision, user, scope, constraints, success metrics, risks, high-level architecture)
+- **ROADMAP.md**: Planned future work only (phases, tasks, gates)
+- **STATUS.md**: Execution history only (progress log, blockers, decisions, metrics)
+- **RESEARCH_*.md**: Time-bounded research snapshots
+- Keep these boundaries strict to avoid duplicate or stale sources of truth
 
 ## Workflow
 
@@ -84,6 +85,8 @@ After completing significant work, update STATUS.md with:
 - Progress log entry (date, phase, task, status, notes)
 - Any new blockers or decisions
 - Metrics if measured during the task
+- Do not add progress logs or milestone checklists to `PROJECT_SPEC.md`
+- Update `ROADMAP.md` only when planned future work or gates change
 
 ## Logging and Timing Conventions
 
