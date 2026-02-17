@@ -136,6 +136,7 @@
 - **Preflight gate (before implementation)**: confirm payment-provider availability for a Colombia-based business account.
 - Investigate Stripe availability for Colombia and document the result before coding this phase (as of 2026-02-16, direct Stripe accounts appear unavailable in Colombia).
 - If direct Stripe account creation is not available, choose and document a workaround path (for example: local PSP such as Wompi/PayU, or US-entity/Atlas path) before implementation.
+- Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md)
 - Stripe integration
 - Credit purchase flow
 - Credit deduction on video process

@@ -7,6 +7,7 @@ Semantic video frame search. Paste a YouTube URL, process it, and search moments
 - [PROJECT_SPEC.md](./PROJECT_SPEC.md) - Product and architecture spec
 - [ROADMAP.md](./ROADMAP.md) - Phased implementation plan
 - [STATUS.md](./STATUS.md) - Progress log and metrics
+- [RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md) - Comprehensive payment-provider research for Colombia-based global launch
 - [CLAUDE.md](./CLAUDE.md) - Agent guidance and developer commands
 
 ## Local Setup (One Command)
