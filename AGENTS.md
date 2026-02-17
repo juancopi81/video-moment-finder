@@ -9,6 +9,7 @@ It complements global guidance and takes precedence for project-specific executi
 - Prefer implementation over long planning once scope is clear.
 - Run the narrowest checks first, then run full project checks before merge.
 - Update docs when behavior or workflow changes.
+- Before finalizing, verify documentation freshness for impacted areas and remove stale/duplicated statements.
 
 ## Standard Branch and PR Workflow
 
@@ -95,6 +96,7 @@ Graded preflight rule:
 
 - Temporary runbooks/checklists are allowed during active testing but remove them once done.
 - Keep `README.md` user-focused; keep agent/developer process in `AGENTS.md`/`CLAUDE.md`.
+- Treat doc ownership as a source-of-truth contract: update the owning doc instead of copying status across multiple files.
 
 ## Lessons Memory
 

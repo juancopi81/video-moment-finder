@@ -4,7 +4,8 @@
 
 - Each phase has a **GATE** (exit criteria) - don't proceed until it passes
 - Tasks marked with `||` can be done in parallel
-- Track progress in STATUS.md
+- This file is plan-only: keep future phases/tasks/gates here
+- Track completion/progress updates in [STATUS.md](./STATUS.md), not in `PROJECT_SPEC.md` or this file
 
 ---
 

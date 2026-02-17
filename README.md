@@ -4,11 +4,13 @@ Semantic video frame search. Paste a YouTube URL, process it, and search moments
 
 ## Documentation
 
-- [PROJECT_SPEC.md](./PROJECT_SPEC.md) - Product and architecture spec
-- [ROADMAP.md](./ROADMAP.md) - Phased implementation plan
-- [STATUS.md](./STATUS.md) - Progress log and metrics
-- [RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md) - Comprehensive payment-provider research for Colombia-based global launch
-- [CLAUDE.md](./CLAUDE.md) - Agent guidance and developer commands
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md) - Stable product charter (vision, user, scope, constraints, success metrics, risks, high-level architecture)
+- [ROADMAP.md](./ROADMAP.md) - Planned future work only (phases, tasks, gates)
+- [STATUS.md](./STATUS.md) - Execution history only (progress log, blockers, decisions, metrics)
+- [RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md) - Time-bounded payment-provider research snapshot for Colombia-based global launch
+- [CLAUDE.md](./CLAUDE.md) - Contributor/agent workflow guidance and developer commands
+
+Maintenance rule: update only the document that owns the change type above to avoid duplicate sources of truth.
 
 ## Local Setup (One Command)
 

@@ -2,6 +2,14 @@
 
 > One-line pitch: Paste a YouTube URL, process it, and search moments with semantic queries
 
+## Document Boundaries
+
+- **`PROJECT_SPEC.md`**: Stable product charter (vision, user, scope, constraints, success metrics, risks, high-level architecture).
+- **`ROADMAP.md`**: Planned future work (phases, tasks, gates).
+- **`STATUS.md`**: Execution history (progress log, blockers, decisions, measurements).
+- **`RESEARCH_*.md`**: Time-bounded research notes with update dates.
+- **`CLAUDE.md`**: Contributor and agent workflow guidance.
+
 ## Goals
 
 - [x] **Revenue** — build a paid product from day 1
@@ -101,29 +109,6 @@ Technical Flow:
                    └─────────────┘      └─────────────┘      └─────────────┘
 ```
 
-### Processing Pipeline (Modal GPU)
-
-```python
-def process_video(youtube_url, video_id):
-    # 1. API writes video row + queued job in Supabase
-    # 2. Worker claims queued job and marks video as processing
-    # 3. Download video with yt-dlp
-    # 4. Extract frames at 1 fps with ffmpeg
-    # 5. Embed each frame with Qwen3-VL-Embedding-2B
-    # 6. Upload embeddings to Qdrant with timestamp metadata
-    # 7. Upload thumbnails to R2 (optional)
-    # 8. Mark video ready/failed and complete job
-```
-
-### Search Flow
-
-```python
-def search_video(video_id, query_text=None, query_image=None):
-    # 1. Embed query text with Qwen3-VL-Embedding-2B
-    # 2. Search Qdrant for similar frames (filtered by video_id)
-    # 3. Return top 5 results with timestamps and thumbnails
-```
-
 ## Monetization
 
 - **Pricing model**: Credit-based
@@ -151,23 +136,3 @@ def search_video(video_id, query_text=None, query_image=None):
 - **Processing time**: 30-min video = ~1800 frames = ~15-30 min processing. Mitigation: Show progress, email when ready.
 - **Embedding quality**: Will frame embeddings match text queries well? Need to test with real videos.
 - **GPU costs**: Modal A10G is ~$1/hour. A 30-min video might take 15-30 min = $0.25-0.50 GPU cost.
-
-## Progress Log
-
-| Date | Event | Result |
-| ---- | ----- | ------ |
-| -    | -     | -      |
-
-## Next Milestone
-
-**Goal**: Complete the remaining MVP product features on top of real data flow
-
-**Tasks**:
-
-- [ ] Implement image query search end-to-end (frontend + backend embedding flow)
-- [ ] Integrate Clerk auth and tie videos/jobs to authenticated user_id
-- [ ] Enable Supabase RLS on `videos`, `credits`, and `video_jobs` with per-user policies
-- [ ] Resolve Supabase "Function Search Path Mutable" warnings by setting explicit `search_path` on custom DB functions
-- [ ] Add Stripe credit purchase + deduction on video submission
-- [ ] Add retry/backoff strategy for failed queued jobs
-- [ ] Add request validation hardening (YouTube URL checks, query trimming, limits)
