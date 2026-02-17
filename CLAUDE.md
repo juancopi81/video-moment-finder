@@ -8,7 +8,7 @@ Video Moment Finder is a SaaS product for semantic video frame search. Users pas
 
 ## Tech Stack
 
-- **Frontend**: Next.js 16 + Clerk (auth) + Stripe (payments)
+- **Frontend**: Next.js 16 + Clerk (auth) + Lemon Squeezy (payments, Paddle fallback)
 - **Backend**: FastAPI
 - **Queue Worker**: Supabase-backed durable queue + Python worker
 - **GPU Processing**: Modal (serverless)

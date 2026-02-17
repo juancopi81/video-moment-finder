@@ -134,13 +134,15 @@
 
 ### 4.2 Payments
 
-- **Preflight gate (before implementation)**: confirm payment-provider availability for a Colombia-based business account.
-- Investigate Stripe availability for Colombia and document the result before coding this phase (as of 2026-02-16, direct Stripe accounts appear unavailable in Colombia).
-- If direct Stripe account creation is not available, choose and document a workaround path (for example: local PSP such as Wompi/PayU, or US-entity/Atlas path) before implementation.
+- **Preflight gate (before implementation)**: select the provider for Colombia-based launch and confirm activation prerequisites are met.
+- **Decision (2026-02-17)**: Lemon Squeezy is the first provider path (Merchant of Record), with Paddle as fallback if onboarding or activation fails.
+- **Activation prerequisite**: publish a live, non-placeholder product URL before attempting live activation (must describe the product/service and include support contact and legal pages).
 - Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md)
-- Stripe integration
+- Lemon Squeezy integration (checkout + webhook)
 - Credit purchase flow
 - Credit deduction on video process
+- Webhook signature verification and idempotent credit grants
+- **Next milestone**: publish public product URL, complete Lemon Squeezy store activation, then implement provider integration.
 
 ### 4.3 Production Hardening
 
@@ -153,7 +155,8 @@
 ### 4.4 Launch Checklist
 
 - Environment variables secured
-- Payment provider decision documented for Colombia launch context (direct Stripe vs approved workaround), with implementation plan reflected in docs/config.
+- Payment provider decision documented for Colombia launch context (Lemon Squeezy first, Paddle fallback), with implementation plan reflected in docs/config.
+- Public payment-onboarding URL is live and matches product/pricing/support/legal details used during provider activation.
 - Supabase Security Advisor errors and warnings resolved (including RLS disabled in `public` schema tables and mutable function `search_path` warnings)
 - Database backups configured
 - Monitoring dashboards

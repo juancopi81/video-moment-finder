@@ -45,13 +45,14 @@
 | 2026-02-13 | Phase 4 | Auth Ownership + RLS Hardening      | Done   | Added Clerk JWT auth on create/get/search routes, owner-scoped video access (404 for non-owner), env-driven CORS origins, stricter YouTube URL normalization, frontend Bearer token wiring, and Supabase migration for RLS + function `search_path`. |
 | 2026-02-16 | Phase 4 | 4.2 Payment Provider Feasibility (Colombia) | In Progress | Added launch gate to validate Stripe account availability for Colombia and choose documented workaround path before implementing payments. See [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md). |
 | 2026-02-17 | Phase 4 | Input Validation (Video Length)    | Done   | Validate YouTube metadata on submit, reject live streams and videos over configured duration. |
+| 2026-02-17 | Phase 4 | 4.2 Payment Decision + Activation Prerequisite | Done | Selected Lemon Squeezy as first provider path (Paddle fallback). Clarified that a live non-placeholder product URL is required before live store activation, so implementation follows activation readiness. |
 
 
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
-- Phase 4.2 payments implementation is blocked pending payment-provider feasibility for Colombia (confirm direct Stripe availability or approve workaround path). Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
+- Phase 4.2 payments implementation is blocked on Lemon Squeezy live activation prerequisites: publish a public, non-placeholder product URL with product/pricing/support/legal details, then complete store activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
 
 ## Decisions Made
 
@@ -60,6 +61,7 @@
 - **2-route frontend structure** - Landing (`/`) + Video page (`/video/[id]`) that handles processing, search, and results based on state. Simpler than 3 separate pages.
 - **Queue durability before feature expansion** - Added durable queue state in Supabase before continuing feature work to avoid fragile in-process job execution.
 - **Warm containers are opt-in for cost control** - Search latency now supports optional `MODAL_TEXT_EMBED_MIN_CONTAINERS` (plus legacy alias), but default behavior keeps it unset to avoid always-on GPU cost in dev.
+- **Payments provider decision for Phase 4.2** - Lemon Squeezy selected as first implementation path for Colombia launch context; Paddle remains documented fallback if onboarding/activation fails.
 
 ## Metrics / Measurements
 

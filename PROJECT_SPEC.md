@@ -60,7 +60,7 @@ Content creators and researchers struggle to find specific moments in videos:
 - Text search (implemented)
 - Image search (planned)
 - Top 5 results with thumbnails
-- Credit-based payments (Stripe)
+- Credit-based payments (Lemon Squeezy first, Paddle fallback)
 - User accounts (Clerk)
 
 ### Out of Scope (for now)
@@ -74,7 +74,7 @@ Content creators and researchers struggle to find specific moments in videos:
 ## Tech Stack / Learning Goals
 
 - **Stack**:
-  - Next.js 16 + Clerk + Stripe (frontend)
+  - Next.js 16 + Clerk + Lemon Squeezy (frontend payments)
   - FastAPI (backend API)
   - Durable queue worker (Supabase-backed job table + Python worker)
   - Modal (serverless GPU for processing)
