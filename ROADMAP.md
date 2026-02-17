@@ -136,7 +136,8 @@
 - **Preflight gate (before implementation)**: confirm payment-provider availability for a Colombia-based business account.
 - Investigate Stripe availability for Colombia and document the result before coding this phase (as of 2026-02-16, direct Stripe accounts appear unavailable in Colombia).
 - If direct Stripe account creation is not available, choose and document a workaround path (for example: local PSP such as Wompi/PayU, or US-entity/Atlas path) before implementation.
-- Stripe integration
+- **Decision (2026-02-17)**: Stripe's [global availability list](https://stripe.com/global) does not include Colombia, so direct Stripe accounts are treated as unsupported for a Colombia-based business. Default path: [Wompi Colombia](https://wompi.co/) integration. Alternative path: [Stripe Atlas](https://stripe.com/atlas) (US incorporation) if willing to operate via a US entity.
+- Payment provider integration (Wompi Colombia; Stripe via Atlas optional)
 - Credit purchase flow
 - Credit deduction on video process
 

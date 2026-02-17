@@ -44,13 +44,13 @@
 | 2026-02-13 | Phase 3 | Search Result Deep Links            | Done   | API now returns `youtube_url` on search; frontend renders "Open at timestamp" links for each result.                                                                    |
 | 2026-02-13 | Phase 4 | Auth Ownership + RLS Hardening      | Done   | Added Clerk JWT auth on create/get/search routes, owner-scoped video access (404 for non-owner), env-driven CORS origins, stricter YouTube URL normalization, frontend Bearer token wiring, and Supabase migration for RLS + function `search_path`. |
 | 2026-02-16 | Phase 4 | 4.2 Payment Provider Feasibility (Colombia) | In Progress | Added launch gate to validate Stripe account availability for Colombia and choose documented workaround path before implementing payments. |
+| 2026-02-17 | Phase 4 | 4.2 Payment Provider Feasibility (Colombia) | Done | Stripe [global availability list](https://stripe.com/global) does not include Colombia; decision: [Wompi Colombia](https://wompi.co/) by default, [Stripe Atlas](https://stripe.com/atlas) optional. |
 
 
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: download videos locally first, then upload to Modal.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
-- Phase 4.2 payments implementation is blocked pending payment-provider feasibility for Colombia (confirm direct Stripe availability or approve workaround path).
 
 ## Decisions Made
 

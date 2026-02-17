@@ -52,7 +52,7 @@ Content creators and researchers struggle to find specific moments in videos:
 - Text search (implemented)
 - Image search (planned)
 - Top 5 results with thumbnails
-- Credit-based payments (Stripe)
+- Credit-based payments (Wompi Colombia; Stripe via Atlas optional)
 - User accounts (Clerk)
 
 ### Out of Scope (for now)
@@ -66,7 +66,7 @@ Content creators and researchers struggle to find specific moments in videos:
 ## Tech Stack / Learning Goals
 
 - **Stack**:
-  - Next.js 16 + Clerk + Stripe (frontend)
+  - Next.js 16 + Clerk + Wompi (payments; Stripe via Atlas optional)
   - FastAPI (backend API)
   - Durable queue worker (Supabase-backed job table + Python worker)
   - Modal (serverless GPU for processing)
@@ -168,6 +168,6 @@ def search_video(video_id, query_text=None, query_image=None):
 - [ ] Integrate Clerk auth and tie videos/jobs to authenticated user_id
 - [ ] Enable Supabase RLS on `videos`, `credits`, and `video_jobs` with per-user policies
 - [ ] Resolve Supabase "Function Search Path Mutable" warnings by setting explicit `search_path` on custom DB functions
-- [ ] Add Stripe credit purchase + deduction on video submission
+- [ ] Add Wompi credit purchase + deduction on video submission (Stripe via Atlas optional)
 - [ ] Add retry/backoff strategy for failed queued jobs
 - [ ] Add request validation hardening (YouTube URL checks, query trimming, limits)
