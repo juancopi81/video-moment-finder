@@ -9,6 +9,7 @@ from src.api.app import app, _allowed_cors_origins, _extract_youtube_video_id
 from src.api.auth import get_current_user_id
 from src.db.supabase import VideoRecord
 from src.storage.qdrant import SearchResult
+from src.video.download import VideoMetadata
 
 
 def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
@@ -72,6 +73,10 @@ def test_create_video_enqueues_job_for_authenticated_owner(monkeypatch) -> None:
 
     monkeypatch.setattr("src.api.app.db_create_video", fake_create_video)
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
 
     response = client.post(
         "/videos",
@@ -111,6 +116,10 @@ def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
         lambda video_id: (_ for _ in ()).throw(RuntimeError("queue down")),
     )
     monkeypatch.setattr("src.api.app.update_video_status", fake_update)
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
 
     response = client.post(
         "/videos",
@@ -134,6 +143,41 @@ def test_create_video_rejects_non_video_youtube_url() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_create_video_rejects_live_stream(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=600.0, is_live=True),
+    )
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Live streams are not supported"
+
+
+def test_create_video_rejects_long_video(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_DURATION_S", "60")
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Video exceeds 1-minute limit"
 
 
 def test_get_video_requires_owner_scope(monkeypatch) -> None:
