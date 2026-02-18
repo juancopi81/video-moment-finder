@@ -40,6 +40,9 @@ def _video(video_id: str, *, status: str = "queued") -> VideoRecord:
         status=status,  # type: ignore[arg-type]
         user_id=None,
         error_message=None,
+        source_type="youtube",
+        source_r2_key=None,
+        source_filename=None,
         created_at=now,
         updated_at=now,
     )
@@ -75,7 +78,7 @@ def test_run_once_processes_successful_job(monkeypatch) -> None:
         lambda worker_id: _job("video_123", attempt_count=1),
     )
     monkeypatch.setattr("src.worker.runner.get_video", lambda video_id: _video(video_id))
-    monkeypatch.setattr("src.worker.runner.process_video", lambda video_id, youtube_url: object())
+    monkeypatch.setattr("src.worker.runner.process_video", lambda video: object())
     monkeypatch.setattr(
         "src.worker.runner.update_video_status",
         lambda video_id, status, error_message=None: status_updates.append(
@@ -116,7 +119,7 @@ def test_run_once_requeues_failed_job_below_retry_cap(monkeypatch) -> None:
     )
     monkeypatch.setattr("src.worker.runner.get_video", lambda video_id: _video(video_id))
 
-    def _raise(video_id: str, youtube_url: str) -> None:
+    def _raise(video: VideoRecord) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr("src.worker.runner.process_video", _raise)
@@ -166,7 +169,7 @@ def test_run_once_marks_terminal_failure_when_retry_cap_reached(monkeypatch) -> 
     )
     monkeypatch.setattr("src.worker.runner.get_video", lambda video_id: _video(video_id))
 
-    def _raise(video_id: str, youtube_url: str) -> None:
+    def _raise(video: VideoRecord) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr("src.worker.runner.process_video", _raise)
@@ -233,7 +236,7 @@ def test_run_once_recovers_stale_lock_and_processes_next_job(monkeypatch) -> Non
         lambda worker_id: _job("video_fresh", job_id="job_fresh", attempt_count=2),
     )
     monkeypatch.setattr("src.worker.runner.get_video", lambda video_id: _video(video_id))
-    monkeypatch.setattr("src.worker.runner.process_video", lambda video_id, youtube_url: object())
+    monkeypatch.setattr("src.worker.runner.process_video", lambda video: object())
     monkeypatch.setattr(
         "src.worker.runner.update_video_status",
         lambda video_id, status, error_message=None: status_updates.append(

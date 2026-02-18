@@ -47,11 +47,12 @@
 | 2026-02-17 | Phase 4 | Input Validation (Video Length)    | Done   | Validate YouTube metadata on submit, reject live streams and videos over configured duration. |
 | 2026-02-17 | Phase 4 | 4.2 Payment Decision + Activation Prerequisite | Done | Selected Lemon Squeezy as first provider path (Paddle fallback). Clarified that a live non-placeholder product URL is required before live store activation, so implementation follows activation readiness. |
 | 2026-02-18 | Phase 3 | Local Video Cache Fallback          | Done   | Added `VIDEO_LOCAL_VIDEO_DIR` support to use pre-downloaded files named `<youtube_id>.<ext>` before invoking yt-dlp. |
+| 2026-02-18 | Phase 3 | Production Upload Ingest Path       | Done   | Added authenticated upload endpoint, stored source in R2, and queued jobs using the stored source. |
 
 
 ## Blockers
 
-- YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: pre-download videos locally and set `VIDEO_LOCAL_VIDEO_DIR` to files named `<youtube_id>.<ext>`. Follow-up is documented in `ROADMAP.md` Phase 3.3 as the production ingest-path PR.
+- YouTube bot detection blocks yt-dlp from Modal IPs. Use uploaded ingest path or local cache fallback when cloud downloads fail.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
 - Phase 4.2 payments implementation is blocked on Lemon Squeezy live activation prerequisites: publish a public, non-placeholder product URL with product/pricing/support/legal details, then complete store activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
 

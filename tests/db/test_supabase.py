@@ -25,6 +25,9 @@ def test_row_to_video_converts_correctly() -> None:
         "status": "processing",
         "user_id": "user_456",
         "error_message": None,
+        "source_type": "youtube",
+        "source_r2_key": None,
+        "source_filename": None,
         "created_at": "2026-01-27T10:00:00Z",
         "updated_at": "2026-01-27T10:00:00Z",
     }
@@ -66,6 +69,9 @@ def test_create_video_returns_record(mock_get_client: MagicMock) -> None:
             "status": "processing",
             "user_id": None,
             "error_message": None,
+            "source_type": "youtube",
+            "source_r2_key": None,
+            "source_filename": None,
             "created_at": "2026-01-27T10:00:00Z",
             "updated_at": "2026-01-27T10:00:00Z",
         }

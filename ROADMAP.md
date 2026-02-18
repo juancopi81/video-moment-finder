@@ -119,11 +119,9 @@
 - Modal webhook for job completion
 - Background job queue (or polling)
 - R2 thumbnail serving
-- **Next PR focus (production ingest path)**:
-- Add authenticated video upload/ingest.
-- Store uploaded source in durable object storage.
-- Queue jobs using that stored source.
-- Keep `yt-dlp` and `VIDEO_LOCAL_VIDEO_DIR` as fallback paths only.
+- Frontend upload UX for authenticated users (file picker, progress, and limits)
+- Signed or multipart upload flow for large files
+- Storage lifecycle cleanup for uploaded source videos
 
 ---
 

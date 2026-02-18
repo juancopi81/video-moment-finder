@@ -11,6 +11,7 @@ from supabase import create_client, Client
 
 # Video status type
 VideoStatus = Literal["queued", "processing", "ready", "failed"]
+SourceType = Literal["youtube", "upload"]
 JobStatus = Literal["queued", "processing", "completed", "failed"]
 TerminalJobStatus = Literal["completed", "failed"]
 
@@ -20,10 +21,13 @@ class VideoRecord:
     """Video database record."""
 
     id: str
-    youtube_url: str
+    youtube_url: str | None
     status: VideoStatus
     user_id: str | None = None
     error_message: str | None = None
+    source_type: SourceType = "youtube"
+    source_r2_key: str | None = None
+    source_filename: str | None = None
     created_at: str | None = None  # ISO 8601 string from Supabase
     updated_at: str | None = None  # ISO 8601 string from Supabase
 
@@ -81,10 +85,13 @@ def _row_to_video(row: dict) -> VideoRecord:
     """Convert database row to VideoRecord."""
     return VideoRecord(
         id=row["id"],
-        youtube_url=row["youtube_url"],
+        youtube_url=row.get("youtube_url"),
         status=row["status"],
         user_id=row.get("user_id"),
         error_message=row.get("error_message"),
+        source_type=row.get("source_type") or "youtube",
+        source_r2_key=row.get("source_r2_key"),
+        source_filename=row.get("source_filename"),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
     )
@@ -132,6 +139,8 @@ def create_video(
     youtube_url: str,
     user_id: str | None = None,
     status: VideoStatus = "queued",
+    *,
+    video_id: str | None = None,
 ) -> VideoRecord:
     """Create a new video record.
 
@@ -143,7 +152,41 @@ def create_video(
         Created VideoRecord with generated ID.
     """
     client = get_client()
-    data = {"youtube_url": youtube_url, "status": status}
+    data: dict = {"youtube_url": youtube_url, "status": status, "source_type": "youtube"}
+    if user_id is not None:
+        data["user_id"] = user_id
+    if video_id is not None:
+        data["id"] = video_id
+
+    result = client.table("videos").insert(data).execute()
+    if not result.data:
+        raise RuntimeError("Failed to create video record")
+    return _row_to_video(result.data[0])
+
+
+def create_uploaded_video(
+    *,
+    video_id: str,
+    source_r2_key: str,
+    source_filename: str | None = None,
+    user_id: str | None = None,
+    status: VideoStatus = "queued",
+) -> VideoRecord:
+    """Create a new uploaded-video record."""
+    if not video_id.strip():
+        raise ValueError("video_id must be non-empty")
+    if not source_r2_key.strip():
+        raise ValueError("source_r2_key must be non-empty")
+
+    client = get_client()
+    data: dict = {
+        "id": video_id,
+        "youtube_url": None,
+        "status": status,
+        "source_type": "upload",
+        "source_r2_key": source_r2_key,
+        "source_filename": source_filename,
+    }
     if user_id is not None:
         data["user_id"] = user_id
 
