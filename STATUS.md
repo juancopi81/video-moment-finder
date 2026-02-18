@@ -51,7 +51,7 @@
 
 ## Blockers
 
-- YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: pre-download videos locally and set `VIDEO_LOCAL_VIDEO_DIR` to files named `<youtube_id>.<ext>`.
+- YouTube bot detection blocks yt-dlp from Modal IPs. Workaround: pre-download videos locally and set `VIDEO_LOCAL_VIDEO_DIR` to files named `<youtube_id>.<ext>`. Follow-up is documented in `ROADMAP.md` Phase 3.3 as the production ingest-path PR.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
 - Phase 4.2 payments implementation is blocked on Lemon Squeezy live activation prerequisites: publish a public, non-placeholder product URL with product/pricing/support/legal details, then complete store activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
 
