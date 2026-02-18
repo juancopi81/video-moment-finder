@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import os
-import re
 from typing import Literal
-from urllib.parse import parse_qs, urlparse
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,12 +23,12 @@ from src.storage.config import StorageConfigError
 from src.storage.qdrant import QdrantStorageError
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
+from src.video.youtube import normalize_youtube_url
 
 load_env()
 logger = get_logger(__name__)
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
-YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 
 
@@ -40,29 +38,6 @@ def _allowed_cors_origins() -> list[str]:
         return ["http://localhost:3000"]
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
     return origins or ["http://localhost:3000"]
-
-
-def _extract_youtube_video_id(youtube_url: str) -> str | None:
-    parsed = urlparse(youtube_url.strip())
-    host = parsed.netloc.lower()
-    path_parts = [part for part in parsed.path.split("/") if part]
-    video_id: str | None = None
-
-    if host in {"youtube.com", "www.youtube.com", "m.youtube.com"}:
-        if parsed.path == "/watch":
-            query = parse_qs(parsed.query)
-            video_id = query.get("v", [None])[0]
-        elif path_parts and path_parts[0] in {"shorts", "live"}:
-            video_id = path_parts[1] if len(path_parts) > 1 else None
-    elif host == "youtu.be":
-        video_id = path_parts[0] if path_parts else None
-
-    if video_id is None:
-        return None
-    video_id = video_id.strip()
-    if not YOUTUBE_VIDEO_ID_RE.fullmatch(video_id):
-        return None
-    return video_id
 
 
 def _max_video_duration_s() -> int:
@@ -110,10 +85,10 @@ class VideoCreateRequest(BaseModel):
     @field_validator("youtube_url")
     @classmethod
     def normalize_youtube_url(cls, value: str) -> str:
-        video_id = _extract_youtube_video_id(value)
-        if video_id is None:
+        normalized = normalize_youtube_url(value)
+        if normalized is None:
             raise ValueError("youtube_url must be a valid YouTube video URL")
-        return f"https://www.youtube.com/watch?v={video_id}"
+        return normalized
 
 
 class VideoResponse(BaseModel):
