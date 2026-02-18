@@ -36,6 +36,7 @@ Backend (`.env`):
 - `CLERK_ISSUER` (JWT issuer verification)
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
+- `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
 
 Frontend (`frontend/.env.local`):
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (Clerk initialization)
@@ -58,6 +59,17 @@ Run worker (required for processing queue):
 ```bash
 uv run python -m src.worker.runner
 ```
+
+YouTube download workaround (for cloud IP bot detection):
+
+1. Download a video locally with `yt-dlp`:
+
+```bash
+uv run yt-dlp -f "best[height<=720]" -o "abc123xyz45.mp4" "https://www.youtube.com/watch?v=abc123xyz45"
+```
+
+2. Set `VIDEO_LOCAL_VIDEO_DIR` to the folder containing the file.
+3. Ensure the filename matches the YouTube video ID (`abc123xyz45.mp4`).
 
 Optional reliability overrides:
 

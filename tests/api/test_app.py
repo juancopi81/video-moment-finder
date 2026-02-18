@@ -5,11 +5,12 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app, _allowed_cors_origins, _extract_youtube_video_id
+from src.api.app import app, _allowed_cors_origins
 from src.api.auth import get_current_user_id
 from src.db.supabase import VideoRecord
 from src.storage.qdrant import SearchResult
 from src.video.download import VideoMetadata
+from src.video.youtube import extract_youtube_video_id
 
 
 def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
@@ -334,7 +335,7 @@ def test_extract_youtube_video_id_supported_formats(
     url: str,
     expected_video_id: str,
 ) -> None:
-    assert _extract_youtube_video_id(url) == expected_video_id
+    assert extract_youtube_video_id(url) == expected_video_id
 
 
 @pytest.mark.parametrize(
@@ -347,7 +348,7 @@ def test_extract_youtube_video_id_supported_formats(
     ],
 )
 def test_extract_youtube_video_id_rejects_invalid_urls(url: str) -> None:
-    assert _extract_youtube_video_id(url) is None
+    assert extract_youtube_video_id(url) is None
 
 
 def test_allowed_cors_origins_uses_env(monkeypatch) -> None:

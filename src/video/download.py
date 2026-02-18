@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 
 from src.utils.subprocess import format_subprocess_error
+from src.video.youtube import extract_youtube_video_id
 
 
 class DownloadError(RuntimeError):
@@ -63,6 +64,7 @@ def download_video(
     *,
     quality: str = "best[height<=720]",
     output_basename: str = "video",
+    local_video_dir: Path | None = None,
 ) -> Path:
     """
     Download a video via yt-dlp.
@@ -72,6 +74,10 @@ def download_video(
     - Raises DownloadError on any yt-dlp failure.
     - Raises DownloadError if output file cannot be uniquely determined.
     """
+    local_path = _resolve_local_video(url, local_video_dir)
+    if local_path is not None:
+        return local_path
+
     output_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(output_dir / f"{output_basename}.%(ext)s")
 
@@ -99,3 +105,25 @@ def download_video(
         )
 
     return matches[0]
+
+
+def _resolve_local_video(url: str, local_video_dir: Path | None) -> Path | None:
+    if local_video_dir is None:
+        return None
+    if not local_video_dir.exists():
+        return None
+
+    video_id = extract_youtube_video_id(url)
+    if video_id is None:
+        return None
+
+    matches = sorted(local_video_dir.glob(f"{video_id}.*"))
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+
+    raise DownloadError(
+        "Multiple local video files found for "
+        f"{video_id}: {matches}. Keep only one."
+    )

@@ -1,6 +1,7 @@
 """Video processing pipeline implementation."""
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -42,8 +43,21 @@ def process_video(video_id: str, youtube_url: str) -> ProcessingResult:
             frames_dir = temp_path / "frames"
             thumbnails_dir = temp_path / "thumbnails"
 
+            local_video_dir = _local_video_dir()
+            if local_video_dir is not None:
+                logger.info(
+                    "Checking local video cache for video_id=%s in %s",
+                    video_id,
+                    local_video_dir,
+                )
             logger.info("Downloading video for video_id=%s", video_id)
-            video_path = download_video(youtube_url, video_dir)
+            video_path = download_video(
+                youtube_url,
+                video_dir,
+                local_video_dir=local_video_dir,
+            )
+            if local_video_dir is not None and _is_within_dir(video_path, local_video_dir):
+                logger.info("Using local video file %s", video_path)
             logger.info("Downloaded video to %s", video_path)
 
             logger.info("Extracting frames for video_id=%s", video_id)
@@ -92,3 +106,18 @@ def process_video(video_id: str, youtube_url: str) -> ProcessingResult:
     except Exception as exc:
         logger.exception("Failed to process video_id=%s: %s", video_id, exc)
         raise VideoProcessingError(str(exc)) from exc
+
+
+def _local_video_dir() -> Path | None:
+    raw = os.environ.get("VIDEO_LOCAL_VIDEO_DIR", "").strip()
+    if not raw:
+        return None
+    return Path(raw)
+
+
+def _is_within_dir(path: Path, directory: Path) -> bool:
+    try:
+        path.relative_to(directory)
+    except ValueError:
+        return False
+    return True
