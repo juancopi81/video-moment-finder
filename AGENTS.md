@@ -98,6 +98,11 @@ Graded preflight rule:
 - Keep `README.md` user-focused; keep agent/developer process in `AGENTS.md`/`CLAUDE.md`.
 - Treat doc ownership as a source-of-truth contract: update the owning doc instead of copying status across multiple files.
 
+## Path Privacy Rule
+
+- In repository content (commits, PR descriptions, markdown docs, comments), use project-relative paths (for example `src/api/app.py`) instead of absolute local filesystem paths.
+- Never include machine-specific prefixes like `/Users/...` in committed artifacts.
+
 ## Lessons Memory
 
 - If a new reusable lesson is discovered, append a short entry to:
