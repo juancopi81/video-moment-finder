@@ -1,6 +1,6 @@
 # Video Moment Finder
 
-Semantic video frame search. Paste a YouTube URL, process it, and search moments with text queries.
+Semantic video frame search. Paste a YouTube URL or upload a video, process it, and search moments with text queries.
 
 ## Documentation
 
@@ -37,6 +37,7 @@ Backend (`.env`):
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
+- `R2_*` (required for uploaded video ingest and thumbnails)
 
 Frontend (`frontend/.env.local`):
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (Clerk initialization)
@@ -53,6 +54,14 @@ uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
 Protected API routes (`POST /videos`, `GET /videos/{id}`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
+
+Upload a video (requires R2 env configured):
+
+```bash
+curl -X POST "http://localhost:8000/videos/upload" \
+  -H "Authorization: Bearer <CLERK_JWT>" \
+  -F "file=@/path/to/video.mp4"
+```
 
 Run worker (required for processing queue):
 

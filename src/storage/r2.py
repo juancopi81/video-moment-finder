@@ -1,4 +1,4 @@
-"""Cloudflare R2 storage for video thumbnails."""
+"""Cloudflare R2 storage for video thumbnails and source uploads."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,9 +34,21 @@ class UploadResult:
     url: str
 
 
+@dataclass(frozen=True)
+class SourceUploadResult:
+    """Result of a source video upload."""
+
+    key: str
+
+
 def thumbnail_key(video_id: str, frame_index: int) -> str:
     """Generate R2 key for a thumbnail."""
     return f"{video_id}/thumb_{frame_index:05d}.jpg"
+
+
+def source_key(video_id: str, filename: str) -> str:
+    """Generate R2 key for an uploaded source video."""
+    return f"{video_id}/source/{filename}"
 
 
 class R2Store:
@@ -82,6 +94,44 @@ class R2Store:
             raise R2StorageError(f"Failed to upload thumbnail: {exc}") from exc
 
         return UploadResult(key=key, url=self._build_url(key))
+
+    def upload_source_video(
+        self,
+        *,
+        video_id: str,
+        filename: str,
+        file_obj,
+        content_type: str | None = None,
+    ) -> SourceUploadResult:
+        """Upload an uploaded source video to R2."""
+        key = source_key(video_id, filename)
+        extra_args = {}
+        if content_type:
+            extra_args["ContentType"] = content_type
+
+        try:
+            kwargs = {}
+            if extra_args:
+                kwargs["ExtraArgs"] = extra_args
+            self._client.upload_fileobj(
+                file_obj,
+                self._config.bucket_name,
+                key,
+                **kwargs,
+            )
+        except Exception as exc:
+            raise R2StorageError(f"Failed to upload source video: {exc}") from exc
+
+        return SourceUploadResult(key=key)
+
+    def download_source_video(self, key: str, destination: Path) -> None:
+        """Download a source video from R2 to a local path."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with destination.open("wb") as f:
+                self._client.download_fileobj(self._config.bucket_name, key, f)
+        except Exception as exc:
+            raise R2StorageError(f"Failed to download source video: {exc}") from exc
 
     def upload_thumbnails(
         self,

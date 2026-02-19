@@ -40,7 +40,7 @@ Content creators and researchers struggle to find specific moments in videos:
 
 ## Inputs
 
-- **Required**: YouTube video URL
+- **Required**: YouTube video URL or direct video upload
 - **Query options**:
   - Text: "person holding a phone", "code editor on screen" (implemented)
   - Image: upload a reference image to find similar frames (planned)
@@ -55,7 +55,8 @@ Content creators and researchers struggle to find specific moments in videos:
 
 ### In Scope
 
-- YouTube videos only (via yt-dlp)
+- YouTube videos (via yt-dlp fallback)
+- Direct video upload (stored in durable object storage)
 - Max 30-minute videos
 - Text search (implemented)
 - Image search (planned)
@@ -65,7 +66,7 @@ Content creators and researchers struggle to find specific moments in videos:
 
 ### Out of Scope (for now)
 
-- Other video sources (Vimeo, direct upload)
+- Other video sources (Vimeo)
 - Videos longer than 30 minutes
 - Video clip export
 - Team/collaboration features
@@ -132,7 +133,7 @@ Technical Flow:
 
 ## Risks & Unknowns
 
-- **YouTube ToS**: Downloading videos may violate terms. Mitigation: Users process their own videos; consider direct upload later.
+- **YouTube ToS**: Downloading videos may violate terms. Mitigation: Users process their own videos; direct upload path is available.
 - **Processing time**: 30-min video = ~1800 frames = ~15-30 min processing. Mitigation: Show progress, email when ready.
 - **Embedding quality**: Will frame embeddings match text queries well? Need to test with real videos.
 - **GPU costs**: Modal A10G is ~$1/hour. A 30-min video might take 15-30 min = $0.25-0.50 GPU cost.

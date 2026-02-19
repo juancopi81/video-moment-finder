@@ -170,7 +170,7 @@ def _process_claimed_job(
     update_video_status(video.id, "processing")
 
     try:
-        process_video(video.id, video.youtube_url)
+        process_video(video)
     except Exception as exc:
         error_message = str(exc)
         logger.exception("Job failed job_id=%s video_id=%s: %s", job.id, video.id, exc)

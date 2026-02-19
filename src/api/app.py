@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -15,15 +15,18 @@ from src.config.env import load_env
 from src.db.supabase import (
     VideoRecord,
     create_video as db_create_video,
+    create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_video as db_get_video,
     update_video_status,
 )
-from src.storage.config import StorageConfigError
+from src.storage.config import R2Config, StorageConfigError
+from src.storage.r2 import R2Store, R2StorageError
 from src.storage.qdrant import QdrantStorageError
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
 from src.video.youtube import normalize_youtube_url
+from uuid import uuid4
 
 load_env()
 logger = get_logger(__name__)
@@ -93,8 +96,10 @@ class VideoCreateRequest(BaseModel):
 
 class VideoResponse(BaseModel):
     id: str
-    youtube_url: HttpUrl
+    youtube_url: HttpUrl | None
     status: StatusType
+    source_type: Literal["youtube", "upload"]
+    source_filename: str | None = None
     created_at: datetime
     error_message: str | None = None
 
@@ -121,7 +126,7 @@ class SearchResult(BaseModel):
 
 class VideoSearchResponse(BaseModel):
     video_id: str
-    youtube_url: HttpUrl
+    youtube_url: HttpUrl | None
     status: StatusType
     results: list[SearchResult]
 
@@ -139,9 +144,20 @@ def _video_record_to_response(record: VideoRecord) -> VideoResponse:
         id=record.id,
         youtube_url=record.youtube_url,
         status=record.status,
+        source_type=record.source_type,
+        source_filename=record.source_filename,
         created_at=_parse_iso_datetime(record.created_at),
         error_message=record.error_message,
     )
+
+
+def _sanitize_filename(value: str | None) -> str:
+    if not value:
+        return "upload.mp4"
+    name = os.path.basename(value)
+    if not name.strip():
+        return "upload.mp4"
+    return name
 
 
 app = FastAPI(
@@ -165,6 +181,71 @@ def create_video(
     """Create a new video and enqueue durable processing job."""
     _validate_video_duration(request.youtube_url)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
+    try:
+        enqueue_video_job(record.id)
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue processing job for video_id=%s: %s",
+            record.id,
+            exc,
+        )
+        update_video_status(
+            record.id,
+            "failed",
+            error_message=f"Failed to enqueue processing job: {exc}",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to enqueue processing job",
+        ) from exc
+
+    return _video_record_to_response(record)
+
+
+@app.post("/videos/upload", response_model=VideoResponse)
+def upload_video(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
+    """Upload a video file and enqueue durable processing job."""
+    if not file.filename and not file.content_type:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    if file.content_type and not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Only video uploads are supported")
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload storage is not configured",
+        ) from exc
+
+    video_id = str(uuid4())
+    filename = _sanitize_filename(file.filename)
+    store = R2Store(r2_config)
+
+    try:
+        upload_result = store.upload_source_video(
+            video_id=video_id,
+            filename=filename,
+            file_obj=file.file,
+            content_type=file.content_type,
+        )
+    except R2StorageError as exc:
+        logger.exception("Failed to upload source video: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to store uploaded video",
+        ) from exc
+
+    record = db_create_uploaded_video(
+        video_id=video_id,
+        source_r2_key=upload_result.key,
+        source_filename=filename,
+        user_id=user_id,
+        status="queued",
+    )
     try:
         enqueue_video_job(record.id)
     except Exception as exc:

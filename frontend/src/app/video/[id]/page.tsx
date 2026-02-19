@@ -25,14 +25,14 @@ type SearchResult = {
 
 type VideoStatusResponse = {
   id: string;
-  youtube_url: string;
+  youtube_url: string | null;
   status: VideoStatus;
   error_message: string | null;
 };
 
 type VideoSearchResponse = {
   video_id: string;
-  youtube_url: string;
+  youtube_url: string | null;
   status: VideoStatus;
   results: SearchResult[];
 };

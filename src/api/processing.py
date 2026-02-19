@@ -10,7 +10,9 @@ from src.config.modal import (
     get_embedding_modal_function,
 )
 from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
+from src.db.supabase import VideoRecord
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
+from src.storage.r2 import R2Store, R2StorageError
 from src.utils.logging import get_logger
 from src.video.download import download_video
 from src.video.frames import extract_frames
@@ -24,7 +26,7 @@ class VideoProcessingError(RuntimeError):
     """Raised when the processing pipeline fails."""
 
 
-def process_video(video_id: str, youtube_url: str) -> ProcessingResult:
+def process_video(video: VideoRecord) -> ProcessingResult:
     """
     Processing pipeline: download -> extract -> embed -> store.
 
@@ -34,7 +36,11 @@ def process_video(video_id: str, youtube_url: str) -> ProcessingResult:
     Raises:
         VideoProcessingError: If any stage fails.
     """
-    logger.info("Starting processing for video_id=%s url=%s", video_id, youtube_url)
+    logger.info(
+        "Starting processing for video_id=%s source_type=%s",
+        video.id,
+        video.source_type,
+    )
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -43,24 +49,9 @@ def process_video(video_id: str, youtube_url: str) -> ProcessingResult:
             frames_dir = temp_path / "frames"
             thumbnails_dir = temp_path / "thumbnails"
 
-            local_video_dir = _local_video_dir()
-            if local_video_dir is not None:
-                logger.info(
-                    "Checking local video cache for video_id=%s in %s",
-                    video_id,
-                    local_video_dir,
-                )
-            logger.info("Downloading video for video_id=%s", video_id)
-            video_path = download_video(
-                youtube_url,
-                video_dir,
-                local_video_dir=local_video_dir,
-            )
-            if local_video_dir is not None and _is_within_dir(video_path, local_video_dir):
-                logger.info("Using local video file %s", video_path)
-            logger.info("Downloaded video to %s", video_path)
+            video_path, r2_config = _resolve_video_source(video, video_dir)
 
-            logger.info("Extracting frames for video_id=%s", video_id)
+            logger.info("Extracting frames for video_id=%s", video.id)
             frames = extract_frames(
                 video_path,
                 frames_dir,
@@ -83,29 +74,82 @@ def process_video(video_id: str, youtube_url: str) -> ProcessingResult:
             embeddings = embed_fn.remote(frame_bytes, batch_size=8)
             logger.info("Got %d embeddings", len(embeddings))
 
-            logger.info("Storing embeddings and thumbnails for video_id=%s", video_id)
+            logger.info("Storing embeddings and thumbnails for video_id=%s", video.id)
             qdrant_config = QdrantConfig.from_env()
-            try:
-                r2_config = R2Config.from_env()
-            except StorageConfigError:
-                logger.warning("R2 not configured, thumbnails will not be uploaded")
-                r2_config = None
+            if r2_config is None:
+                try:
+                    r2_config = R2Config.from_env()
+                except StorageConfigError:
+                    logger.warning("R2 not configured, thumbnails will not be uploaded")
+                    r2_config = None
 
             pipeline = StoragePipeline(qdrant_config, r2_config)
             pipeline.ensure_ready()
-            result = pipeline.process_video(video_id, frames, embeddings)
+            result = pipeline.process_video(video.id, frames, embeddings)
             logger.info(
                 "Stored %d embeddings, %d thumbnails for video_id=%s",
                 result.embeddings_stored,
                 result.thumbnails_uploaded,
-                video_id,
+                video.id,
             )
-            logger.info("Video processing complete for video_id=%s", video_id)
+            logger.info("Video processing complete for video_id=%s", video.id)
             return result
 
     except Exception as exc:
-        logger.exception("Failed to process video_id=%s: %s", video_id, exc)
+        logger.exception("Failed to process video_id=%s: %s", video.id, exc)
         raise VideoProcessingError(str(exc)) from exc
+
+
+def _resolve_video_source(
+    video: VideoRecord,
+    video_dir: Path,
+) -> tuple[Path, R2Config | None]:
+    if video.source_type == "upload":
+        if not video.source_r2_key:
+            raise VideoProcessingError("Missing source_r2_key for uploaded video")
+        try:
+            r2_config = R2Config.from_env()
+        except StorageConfigError as exc:
+            raise VideoProcessingError("R2 config is required for uploaded videos") from exc
+
+        filename = video.source_filename or "upload.mp4"
+        destination = video_dir / filename
+        logger.info(
+            "Downloading uploaded source for video_id=%s to %s",
+            video.id,
+            destination,
+        )
+        store = R2Store(r2_config)
+        try:
+            store.download_source_video(video.source_r2_key, destination)
+        except R2StorageError as exc:
+            raise VideoProcessingError(str(exc)) from exc
+
+        return destination, r2_config
+
+    if video.source_type != "youtube":
+        raise VideoProcessingError(f"Unsupported source_type {video.source_type!r}")
+
+    if not video.youtube_url:
+        raise VideoProcessingError("Missing youtube_url for video source")
+
+    local_video_dir = _local_video_dir()
+    if local_video_dir is not None:
+        logger.info(
+            "Checking local video cache for video_id=%s in %s",
+            video.id,
+            local_video_dir,
+        )
+    logger.info("Downloading video for video_id=%s", video.id)
+    video_path = download_video(
+        video.youtube_url,
+        video_dir,
+        local_video_dir=local_video_dir,
+    )
+    if local_video_dir is not None and _is_within_dir(video_path, local_video_dir):
+        logger.info("Using local video file %s", video_path)
+    logger.info("Downloaded video to %s", video_path)
+    return video_path, None
 
 
 def _local_video_dir() -> Path | None:
