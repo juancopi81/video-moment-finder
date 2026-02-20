@@ -13,3 +13,5 @@ test_video*
 
 # Environment variables
 .env
+
+.DS_Store
