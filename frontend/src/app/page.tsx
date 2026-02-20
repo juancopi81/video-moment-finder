@@ -226,7 +226,7 @@ export default function Home() {
           </div>
 
           {mode === "youtube" ? (
-            <form onSubmit={handleSubmit}>
+            <form key="youtube-form" onSubmit={handleSubmit}>
               <input
                 type="text"
                 value={url}
@@ -244,7 +244,7 @@ export default function Home() {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleUpload}>
+            <form key="upload-form" onSubmit={handleUpload}>
               <input
                 type="file"
                 accept="video/*"
