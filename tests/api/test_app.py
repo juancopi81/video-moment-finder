@@ -29,6 +29,21 @@ def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
     )
 
 
+def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord:
+    return VideoRecord(
+        id=video_id,
+        youtube_url=None,
+        status=status,  # type: ignore[arg-type]
+        user_id="user_123",
+        error_message=None,
+        source_type="upload",
+        source_r2_key="video_123/source/upload.mp4",
+        source_filename="upload.mp4",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 @pytest.fixture(autouse=True)
 def _clear_dependency_overrides() -> None:
     app.dependency_overrides.clear()
@@ -204,6 +219,7 @@ def test_get_video_requires_owner_scope(monkeypatch) -> None:
     assert payload["id"] == "video_status"
     assert payload["status"] == "processing"
     assert payload["source_type"] == "youtube"
+    assert payload["source_url"] is None
     assert calls == [("video_status", "user_123")]
 
 
@@ -227,6 +243,26 @@ def test_get_video_requires_authentication() -> None:
 
     assert response.status_code == 401
     assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_get_video_includes_source_url_for_uploaded_video(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app._source_url_for_record",
+        lambda record: "https://example.com/source.mp4?token=abc",
+    )
+
+    response = client.get("/videos/video_upload")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_type"] == "upload"
+    assert payload["source_url"] == "https://example.com/source.mp4?token=abc"
 
 
 def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
@@ -258,6 +294,7 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     payload = response.json()
     assert payload["status"] == "ready"
     assert payload["youtube_url"] == "https://www.youtube.com/watch?v=abc123xyz45"
+    assert payload["source_url"] is None
     assert payload["results"][0]["thumbnail_url"] is None
     assert payload["results"][0]["timestamp_s"] == 12.5
 

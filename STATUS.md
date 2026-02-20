@@ -49,6 +49,7 @@
 | 2026-02-18 | Phase 3 | Local Video Cache Fallback          | Done   | Added `VIDEO_LOCAL_VIDEO_DIR` support to use pre-downloaded files named `<youtube_id>.<ext>` before invoking yt-dlp. |
 | 2026-02-18 | Phase 3 | Production Upload Ingest Path       | Done   | Added authenticated upload endpoint, stored source in R2, and queued jobs using the stored source. |
 | 2026-02-19 | Phase 3 | Frontend Upload UX                  | Done   | Added signed-in upload flow with progress tracking and mode toggle between URL and direct upload. |
+| 2026-02-20 | Phase 3 | Upload Playback Jump Links           | Done   | Added signed R2 source URLs for ready uploads and frontend playback/jump-to-timestamp controls. |
 
 
 ## Blockers

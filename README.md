@@ -36,6 +36,7 @@ Backend (`.env`):
 - `CLERK_ISSUER` (JWT issuer verification)
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
+- `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
 - `R2_*` (required for uploaded video ingest and thumbnails)
 
