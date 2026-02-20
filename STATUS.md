@@ -48,6 +48,7 @@
 | 2026-02-17 | Phase 4 | 4.2 Payment Decision + Activation Prerequisite | Done | Selected Lemon Squeezy as first provider path (Paddle fallback). Clarified that a live non-placeholder product URL is required before live store activation, so implementation follows activation readiness. |
 | 2026-02-18 | Phase 3 | Local Video Cache Fallback          | Done   | Added `VIDEO_LOCAL_VIDEO_DIR` support to use pre-downloaded files named `<youtube_id>.<ext>` before invoking yt-dlp. |
 | 2026-02-18 | Phase 3 | Production Upload Ingest Path       | Done   | Added authenticated upload endpoint, stored source in R2, and queued jobs using the stored source. |
+| 2026-02-19 | Phase 3 | Frontend Upload UX                  | Done   | Added signed-in upload flow with progress tracking and mode toggle between URL and direct upload. |
 
 
 ## Blockers
