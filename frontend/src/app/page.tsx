@@ -104,14 +104,39 @@ export default function Home() {
       }
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const formData = new FormData();
-      formData.append("file", uploadFile);
+      const initResponse = await fetch(`${apiUrl}/videos/upload/init`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          filename: uploadFile.name,
+          content_type: uploadFile.type || null,
+        }),
+      });
 
-      const response = await new Promise<Response>((resolve, reject) => {
+      if (!initResponse.ok) {
+        const data = await initResponse.json().catch(() => null);
+        let message = "Failed to prepare upload";
+        if (Array.isArray(data?.detail)) {
+          message = data.detail[0]?.msg || message;
+        } else if (typeof data?.detail === "string") {
+          message = data.detail;
+        } else if (initResponse.status === 401) {
+          message = "Please sign in to process a video.";
+        }
+        throw new Error(message);
+      }
+
+      const initData = await initResponse.json();
+
+      await new Promise<void>((resolve, reject) => {
         const request = new XMLHttpRequest();
-        request.open("POST", `${apiUrl}/videos/upload`);
-        request.setRequestHeader("Authorization", `Bearer ${token}`);
-        request.responseType = "text";
+        request.open("PUT", initData.upload_url);
+        if (uploadFile.type) {
+          request.setRequestHeader("Content-Type", uploadFile.type);
+        }
 
         request.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -120,34 +145,46 @@ export default function Home() {
         };
 
         request.onload = () => {
-          const response = new Response(request.responseText, {
-            status: request.status,
-            statusText: request.statusText,
-          });
-          resolve(response);
+          if (request.status >= 200 && request.status < 300) {
+            resolve();
+          } else {
+            reject(new Error("Failed to upload video to storage"));
+          }
         };
 
         request.onerror = () => {
           reject(new TypeError("Network error"));
         };
 
-        request.send(formData);
+        request.send(uploadFile);
       });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        let message = "Failed to upload video";
+      const completeResponse = await fetch(`${apiUrl}/videos/upload/complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          video_id: initData.video_id,
+          filename: uploadFile.name,
+        }),
+      });
+
+      if (!completeResponse.ok) {
+        const data = await completeResponse.json().catch(() => null);
+        let message = "Failed to finalize upload";
         if (Array.isArray(data?.detail)) {
           message = data.detail[0]?.msg || message;
         } else if (typeof data?.detail === "string") {
           message = data.detail;
-        } else if (response.status === 401) {
+        } else if (completeResponse.status === 401) {
           message = "Please sign in to process a video.";
         }
         throw new Error(message);
       }
 
-      const data = await response.json();
+      const data = await completeResponse.json();
       router.push(`/video/${data.id}`);
     } catch (err) {
       if (err instanceof TypeError && err.message.includes("Network")) {

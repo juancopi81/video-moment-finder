@@ -21,7 +21,7 @@ from src.db.supabase import (
     update_video_status,
 )
 from src.storage.config import R2Config, StorageConfigError
-from src.storage.r2 import R2Store, R2StorageError
+from src.storage.r2 import R2Store, R2StorageError, source_key
 from src.storage.qdrant import QdrantStorageError
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
@@ -97,6 +97,21 @@ def _source_url_ttl_s() -> int:
     return value
 
 
+def _upload_url_ttl_s() -> int:
+    raw = os.environ.get("VIDEO_UPLOAD_URL_TTL_S", "").strip()
+    if not raw:
+        return 900
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid VIDEO_UPLOAD_URL_TTL_S=%r; using default", raw)
+        return 900
+    if value <= 0:
+        logger.warning("VIDEO_UPLOAD_URL_TTL_S must be positive; using default")
+        return 900
+    return value
+
+
 def _source_url_for_record(record: VideoRecord) -> str | None:
     if record.source_type != "upload":
         return None
@@ -151,6 +166,23 @@ class VideoResponse(BaseModel):
     source_url: HttpUrl | None = None
     created_at: datetime
     error_message: str | None = None
+
+
+class UploadInitRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=200)
+    content_type: str | None = Field(default=None, max_length=200)
+
+
+class UploadInitResponse(BaseModel):
+    video_id: str
+    key: str
+    upload_url: HttpUrl
+    expires_in: int
+
+
+class UploadCompleteRequest(BaseModel):
+    video_id: str = Field(min_length=1, max_length=200)
+    filename: str = Field(min_length=1, max_length=200)
 
 
 class VideoSearchRequest(BaseModel):
@@ -293,6 +325,110 @@ def upload_video(
     record = db_create_uploaded_video(
         video_id=video_id,
         source_r2_key=upload_result.key,
+        source_filename=filename,
+        user_id=user_id,
+        status="queued",
+    )
+    try:
+        enqueue_video_job(record.id)
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue processing job for video_id=%s: %s",
+            record.id,
+            exc,
+        )
+        update_video_status(
+            record.id,
+            "failed",
+            error_message=f"Failed to enqueue processing job: {exc}",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to enqueue processing job",
+        ) from exc
+
+    return _video_record_to_response(record)
+
+
+@app.post("/videos/upload/init", response_model=UploadInitResponse)
+def init_upload(
+    request: UploadInitRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> UploadInitResponse:
+    """Generate a presigned upload URL for direct-to-R2 uploads."""
+    _ = user_id
+    if request.content_type and not request.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Only video uploads are supported")
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload storage is not configured",
+        ) from exc
+
+    video_id = str(uuid4())
+    filename = _sanitize_filename(request.filename)
+    key = source_key(video_id, filename)
+    expires_in = _upload_url_ttl_s()
+    store = R2Store(r2_config)
+
+    try:
+        upload_url = store.generate_presigned_upload_url(
+            key,
+            content_type=request.content_type,
+            expires_in=expires_in,
+        )
+    except R2StorageError as exc:
+        logger.exception("Failed to generate upload URL: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to prepare upload",
+        ) from exc
+
+    return UploadInitResponse(
+        video_id=video_id,
+        key=key,
+        upload_url=upload_url,
+        expires_in=expires_in,
+    )
+
+
+@app.post("/videos/upload/complete", response_model=VideoResponse)
+def complete_upload(
+    request: UploadCompleteRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
+    """Finalize a presigned upload and enqueue processing."""
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload storage is not configured",
+        ) from exc
+
+    filename = _sanitize_filename(request.filename)
+    key = source_key(request.video_id, filename)
+    store = R2Store(r2_config)
+
+    try:
+        if not store.source_exists(key):
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded source not found",
+            )
+    except R2StorageError as exc:
+        logger.exception("Failed to check uploaded source: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to verify upload",
+        ) from exc
+
+    record = db_create_uploaded_video(
+        video_id=request.video_id,
+        source_r2_key=key,
         source_filename=filename,
         user_id=user_id,
         status="queued",

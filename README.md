@@ -38,6 +38,7 @@ Backend (`.env`):
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
 - `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)
+- `VIDEO_UPLOAD_URL_TTL_S` (signed upload URL lifetime in seconds for direct-to-R2 uploads; default `900`)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
 - `R2_*` (required for uploaded video ingest and thumbnails)
 
@@ -58,7 +59,27 @@ uv run uvicorn src.api.app:app --reload --port 8000
 
 Protected API routes (`POST /videos`, `GET /videos/{id}`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
 
-Upload a video (requires R2 env configured):
+Upload a video via presigned direct-to-R2 flow (requires R2 env configured):
+
+```bash
+curl -X POST "http://localhost:8000/videos/upload/init" \
+  -H "Authorization: Bearer <CLERK_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"filename":"video.mp4","content_type":"video/mp4"}'
+
+curl -X PUT "<UPLOAD_URL_FROM_RESPONSE>" \
+  -H "Content-Type: video/mp4" \
+  --data-binary "@/path/to/video.mp4"
+
+curl -X POST "http://localhost:8000/videos/upload/complete" \
+  -H "Authorization: Bearer <CLERK_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"video_id":"<VIDEO_ID_FROM_RESPONSE>","filename":"video.mp4"}'
+```
+
+Ensure your R2 bucket CORS allows `PUT` from the frontend origin for direct uploads.
+
+Small files can still use the API upload endpoint:
 
 ```bash
 curl -X POST "http://localhost:8000/videos/upload" \
