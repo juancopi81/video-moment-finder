@@ -33,6 +33,7 @@ This applies SQL migrations in `supabase/migrations`, installs Python deps with 
 Required auth/CORS env for local API + frontend:
 
 Backend (`.env`):
+
 - `CLERK_ISSUER` (JWT issuer verification)
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
@@ -41,6 +42,7 @@ Backend (`.env`):
 - `R2_*` (required for uploaded video ingest and thumbnails)
 
 Frontend (`frontend/.env.local`):
+
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (Clerk initialization)
 - `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`)
 
@@ -90,38 +92,6 @@ uv run python -m src.worker.runner --max-attempts 3 --stale-lock-timeout 600
 - Failed jobs are retried up to `VIDEO_JOB_MAX_ATTEMPTS` (default `3`).
 - `processing` jobs with stale locks older than `VIDEO_JOB_STALE_LOCK_TIMEOUT_S` seconds
   (default `600`) are recovered and requeued.
-
-## R2 Object Namespaces + Lifecycle Rules
-
-R2 stores different object types in separate namespaces:
-
-- Thumbnails: `thumb/<video_id>/thumb_00001.jpg`
-- Uploaded source videos: `source/<video_id>/<filename>`
-
-Lifecycle setup (Cloudflare dashboard):
-
-1. Open **R2 → Buckets → <your bucket> → Settings → Lifecycle rules**.
-2. Add a rule with prefix `source/`.
-3. Set the expiration window that matches your retention policy (for example, delete after 7 days).
-4. Save the rule.
-
-Verification steps:
-
-1. Upload a small test object to `source/<video_id>/test.txt` and another to `thumb/<video_id>/thumb_00000.jpg`.
-2. Confirm the lifecycle rule targets only the `source/` prefix in the bucket UI.
-3. Optional CLI check (uses the same R2 credentials as the app):
-
-```bash
-aws s3api get-bucket-lifecycle-configuration \
-  --endpoint-url "$R2_ENDPOINT_URL" \
-  --bucket "$R2_BUCKET_NAME"
-```
-
-Run frontend:
-
-```bash
-cd frontend && npm run dev
-```
 
 ## Quality Checks
 
