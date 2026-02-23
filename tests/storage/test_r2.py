@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import boto3
+from botocore.exceptions import ClientError
 
 from src.storage.config import R2Config
 from src.storage.r2 import R2Store, thumbnail_key
@@ -18,10 +19,16 @@ class FakePaginator:
 
 
 class FakeClient:
-    def __init__(self, pages_by_prefix: dict[str, list[dict]] | None = None) -> None:
+    def __init__(
+        self,
+        pages_by_prefix: dict[str, list[dict]] | None = None,
+        existing_keys: set[str] | None = None,
+    ) -> None:
         self.uploaded: list[tuple[str, str, dict]] = []
         self.deleted: list[dict] = []
+        self.presigned: list[tuple[str, dict, int]] = []
         self._pages_by_prefix = pages_by_prefix or {}
+        self._existing_keys = existing_keys or set()
 
     def upload_fileobj(self, fileobj, bucket: str, key: str, ExtraArgs: dict) -> None:  # noqa: N803
         fileobj.read()
@@ -33,6 +40,18 @@ class FakeClient:
 
     def delete_objects(self, Bucket: str, Delete: dict) -> None:  # noqa: N803
         self.deleted.extend(Delete.get("Objects", []))
+
+    def generate_presigned_url(self, operation_name: str, Params: dict, ExpiresIn: int):
+        self.presigned.append((operation_name, Params, ExpiresIn))
+        return f"https://signed.example.com/{Params['Key']}"
+
+    def head_object(self, Bucket: str, Key: str):  # noqa: N803
+        if Key not in self._existing_keys:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "Not Found"}},
+                "HeadObject",
+            )
+        return {"ContentLength": 123}
 
 
 def _make_config(public_url: str | None = None) -> R2Config:
@@ -132,3 +151,45 @@ def test_delete_video_thumbnails_no_objects(monkeypatch) -> None:
 
     assert deleted == 0
     assert fake_client.deleted == []
+
+
+def test_generate_presigned_upload_url(monkeypatch) -> None:
+    fake_client = FakeClient()
+
+    def fake_boto_client(*args, **kwargs):
+        return fake_client
+
+    monkeypatch.setattr(boto3, "client", fake_boto_client)
+
+    store = R2Store(_make_config())
+    url = store.generate_presigned_upload_url(
+        "source/video_a/upload.mp4",
+        content_type="video/mp4",
+        expires_in=120,
+    )
+
+    assert url == "https://signed.example.com/source/video_a/upload.mp4"
+    assert fake_client.presigned == [
+        (
+            "put_object",
+            {
+                "Bucket": "video-thumbnails",
+                "Key": "source/video_a/upload.mp4",
+                "ContentType": "video/mp4",
+            },
+            120,
+        )
+    ]
+
+
+def test_source_exists_checks_head_object(monkeypatch) -> None:
+    fake_client = FakeClient(existing_keys={"source/video_a/upload.mp4"})
+
+    def fake_boto_client(*args, **kwargs):
+        return fake_client
+
+    monkeypatch.setattr(boto3, "client", fake_boto_client)
+
+    store = R2Store(_make_config())
+    assert store.source_exists("source/video_a/upload.mp4") is True
+    assert store.source_exists("source/video_a/missing.mp4") is False

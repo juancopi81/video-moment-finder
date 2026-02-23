@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from src.storage.config import R2Config
 from src.utils.logging import get_logger
@@ -145,6 +146,41 @@ class R2Store:
             )
         except Exception as exc:
             raise R2StorageError(f"Failed to generate presigned URL: {exc}") from exc
+
+    def generate_presigned_upload_url(
+        self,
+        key: str,
+        *,
+        content_type: str | None = None,
+        expires_in: int = 900,
+    ) -> str:
+        """Generate a presigned upload URL for a stored object."""
+        if expires_in <= 0:
+            raise R2StorageError("expires_in must be positive")
+        params = {"Bucket": self._config.bucket_name, "Key": key}
+        if content_type:
+            params["ContentType"] = content_type
+        try:
+            return self._client.generate_presigned_url(
+                "put_object",
+                Params=params,
+                ExpiresIn=expires_in,
+            )
+        except Exception as exc:
+            raise R2StorageError(f"Failed to generate presigned upload URL: {exc}") from exc
+
+    def source_exists(self, key: str) -> bool:
+        """Check whether an uploaded source object exists."""
+        try:
+            self._client.head_object(Bucket=self._config.bucket_name, Key=key)
+        except ClientError as exc:
+            code = (exc.response.get("Error") or {}).get("Code", "")
+            if code in {"404", "NoSuchKey", "NotFound"}:
+                return False
+            raise R2StorageError(f"Failed to check source object: {exc}") from exc
+        except Exception as exc:
+            raise R2StorageError(f"Failed to check source object: {exc}") from exc
+        return True
 
     def upload_thumbnails(
         self,

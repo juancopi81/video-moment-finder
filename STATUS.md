@@ -50,6 +50,7 @@
 | 2026-02-19 | Phase 3 | Frontend Upload UX                             | Done        | Added signed-in upload flow with progress tracking and mode toggle between URL and direct upload.                                                                                                                                                    |
 | 2026-02-20 | Phase 3 | Upload Playback Jump Links                     | Done        | Added signed R2 source URLs for ready uploads and frontend playback/jump-to-timestamp controls.                                                                                                                                                      |
 | 2026-02-23 | Phase 3 | R2 Namespace Split + Lifecycle Docs            | Done        | Standardized on `source/` and `thumb/` R2 prefixes (no legacy key compatibility) and documented lifecycle rule setup/verification.                                                                                                                   |
+| 2026-02-23 | Phase 3 | Presigned Upload Flow                          | Done        | Added presigned upload init/complete endpoints, frontend direct-to-R2 upload, and storage existence checks for large-file support. Validation: `uv run pytest tests/api/test_app.py tests/storage/test_r2.py`, `npm run lint` (after `npm ci`).    |
 
 ## Blockers
 

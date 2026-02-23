@@ -320,6 +320,62 @@ def test_upload_video_requires_authentication(monkeypatch) -> None:
     assert called is False
 
 
+def test_init_upload_requires_authentication() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/videos/upload/init",
+        json={"filename": "upload.mp4", "content_type": "video/mp4"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_init_upload_returns_503_when_r2_missing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    monkeypatch.setattr(
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(StorageConfigError("missing")),
+    )
+
+    response = client.post(
+        "/videos/upload/init",
+        json={"filename": "upload.mp4", "content_type": "video/mp4"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Upload storage is not configured"
+
+
+def test_init_upload_returns_presigned_url(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def generate_presigned_upload_url(self, key, content_type=None, expires_in=900):
+            return f"https://signed.example.com/{key}"
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+    response = client.post(
+        "/videos/upload/init",
+        json={"filename": "upload.mp4", "content_type": "video/mp4"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["key"].startswith("source/")
+    assert payload["key"].endswith("/upload.mp4")
+    assert payload["upload_url"].endswith(payload["key"])
+    assert payload["expires_in"] == 900
+
+
 def test_upload_video_returns_503_when_r2_missing(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
@@ -336,6 +392,98 @@ def test_upload_video_returns_503_when_r2_missing(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Upload storage is not configured"
+
+
+def test_complete_upload_requires_authentication() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": "video_123", "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_complete_upload_returns_400_when_source_missing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return False
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": "video_123", "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded source not found"
+
+
+def test_complete_upload_enqueues_job(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    enqueue_calls: list[str] = []
+    create_calls: list[tuple[str, str, str | None, str]] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return True
+
+    def fake_create_uploaded_video(
+        video_id: str,
+        source_r2_key: str,
+        source_filename: str | None = None,
+        user_id: str | None = None,
+        status: str = "queued",
+    ) -> VideoRecord:
+        create_calls.append((video_id, source_r2_key, source_filename, status))
+        return VideoRecord(
+            id=video_id,
+            youtube_url=None,
+            status=status,  # type: ignore[arg-type]
+            user_id=user_id,
+            error_message=None,
+            source_type="upload",
+            source_r2_key=source_r2_key,
+            source_filename=source_filename,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def fake_enqueue(video_id: str) -> object:
+        enqueue_calls.append(video_id)
+        return object()
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_create_uploaded_video", fake_create_uploaded_video)
+    monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": "video_123", "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "queued"
+    assert payload["source_type"] == "upload"
+    assert payload["source_filename"] == "upload.mp4"
+    assert enqueue_calls == [payload["id"]]
+    assert create_calls
 
 
 def test_upload_video_enqueues_job(monkeypatch) -> None:
