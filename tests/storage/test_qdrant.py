@@ -32,21 +32,21 @@ def test_upsert_search_delete_in_memory() -> None:
             frame_index=0,
             timestamp_s=0.0,
             vector=_vector(0.1),
-            thumbnail_url="https://cdn/video_a/thumb_00000.jpg",
+            thumbnail_url="https://cdn/thumb/video_a/thumb_00000.jpg",
         ),
         FrameVector(
             video_id="video_a",
             frame_index=1,
             timestamp_s=1.0,
             vector=_vector(0.2),
-            thumbnail_url="https://cdn/video_a/thumb_00001.jpg",
+            thumbnail_url="https://cdn/thumb/video_a/thumb_00001.jpg",
         ),
         FrameVector(
             video_id="video_b",
             frame_index=0,
             timestamp_s=0.0,
             vector=_vector(0.3),
-            thumbnail_url="https://cdn/video_b/thumb_00000.jpg",
+            thumbnail_url="https://cdn/thumb/video_b/thumb_00000.jpg",
         ),
     ]
 
