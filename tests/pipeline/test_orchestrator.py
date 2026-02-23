@@ -20,7 +20,7 @@ class FakeR2Store:
         self.uploaded = thumbnails
         results = []
         for frame_index, _ in thumbnails:
-            key = f"thumb/{video_id}/thumb_{frame_index:05d}.jpg"
+            key = f"{video_id}/thumb_{frame_index:05d}.jpg"
             url = f"https://cdn.example.com/{key}"
             results.append(UploadResult(key=key, url=url))
         return results
