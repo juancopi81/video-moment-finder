@@ -37,7 +37,7 @@ def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord
         user_id="user_123",
         error_message=None,
         source_type="upload",
-        source_r2_key="video_123/source/upload.mp4",
+        source_r2_key="source/video_123/upload.mp4",
         source_filename="upload.mp4",
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
@@ -351,7 +351,7 @@ def test_upload_video_enqueues_job(monkeypatch) -> None:
 
         def upload_source_video(self, *args, **kwargs):
             class Result:
-                key = "video_123/source/upload.mp4"
+                key = "source/video_123/upload.mp4"
 
             return Result()
 

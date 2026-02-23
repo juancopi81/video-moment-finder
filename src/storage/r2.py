@@ -43,12 +43,12 @@ class SourceUploadResult:
 
 def thumbnail_key(video_id: str, frame_index: int) -> str:
     """Generate R2 key for a thumbnail."""
-    return f"{video_id}/thumb_{frame_index:05d}.jpg"
+    return f"thumb/{video_id}/thumb_{frame_index:05d}.jpg"
 
 
 def source_key(video_id: str, filename: str) -> str:
     """Generate R2 key for an uploaded source video."""
-    return f"{video_id}/source/{filename}"
+    return f"source/{video_id}/{filename}"
 
 
 class R2Store:
@@ -238,7 +238,7 @@ class R2Store:
 
     def delete_video_thumbnails(self, video_id: str) -> int:
         """Delete all thumbnails for a video. Returns count of deleted objects."""
-        prefix = f"{video_id}/"
+        prefix = f"thumb/{video_id}/"
 
         try:
             # List all objects with this prefix
