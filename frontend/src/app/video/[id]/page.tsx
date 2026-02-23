@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -28,11 +28,14 @@ type VideoStatusResponse = {
   youtube_url: string | null;
   status: VideoStatus;
   error_message: string | null;
+  source_type: "youtube" | "upload";
+  source_url: string | null;
 };
 
 type VideoSearchResponse = {
   video_id: string;
   youtube_url: string | null;
+  source_url: string | null;
   status: VideoStatus;
   results: SearchResult[];
 };
@@ -64,9 +67,12 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState<"youtube" | "upload" | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -117,6 +123,12 @@ export default function VideoPage({ params }: VideoPageProps) {
         setStatusMessage(data.error_message);
         if (data.youtube_url) {
           setVideoUrl(data.youtube_url);
+        }
+        if (data.source_type) {
+          setSourceType(data.source_type);
+        }
+        if (data.source_url) {
+          setSourceUrl(data.source_url);
         }
       } catch (err) {
         console.error("Polling error:", err);
@@ -170,6 +182,9 @@ export default function VideoPage({ params }: VideoPageProps) {
       setResults(data.results);
       if (data.youtube_url) {
         setVideoUrl(data.youtube_url);
+      }
+      if (data.source_url) {
+        setSourceUrl(data.source_url);
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -246,6 +261,26 @@ export default function VideoPage({ params }: VideoPageProps) {
 
         {status === "ready" && (
           <div className="w-full max-w-xl">
+            {sourceType === "upload" && sourceUrl && (
+              <div className="mb-6">
+                <video
+                  ref={videoRef}
+                  src={sourceUrl}
+                  controls
+                  className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700"
+                />
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  Uploaded video playback
+                </p>
+              </div>
+            )}
+
+            {sourceType === "upload" && !sourceUrl && (
+              <p className="mb-6 text-sm text-amber-600 dark:text-amber-400">
+                Uploaded video playback is unavailable right now.
+              </p>
+            )}
+
             <form onSubmit={handleSearch}>
               <input
                 type="text"
@@ -270,6 +305,7 @@ export default function VideoPage({ params }: VideoPageProps) {
                   const timestampUrl = videoUrl
                     ? buildTimestampUrl(videoUrl, result.timestamp_s)
                     : null;
+                  const canJumpToUpload = sourceType === "upload" && sourceUrl;
 
                   return (
                     <div key={index} className="relative">
@@ -301,6 +337,23 @@ export default function VideoPage({ params }: VideoPageProps) {
                         >
                           Open at timestamp
                         </a>
+                      )}
+                      {canJumpToUpload && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!videoRef.current) return;
+                            videoRef.current.currentTime = result.timestamp_s;
+                            void videoRef.current.play().catch(() => {});
+                            videoRef.current.scrollIntoView({
+                              behavior: "smooth",
+                              block: "center",
+                            });
+                          }}
+                          className="mt-1 block w-full text-xs text-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                        >
+                          Jump to timestamp
+                        </button>
                       )}
                     </div>
                   );

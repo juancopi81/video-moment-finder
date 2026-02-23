@@ -82,6 +82,54 @@ def _validate_video_duration(youtube_url: str) -> None:
         )
 
 
+def _source_url_ttl_s() -> int:
+    raw = os.environ.get("VIDEO_SOURCE_URL_TTL_S", "").strip()
+    if not raw:
+        return 3600
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid VIDEO_SOURCE_URL_TTL_S=%r; using default", raw)
+        return 3600
+    if value <= 0:
+        logger.warning("VIDEO_SOURCE_URL_TTL_S must be positive; using default")
+        return 3600
+    return value
+
+
+def _source_url_for_record(record: VideoRecord) -> str | None:
+    if record.source_type != "upload":
+        return None
+    if record.status != "ready":
+        return None
+    if not record.source_r2_key:
+        return None
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        logger.warning(
+            "R2 config missing; cannot build source URL for video_id=%s: %s",
+            record.id,
+            exc,
+        )
+        return None
+
+    store = R2Store(r2_config)
+    try:
+        return store.generate_presigned_url(
+            record.source_r2_key,
+            expires_in=_source_url_ttl_s(),
+        )
+    except R2StorageError as exc:
+        logger.warning(
+            "Failed to generate source URL for video_id=%s: %s",
+            record.id,
+            exc,
+        )
+        return None
+
+
 class VideoCreateRequest(BaseModel):
     youtube_url: str = Field(min_length=1, max_length=500)
 
@@ -100,6 +148,7 @@ class VideoResponse(BaseModel):
     status: StatusType
     source_type: Literal["youtube", "upload"]
     source_filename: str | None = None
+    source_url: HttpUrl | None = None
     created_at: datetime
     error_message: str | None = None
 
@@ -127,6 +176,7 @@ class SearchResult(BaseModel):
 class VideoSearchResponse(BaseModel):
     video_id: str
     youtube_url: HttpUrl | None
+    source_url: HttpUrl | None = None
     status: StatusType
     results: list[SearchResult]
 
@@ -146,6 +196,7 @@ def _video_record_to_response(record: VideoRecord) -> VideoResponse:
         status=record.status,
         source_type=record.source_type,
         source_filename=record.source_filename,
+        source_url=_source_url_for_record(record),
         created_at=_parse_iso_datetime(record.created_at),
         error_message=record.error_message,
     )
@@ -319,6 +370,7 @@ def search_video(
     return VideoSearchResponse(
         video_id=video_id,
         youtube_url=record.youtube_url,
+        source_url=_source_url_for_record(record),
         status=record.status,
         results=[
             SearchResult(

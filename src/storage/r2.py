@@ -133,6 +133,19 @@ class R2Store:
         except Exception as exc:
             raise R2StorageError(f"Failed to download source video: {exc}") from exc
 
+    def generate_presigned_url(self, key: str, *, expires_in: int = 3600) -> str:
+        """Generate a presigned URL for a stored object."""
+        if expires_in <= 0:
+            raise R2StorageError("expires_in must be positive")
+        try:
+            return self._client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self._config.bucket_name, "Key": key},
+                ExpiresIn=expires_in,
+            )
+        except Exception as exc:
+            raise R2StorageError(f"Failed to generate presigned URL: {exc}") from exc
+
     def upload_thumbnails(
         self,
         video_id: str,

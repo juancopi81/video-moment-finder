@@ -122,6 +122,7 @@
 - Frontend upload UX for authenticated users (file picker, progress, and limits)
 - Signed or multipart upload flow for large files
 - Storage lifecycle cleanup for uploaded source videos
+- **Next PR target (post-merge of current upload playback work)**: split R2 object namespaces so lifecycle policies can target uploaded sources independently (for example `source/<video_id>/...` vs `thumb/<video_id>/...`), then document exact Cloudflare R2 lifecycle rule setup and verification steps.
 
 ---
 

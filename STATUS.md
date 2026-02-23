@@ -49,6 +49,7 @@
 | 2026-02-18 | Phase 3 | Local Video Cache Fallback          | Done   | Added `VIDEO_LOCAL_VIDEO_DIR` support to use pre-downloaded files named `<youtube_id>.<ext>` before invoking yt-dlp. |
 | 2026-02-18 | Phase 3 | Production Upload Ingest Path       | Done   | Added authenticated upload endpoint, stored source in R2, and queued jobs using the stored source. |
 | 2026-02-19 | Phase 3 | Frontend Upload UX                  | Done   | Added signed-in upload flow with progress tracking and mode toggle between URL and direct upload. |
+| 2026-02-20 | Phase 3 | Upload Playback Jump Links           | Done   | Added signed R2 source URLs for ready uploads and frontend playback/jump-to-timestamp controls. |
 
 
 ## Blockers
@@ -56,6 +57,7 @@
 - YouTube bot detection blocks yt-dlp from Modal IPs. Use uploaded ingest path or local cache fallback when cloud downloads fail.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
 - Phase 4.2 payments implementation is blocked on Lemon Squeezy live activation prerequisites: publish a public, non-placeholder product URL with product/pricing/support/legal details, then complete store activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
+- Next PR after current upload playback merge: implement R2 lifecycle-ready key namespaces for uploaded sources vs thumbnails, plus a concrete Cloudflare R2 setup/verification guide so source videos auto-expire on schedule.
 
 ## Decisions Made
 
