@@ -238,22 +238,21 @@ class R2Store:
 
     def delete_video_thumbnails(self, video_id: str) -> int:
         """Delete all thumbnails for a video. Returns count of deleted objects."""
-        prefixes = (f"thumb/{video_id}/", f"{video_id}/thumb_")
+        prefix = f"thumb/{video_id}/"
 
         try:
             # List all objects with this prefix
             paginator = self._client.get_paginator("list_objects_v2")
             objects_to_delete = []
 
-            for prefix in prefixes:
-                for page in paginator.paginate(
-                    Bucket=self._config.bucket_name,
-                    Prefix=prefix,
-                ):
-                    if "Contents" in page:
-                        objects_to_delete.extend(
-                            [{"Key": obj["Key"]} for obj in page["Contents"]]
-                        )
+            for page in paginator.paginate(
+                Bucket=self._config.bucket_name,
+                Prefix=prefix,
+            ):
+                if "Contents" in page:
+                    objects_to_delete.extend(
+                        [{"Key": obj["Key"]} for obj in page["Contents"]]
+                    )
 
             if not objects_to_delete:
                 return 0

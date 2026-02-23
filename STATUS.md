@@ -50,7 +50,7 @@
 | 2026-02-18 | Phase 3 | Production Upload Ingest Path       | Done   | Added authenticated upload endpoint, stored source in R2, and queued jobs using the stored source. |
 | 2026-02-19 | Phase 3 | Frontend Upload UX                  | Done   | Added signed-in upload flow with progress tracking and mode toggle between URL and direct upload. |
 | 2026-02-20 | Phase 3 | Upload Playback Jump Links           | Done   | Added signed R2 source URLs for ready uploads and frontend playback/jump-to-timestamp controls. |
-| 2026-02-23 | Phase 3 | R2 Namespace Split + Lifecycle Docs  | Done   | Separate `source/` and `thumb/` prefixes for R2 keys, protect source keys from thumbnail cleanup, and documented lifecycle rule setup/verification. |
+| 2026-02-23 | Phase 3 | R2 Namespace Split + Lifecycle Docs  | Done   | Standardized on `source/` and `thumb/` R2 prefixes (no legacy key compatibility) and documented lifecycle rule setup/verification. |
 
 
 ## Blockers

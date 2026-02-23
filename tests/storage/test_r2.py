@@ -100,9 +100,6 @@ def test_delete_video_thumbnails(monkeypatch) -> None:
         "thumb/video_a/": [
             {"Contents": [{"Key": "thumb/video_a/thumb_00000.jpg"}]},
         ],
-        "video_a/thumb_": [
-            {"Contents": [{"Key": "video_a/thumb_00001.jpg"}]},
-        ],
     }
     fake_client = FakeClient(pages_by_prefix)
     monkeypatch.setenv("R2_UPLOAD_WORKERS", "1")
@@ -116,8 +113,8 @@ def test_delete_video_thumbnails(monkeypatch) -> None:
     store = R2Store(_make_config())
     deleted = store.delete_video_thumbnails("video_a")
 
-    assert deleted == 2
-    assert len(fake_client.deleted) == 2
+    assert deleted == 1
+    assert len(fake_client.deleted) == 1
 
 
 def test_delete_video_thumbnails_no_objects(monkeypatch) -> None:
