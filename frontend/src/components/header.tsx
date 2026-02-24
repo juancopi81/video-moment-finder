@@ -24,6 +24,15 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
             {link.label}
           </Link>
         ))}
+        <SignedIn>
+          <Link
+            href="/dashboard"
+            className="text-sm text-zinc-600 hover:text-foreground dark:text-zinc-400"
+            onClick={onClose}
+          >
+            Dashboard
+          </Link>
+        </SignedIn>
         <SignedOut>
           <SignInButton mode="modal">
             <button className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
@@ -75,6 +84,14 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <SignedIn>
+            <Link
+              href="/dashboard"
+              className="text-sm text-zinc-600 hover:text-foreground dark:text-zinc-400"
+            >
+              Dashboard
+            </Link>
+          </SignedIn>
           <SignedOut>
             <SignInButton mode="modal">
               <button className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white">

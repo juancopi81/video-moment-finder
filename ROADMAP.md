@@ -157,9 +157,7 @@
 
 ### 4.5 Authenticated User Experience
 
-- Dashboard / "My Videos" page listing user's processed videos (needs `GET /users/me/videos` API endpoint + Supabase query)
 - Pricing page CTAs link to actual Lemon Squeezy checkout URLs (blocked on payment provider activation)
-- Nav link to dashboard for signed-in users
 
 ### 4.4 Launch Checklist
 
