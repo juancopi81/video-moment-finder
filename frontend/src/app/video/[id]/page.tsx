@@ -7,9 +7,9 @@ import {
   SignInButton,
   SignedIn,
   SignedOut,
-  UserButton,
   useAuth,
 } from "@clerk/nextjs";
+import { API_URL, parseApiError } from "@/lib/api";
 
 type VideoPageProps = {
   params: Promise<{ id: string }>;
@@ -74,8 +74,6 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
   // Poll for video status
   useEffect(() => {
     if (!isLoaded || !userId) return;
@@ -106,7 +104,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           return;
         }
 
-        const res = await fetch(`${apiUrl}/videos/${id}`, {
+        const res = await fetch(`${API_URL}/videos/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 401) {
@@ -144,7 +142,7 @@ export default function VideoPage({ params }: VideoPageProps) {
       stopped = true;
       if (interval) clearInterval(interval);
     };
-  }, [apiUrl, getToken, id, isLoaded, status, userId]);
+  }, [getToken, id, isLoaded, status, userId]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -160,7 +158,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         throw new Error("Please sign in to search this video.");
       }
 
-      const res = await fetch(`${apiUrl}/videos/${id}/search`, {
+      const res = await fetch(`${API_URL}/videos/${id}/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -170,12 +168,7 @@ export default function VideoPage({ params }: VideoPageProps) {
       });
 
       if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("Session expired. Please sign in again.");
-        }
-        const data = await res.json().catch(() => null);
-        const detail = typeof data?.detail === "string" ? data.detail : "Search failed";
-        throw new Error(detail);
+        throw new Error(await parseApiError(res, "Search failed"));
       }
 
       const data: VideoSearchResponse = await res.json();
@@ -199,20 +192,14 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   if (!isLoaded) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-zinc-600 dark:text-zinc-400">Loading authentication...</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="absolute top-4 right-4">
-        <SignedIn>
-          <UserButton afterSignOutUrl="/" />
-        </SignedIn>
-      </div>
-
+    <div className="flex flex-1 flex-col items-center justify-center p-8">
       <h1 className="text-2xl font-bold mb-2">Video: {id}</h1>
       {error && (
         <p className="mb-4 text-sm text-red-600 dark:text-red-400 text-center">
@@ -370,6 +357,6 @@ export default function VideoPage({ params }: VideoPageProps) {
       >
         &larr; Back to home
       </Link>
-    </main>
+    </div>
   );
 }

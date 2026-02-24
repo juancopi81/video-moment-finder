@@ -1,0 +1,85 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Support - Video Moment Finder",
+  description: "Get help with Video Moment Finder. FAQ and contact information.",
+};
+
+const faqs = [
+  {
+    question: "What types of videos are supported?",
+    answer:
+      "Currently, you can process YouTube videos (via URL) or upload video files directly. Videos must be 30 minutes or shorter.",
+  },
+  {
+    question: "How does the search work?",
+    answer:
+      "We use AI-powered semantic search. When you process a video, we extract frames and create embeddings using a multimodal AI model (Qwen3-VL). When you search, your text query is compared against these embeddings to find the most visually relevant moments.",
+  },
+  {
+    question: "How long does processing take?",
+    answer:
+      "Processing time depends on the video length. A 30-minute video typically takes around 7-8 minutes. You can leave the page and come back — processing continues in the background.",
+  },
+  {
+    question: "What happens to my video data?",
+    answer:
+      "We extract frames and generate AI embeddings for search. Thumbnail images and search vectors are stored to enable search. Uploaded source files are automatically cleaned up after processing. We do not share your video data with third parties.",
+  },
+  {
+    question: "How do credits work?",
+    answer:
+      "Each credit allows you to process one video (up to 30 minutes). Free accounts include 1 credit to try the service. You can purchase additional credits through our Starter and Pro plans. Credits do not expire.",
+  },
+  {
+    question: "Can I get a refund?",
+    answer:
+      "Credits that have been used for processing are non-refundable. If you experience a technical issue that consumes a credit without delivering results, contact us and we will review your case.",
+  },
+  {
+    question: "Is my data secure?",
+    answer:
+      "Yes. All connections use HTTPS encryption. Your data is scoped to your authenticated account with row-level security. We use industry-standard infrastructure providers for storage and processing.",
+  },
+];
+
+export default function SupportPage() {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="font-heading text-4xl font-bold">Support</h1>
+      <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
+        Have a question? Check our FAQ below or reach out directly.
+      </p>
+
+      <div className="mt-8 rounded-xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+        <h2 className="font-heading text-lg font-bold">Contact Us</h2>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Email us at{" "}
+          <a
+            href="mailto:support@videomomentfinder.com"
+            className="text-accent hover:underline"
+          >
+            support@videomomentfinder.com
+          </a>
+        </p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          We typically respond within 24 hours on business days.
+        </p>
+      </div>
+
+      <div className="mt-12">
+        <h2 className="font-heading text-2xl font-bold">
+          Frequently Asked Questions
+        </h2>
+        <div className="mt-6 space-y-6">
+          {faqs.map((faq) => (
+            <div key={faq.question}>
+              <h3 className="font-semibold">{faq.question}</h3>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
