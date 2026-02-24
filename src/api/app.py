@@ -14,6 +14,7 @@ from src.api.search import search_video as search_video_service
 from src.config.env import load_env
 from src.db.supabase import (
     VideoRecord,
+    count_videos_for_user as db_count_videos_for_user,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
@@ -34,6 +35,7 @@ logger = get_logger(__name__)
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
 DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
+DEFAULT_MAX_FREE_VIDEOS = 1
 
 
 def _allowed_cors_origins() -> list[str]:
@@ -59,6 +61,21 @@ def _max_video_duration_s() -> int:
     return value
 
 
+def _max_free_videos() -> int:
+    raw = os.environ.get("VIDEO_MAX_FREE_VIDEOS", "").strip()
+    if not raw:
+        return DEFAULT_MAX_FREE_VIDEOS
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid VIDEO_MAX_FREE_VIDEOS=%r; using default", raw)
+        return DEFAULT_MAX_FREE_VIDEOS
+    if value <= 0:
+        logger.warning("VIDEO_MAX_FREE_VIDEOS must be positive; using default")
+        return DEFAULT_MAX_FREE_VIDEOS
+    return value
+
+
 def _validate_video_duration(youtube_url: str) -> None:
     try:
         metadata = fetch_video_metadata(youtube_url)
@@ -80,6 +97,16 @@ def _validate_video_duration(youtube_url: str) -> None:
         raise HTTPException(
             status_code=400,
             detail=f"Video exceeds {max_minutes}-minute limit",
+        )
+
+
+def _enforce_free_video_limit(user_id: str) -> None:
+    max_videos = _max_free_videos()
+    current_count = db_count_videos_for_user(user_id)
+    if current_count >= max_videos:
+        raise HTTPException(
+            status_code=403,
+            detail="Free video limit reached",
         )
 
 
@@ -296,6 +323,7 @@ def create_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Create a new video and enqueue durable processing job."""
+    _enforce_free_video_limit(user_id)
     _validate_video_duration(request.youtube_url)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
     try:
@@ -329,6 +357,7 @@ def upload_video(
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
+    _enforce_free_video_limit(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -390,9 +419,9 @@ def init_upload(
     user_id: str = Depends(get_current_user_id),
 ) -> UploadInitResponse:
     """Generate a presigned upload URL for direct-to-R2 uploads."""
-    _ = user_id
     if request.content_type and not request.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
+    _enforce_free_video_limit(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -435,17 +464,8 @@ def complete_upload(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Finalize a presigned upload and enqueue processing."""
-    try:
-        r2_config = R2Config.from_env()
-    except StorageConfigError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Upload storage is not configured",
-        ) from exc
-
     filename = _sanitize_filename(request.filename)
     key = source_key(request.video_id, filename)
-    store = R2Store(r2_config)
 
     existing = _get_idempotent_upload_record(
         video_id=request.video_id,
@@ -455,6 +475,17 @@ def complete_upload(
     )
     if existing is not None:
         return _video_record_to_response(existing)
+    _enforce_free_video_limit(user_id)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload storage is not configured",
+        ) from exc
+
+    store = R2Store(r2_config)
 
     try:
         if not store.source_exists(key):

@@ -3,6 +3,7 @@
 from src.db.supabase import (
     claim_next_video_job,
     complete_video_job,
+    count_videos_for_user,
     create_video,
     enqueue_video_job,
     get_client,
@@ -20,6 +21,7 @@ from src.db.supabase import (
 __all__ = [
     "claim_next_video_job",
     "complete_video_job",
+    "count_videos_for_user",
     "get_client",
     "create_video",
     "enqueue_video_job",
