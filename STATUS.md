@@ -51,12 +51,13 @@
 | 2026-02-20 | Phase 3 | Upload Playback Jump Links                     | Done        | Added signed R2 source URLs for ready uploads and frontend playback/jump-to-timestamp controls.                                                                                                                                                      |
 | 2026-02-23 | Phase 3 | R2 Namespace Split + Lifecycle Docs            | Done        | Standardized on `source/` and `thumb/` R2 prefixes (no legacy key compatibility) and documented lifecycle rule setup/verification.                                                                                                                   |
 | 2026-02-23 | Phase 3 | Presigned Upload Flow                          | Done        | Added presigned upload init/complete endpoints, frontend direct-to-R2 upload, and storage existence checks for large-file support. Validation: `uv run pytest tests/api/test_app.py tests/storage/test_r2.py`, `npm run lint` (after `npm ci`).    |
+| 2026-02-23 | Phase 4 | Public Pages for Payment-Onboarding Activation  | Done        | Added Header/Footer, landing hero + how-it-works, /pricing (3-tier credit model), /terms, /privacy, /support pages. Custom fonts (Outfit + Source Sans 3), accent color system, CSS animations. Implements Lemon Squeezy activation prerequisites.  |
 
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Use uploaded ingest path or local cache fallback when cloud downloads fail.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
-- Phase 4.2 payments implementation is blocked on Lemon Squeezy live activation prerequisites: publish a public, non-placeholder product URL with product/pricing/support/legal details, then complete store activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
+- Phase 4.2 payments implementation: public pages implemented (pricing, support, terms, privacy), pending deployment and Lemon Squeezy activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
 
 ## Decisions Made
 

@@ -1,0 +1,74 @@
+import type { Metadata } from "next";
+import { PricingCard } from "@/components/pricing-card";
+
+export const metadata: Metadata = {
+  title: "Pricing - Video Moment Finder",
+  description: "Simple credit-based pricing. Start free, upgrade as you need.",
+};
+
+const tiers = [
+  {
+    name: "Free Trial",
+    price: "$0",
+    description: "Try it out with one video",
+    features: [
+      "1 video credit",
+      "Up to 30-minute videos",
+      "Text-based moment search",
+      "Thumbnail previews",
+    ],
+    ctaLabel: "Get started",
+    ctaHref: "/",
+  },
+  {
+    name: "Starter",
+    price: "$5",
+    description: "5 video credits",
+    features: [
+      "5 video credits",
+      "Up to 30-minute videos",
+      "Text-based moment search",
+      "Thumbnail previews",
+      "YouTube URL & direct upload",
+    ],
+    highlighted: true,
+    ctaLabel: "Get started",
+    ctaHref: "/",
+  },
+  {
+    name: "Pro",
+    price: "$15",
+    description: "20 video credits",
+    features: [
+      "20 video credits",
+      "Up to 30-minute videos",
+      "Text-based moment search",
+      "Thumbnail previews",
+      "YouTube URL & direct upload",
+      "Priority processing",
+    ],
+    ctaLabel: "Get started",
+    ctaHref: "/",
+  },
+];
+
+export default function PricingPage() {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-16">
+      <div className="text-center">
+        <h1 className="font-[family-name:var(--font-heading)] text-4xl font-bold">
+          Simple, credit-based pricing
+        </h1>
+        <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
+          Pay for what you use. Each credit processes one video up to 30 minutes.
+        </p>
+      </div>
+
+      <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {tiers.map((tier) => (
+          <PricingCard key={tier.name} {...tier} />
+        ))}
+      </div>
+    </div>
+  );
+}

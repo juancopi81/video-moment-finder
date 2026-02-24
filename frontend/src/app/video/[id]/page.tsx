@@ -7,7 +7,6 @@ import {
   SignInButton,
   SignedIn,
   SignedOut,
-  UserButton,
   useAuth,
 } from "@clerk/nextjs";
 
@@ -199,20 +198,14 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   if (!isLoaded) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
+      <div className="flex min-h-screen items-center justify-center p-8">
         <p className="text-zinc-600 dark:text-zinc-400">Loading authentication...</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="absolute top-4 right-4">
-        <SignedIn>
-          <UserButton afterSignOutUrl="/" />
-        </SignedIn>
-      </div>
-
+    <div className="flex min-h-screen flex-col items-center justify-center p-8">
       <h1 className="text-2xl font-bold mb-2">Video: {id}</h1>
       {error && (
         <p className="mb-4 text-sm text-red-600 dark:text-red-400 text-center">
@@ -370,6 +363,6 @@ export default function VideoPage({ params }: VideoPageProps) {
       >
         &larr; Back to home
       </Link>
-    </main>
+    </div>
   );
 }
