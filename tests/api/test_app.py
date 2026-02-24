@@ -53,6 +53,11 @@ def _clear_dependency_overrides() -> None:
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _mock_free_video_count(monkeypatch) -> None:
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 0)
+
+
 def _authenticate(user_id: str = "user_123") -> None:
     app.dependency_overrides[get_current_user_id] = lambda: user_id
 
@@ -201,6 +206,25 @@ def test_create_video_rejects_long_video(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Video exceeds 1-minute limit"
+
+
+def test_create_video_rejects_when_free_limit_reached(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: (_ for _ in ()).throw(AssertionError("metadata call should not run")),
+    )
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Free video limit reached"
 
 
 def test_get_video_requires_owner_scope(monkeypatch) -> None:
@@ -389,6 +413,25 @@ def test_init_upload_returns_503_when_r2_missing(monkeypatch) -> None:
     assert response.json()["detail"] == "Upload storage is not configured"
 
 
+def test_init_upload_rejects_when_free_limit_reached(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr(
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
+    )
+
+    response = client.post(
+        "/videos/upload/init",
+        json={"filename": "upload.mp4", "content_type": "video/mp4"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Free video limit reached"
+
+
 def test_init_upload_returns_presigned_url(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
@@ -432,6 +475,25 @@ def test_upload_video_returns_503_when_r2_missing(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Upload storage is not configured"
+
+
+def test_upload_video_rejects_when_free_limit_reached(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr(
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
+    )
+
+    response = client.post(
+        "/videos/upload",
+        files={"file": ("upload.mp4", b"data", "video/mp4")},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Free video limit reached"
 
 
 def test_complete_upload_requires_authentication() -> None:
@@ -480,6 +542,26 @@ def test_complete_upload_returns_400_when_source_missing(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Uploaded source not found"
+
+
+def test_complete_upload_rejects_when_free_limit_reached(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr(
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
+    )
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Free video limit reached"
 
 
 def test_complete_upload_enqueues_job(monkeypatch) -> None:

@@ -262,6 +262,24 @@ def list_videos(user_id: str | None = None) -> list[VideoRecord]:
     return [_row_to_video(row) for row in result.data]
 
 
+def count_videos_for_user(user_id: str) -> int:
+    """Count non-failed videos owned by a user."""
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+
+    client = get_client()
+    result = (
+        client.table("videos")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .neq("status", "failed")
+        .execute()
+    )
+    if result.count is not None:
+        return int(result.count)
+    return len(result.data or [])
+
+
 # ---------------------------------------------------------------------------
 # Video jobs (durable queue)
 # ---------------------------------------------------------------------------

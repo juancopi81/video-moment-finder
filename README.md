@@ -15,7 +15,6 @@ Maintenance rule: update only the document that owns the change type above to av
 ## Next PR Targets
 
 - **PR 1 — Production deployment**: Dockerfile for backend + worker (Railway), Vercel config for frontend, CORS / env var wiring for production, and deployment documentation.
-- **PR 2 — Free-beta guardrail**: per-user video limit on `POST /videos` (e.g. 3 free videos) to cap GPU costs before payments are wired up.
 
 ## Local Setup (One Command)
 
@@ -42,6 +41,7 @@ Backend (`.env`):
 - `CLERK_ISSUER` (JWT issuer verification)
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
+- `VIDEO_MAX_FREE_VIDEOS` (max free videos per user before payments; default `1`)
 - `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)
 - `VIDEO_UPLOAD_URL_TTL_S` (signed upload URL lifetime in seconds for direct-to-R2 uploads; default `900`)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
