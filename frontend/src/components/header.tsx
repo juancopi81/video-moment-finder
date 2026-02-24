@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 const navLinks = [
@@ -9,8 +10,43 @@ const navLinks = [
   { href: "/support", label: "Support" },
 ];
 
+function MobileMenu({ onClose }: { onClose: () => void }) {
+  return (
+    <nav className="border-t border-zinc-200 bg-background px-4 py-3 dark:border-zinc-800 md:hidden">
+      <div className="flex flex-col gap-3">
+        {navLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="text-sm text-zinc-600 hover:text-foreground dark:text-zinc-400"
+            onClick={onClose}
+          >
+            {link.label}
+          </Link>
+        ))}
+        <SignedOut>
+          <SignInButton mode="modal">
+            <button className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
+              Sign In
+            </button>
+          </SignInButton>
+        </SignedOut>
+        <SignedIn>
+          <UserButton afterSignOutUrl="/" />
+        </SignedIn>
+      </div>
+    </nav>
+  );
+}
+
 export function Header() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpenOnPath, setMenuOpenOnPath] = useState<string | null>(null);
+  const pathname = usePathname();
+  const menuOpen = menuOpenOnPath === pathname;
+
+  function toggleMenu() {
+    setMenuOpenOnPath(menuOpen ? null : pathname);
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-200 bg-background/80 backdrop-blur-md dark:border-zinc-800">
@@ -49,7 +85,7 @@ export function Header() {
         <button
           type="button"
           className="md:hidden p-2 text-zinc-600 dark:text-zinc-400"
-          onClick={() => setMenuOpen(!menuOpen)}
+          onClick={toggleMenu}
           aria-label="Toggle menu"
         >
           <svg
@@ -77,32 +113,8 @@ export function Header() {
         </button>
       </div>
 
-      {/* Mobile menu */}
       {menuOpen && (
-        <nav className="border-t border-zinc-200 bg-background px-4 py-3 dark:border-zinc-800 md:hidden">
-          <div className="flex flex-col gap-3">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-sm text-zinc-600 hover:text-foreground dark:text-zinc-400"
-                onClick={() => setMenuOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
-                  Sign In
-                </button>
-              </SignInButton>
-            </SignedOut>
-            <SignedIn>
-              <UserButton afterSignOutUrl="/" />
-            </SignedIn>
-          </div>
-        </nav>
+        <MobileMenu onClose={() => setMenuOpenOnPath(null)} />
       )}
     </header>
   );

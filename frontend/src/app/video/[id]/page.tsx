@@ -192,14 +192,14 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   if (!isLoaded) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-zinc-600 dark:text-zinc-400">Loading authentication...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-8">
+    <div className="flex flex-1 flex-col items-center justify-center p-8">
       <h1 className="text-2xl font-bold mb-2">Video: {id}</h1>
       {error && (
         <p className="mb-4 text-sm text-red-600 dark:text-red-400 text-center">

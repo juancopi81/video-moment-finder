@@ -180,7 +180,7 @@ export default function Home() {
 
   if (!isLoaded) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-zinc-600 dark:text-zinc-400">Loading authentication...</p>
       </div>
     );

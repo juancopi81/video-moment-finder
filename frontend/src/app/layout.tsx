@@ -36,10 +36,10 @@ export default function RootLayout({
     >
       <html lang="en">
         <body
-          className={`${sourceSans.className} ${outfit.variable} ${sourceSans.variable} antialiased`}
+          className={`${sourceSans.className} ${outfit.variable} ${sourceSans.variable} flex min-h-screen flex-col antialiased`}
         >
           <Header />
-          <main className="min-h-screen">{children}</main>
+          <main className="flex-1">{children}</main>
           <Footer />
         </body>
       </html>
