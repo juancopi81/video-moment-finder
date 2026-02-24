@@ -12,6 +12,11 @@ Semantic video frame search. Paste a YouTube URL or upload a video, process it, 
 
 Maintenance rule: update only the document that owns the change type above to avoid duplicate sources of truth.
 
+## Next PR Targets
+
+- **PR 1 — Production deployment**: Dockerfile for backend + worker (Railway), Vercel config for frontend, CORS / env var wiring for production, and deployment documentation.
+- **PR 2 — Free-beta guardrail**: per-user video limit on `POST /videos` (e.g. 3 free videos) to cap GPU costs before payments are wired up.
+
 ## Local Setup (One Command)
 
 1. Copy `.env.example` to `.env` and fill backend/infrastructure values (including `SUPABASE_DB_URL`, `CLERK_ISSUER`, and `CORS_ALLOWED_ORIGINS`).
