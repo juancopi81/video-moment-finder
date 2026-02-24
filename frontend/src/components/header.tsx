@@ -17,7 +17,7 @@ export function Header() {
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         <Link
           href="/"
-          className="font-[family-name:var(--font-heading)] text-lg font-bold tracking-tight"
+          className="font-heading text-lg font-bold tracking-tight"
         >
           Video Moment Finder
         </Link>

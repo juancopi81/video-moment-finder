@@ -33,7 +33,7 @@ export function PricingCard({
         </span>
       )}
 
-      <h3 className="font-[family-name:var(--font-heading)] text-lg font-bold">
+      <h3 className="font-heading text-lg font-bold">
         {name}
       </h3>
       <p className="mt-2 text-3xl font-bold">{price}</p>

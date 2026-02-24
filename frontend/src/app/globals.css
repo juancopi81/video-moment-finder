@@ -52,3 +52,7 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+@utility font-heading {
+  font-family: var(--font-heading);
+}

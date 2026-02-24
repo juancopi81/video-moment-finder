@@ -9,6 +9,7 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { API_URL, parseApiError } from "@/lib/api";
 
 type VideoPageProps = {
   params: Promise<{ id: string }>;
@@ -73,8 +74,6 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
   // Poll for video status
   useEffect(() => {
     if (!isLoaded || !userId) return;
@@ -105,7 +104,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           return;
         }
 
-        const res = await fetch(`${apiUrl}/videos/${id}`, {
+        const res = await fetch(`${API_URL}/videos/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 401) {
@@ -143,7 +142,7 @@ export default function VideoPage({ params }: VideoPageProps) {
       stopped = true;
       if (interval) clearInterval(interval);
     };
-  }, [apiUrl, getToken, id, isLoaded, status, userId]);
+  }, [getToken, id, isLoaded, status, userId]);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -159,7 +158,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         throw new Error("Please sign in to search this video.");
       }
 
-      const res = await fetch(`${apiUrl}/videos/${id}/search`, {
+      const res = await fetch(`${API_URL}/videos/${id}/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -169,12 +168,7 @@ export default function VideoPage({ params }: VideoPageProps) {
       });
 
       if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("Session expired. Please sign in again.");
-        }
-        const data = await res.json().catch(() => null);
-        const detail = typeof data?.detail === "string" ? data.detail : "Search failed";
-        throw new Error(detail);
+        throw new Error(await parseApiError(res, "Search failed"));
       }
 
       const data: VideoSearchResponse = await res.json();

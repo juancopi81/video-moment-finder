@@ -6,7 +6,7 @@ export function Footer() {
       <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           <div>
-            <p className="font-[family-name:var(--font-heading)] font-bold">
+            <p className="font-heading font-bold">
               Video Moment Finder
             </p>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">

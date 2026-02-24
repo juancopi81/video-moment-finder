@@ -9,6 +9,14 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { API_URL, parseApiError } from "@/lib/api";
+
+function modeButtonClass(isActive: boolean): string {
+  const base = "flex-1 rounded-lg px-4 py-2 text-sm font-medium";
+  return isActive
+    ? `${base} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`
+    : `${base} border border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200`;
+}
 
 export default function Home() {
   const router = useRouter();
@@ -45,8 +53,7 @@ export default function Home() {
         return;
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiUrl}/videos`, {
+      const response = await fetch(`${API_URL}/videos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,16 +63,7 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        let message = "Failed to process video";
-        if (Array.isArray(data?.detail)) {
-          message = data.detail[0]?.msg || message;
-        } else if (typeof data?.detail === "string") {
-          message = data.detail;
-        } else if (response.status === 401) {
-          message = "Please sign in to process a video.";
-        }
-        throw new Error(message);
+        throw new Error(await parseApiError(response, "Failed to process video"));
       }
 
       const data = await response.json();
@@ -103,8 +101,7 @@ export default function Home() {
         return;
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const initResponse = await fetch(`${apiUrl}/videos/upload/init`, {
+      const initResponse = await fetch(`${API_URL}/videos/upload/init`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -112,21 +109,12 @@ export default function Home() {
         },
         body: JSON.stringify({
           filename: uploadFile.name,
-          content_type: uploadFile.type || null,
+          ...(uploadFile.type ? { content_type: uploadFile.type } : {}),
         }),
       });
 
       if (!initResponse.ok) {
-        const data = await initResponse.json().catch(() => null);
-        let message = "Failed to prepare upload";
-        if (Array.isArray(data?.detail)) {
-          message = data.detail[0]?.msg || message;
-        } else if (typeof data?.detail === "string") {
-          message = data.detail;
-        } else if (initResponse.status === 401) {
-          message = "Please sign in to process a video.";
-        }
-        throw new Error(message);
+        throw new Error(await parseApiError(initResponse, "Failed to prepare upload"));
       }
 
       const initData = await initResponse.json();
@@ -159,7 +147,7 @@ export default function Home() {
         request.send(uploadFile);
       });
 
-      const completeResponse = await fetch(`${apiUrl}/videos/upload/complete`, {
+      const completeResponse = await fetch(`${API_URL}/videos/upload/complete`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -172,16 +160,7 @@ export default function Home() {
       });
 
       if (!completeResponse.ok) {
-        const data = await completeResponse.json().catch(() => null);
-        let message = "Failed to finalize upload";
-        if (Array.isArray(data?.detail)) {
-          message = data.detail[0]?.msg || message;
-        } else if (typeof data?.detail === "string") {
-          message = data.detail;
-        } else if (completeResponse.status === 401) {
-          message = "Please sign in to process a video.";
-        }
-        throw new Error(message);
+        throw new Error(await parseApiError(completeResponse, "Failed to finalize upload"));
       }
 
       const data = await completeResponse.json();
@@ -211,7 +190,7 @@ export default function Home() {
     <div>
       {/* Hero */}
       <section className="flex flex-col items-center px-4 pt-20 pb-16 text-center animate-fade-in-up">
-        <h1 className="font-[family-name:var(--font-heading)] text-5xl font-bold leading-tight sm:text-6xl">
+        <h1 className="font-heading text-5xl font-bold leading-tight sm:text-6xl">
           Find any moment
           <br />
           in any video
@@ -229,7 +208,7 @@ export default function Home() {
           </a>
           <Link
             href="/pricing"
-            className="rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium dark:border-zinc-700"
+            className="rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:border-accent hover:text-accent dark:border-zinc-700"
           >
             See pricing
           </Link>
@@ -238,7 +217,7 @@ export default function Home() {
 
       {/* How it works */}
       <section className="mx-auto max-w-4xl px-4 pb-16">
-        <h2 className="font-[family-name:var(--font-heading)] text-center text-2xl font-bold">
+        <h2 className="font-heading text-center text-2xl font-bold">
           How it works
         </h2>
         <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
@@ -269,7 +248,7 @@ export default function Home() {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
                 {item.step}
               </div>
-              <h3 className="mt-3 font-[family-name:var(--font-heading)] font-semibold">
+              <h3 className="mt-3 font-heading font-semibold">
                 {item.title}
               </h3>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
@@ -301,11 +280,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => handleModeChange("youtube")}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
-                  mode === "youtube"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "border border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"
-                }`}
+                className={modeButtonClass(mode === "youtube")}
                 disabled={isLoading || isUploading}
               >
                 YouTube URL
@@ -313,11 +288,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => handleModeChange("upload")}
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium ${
-                  mode === "upload"
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "border border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"
-                }`}
+                className={modeButtonClass(mode === "upload")}
                 disabled={isLoading || isUploading}
               >
                 Upload Video
@@ -378,7 +349,7 @@ export default function Home() {
 
       {/* CTA banner */}
       <section className="border-t border-zinc-200 bg-surface-card px-4 py-16 text-center dark:border-zinc-800">
-        <h2 className="font-[family-name:var(--font-heading)] text-2xl font-bold">
+        <h2 className="font-heading text-2xl font-bold">
           Ready to find your moments?
         </h2>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">

@@ -56,7 +56,7 @@ export default function PricingPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-16">
       <div className="text-center">
-        <h1 className="font-[family-name:var(--font-heading)] text-4xl font-bold">
+        <h1 className="font-heading text-4xl font-bold">
           Simple, credit-based pricing
         </h1>
         <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
