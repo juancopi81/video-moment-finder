@@ -11,6 +11,7 @@ from src.db.supabase import (
     CreditRecord,
     _row_to_video,
     _row_to_credit,
+    count_videos_for_user,
     create_video,
     get_video,
     update_credits,
@@ -113,6 +114,24 @@ def test_get_video_scopes_by_user_id_when_provided(mock_get_client: MagicMock) -
 
     assert mock_query.eq.call_args_list[0].args == ("id", "video-123")
     assert mock_query.eq.call_args_list[1].args == ("user_id", "user_456")
+
+
+@patch("src.db.supabase.get_client")
+def test_count_videos_for_user_excludes_failed(mock_get_client: MagicMock) -> None:
+    """Test that free-cap counting ignores failed videos."""
+    mock_query = MagicMock()
+    mock_query.eq.return_value = mock_query
+    mock_query.neq.return_value = mock_query
+    mock_query.execute.return_value.count = 2
+    mock_client = MagicMock()
+    mock_client.table.return_value.select.return_value = mock_query
+    mock_get_client.return_value = mock_client
+
+    count = count_videos_for_user("user_456")
+
+    assert count == 2
+    assert mock_query.eq.call_args.args == ("user_id", "user_456")
+    assert mock_query.neq.call_args.args == ("status", "failed")
 
 
 def test_update_credits_rejects_negative_balance() -> None:
