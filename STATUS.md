@@ -55,6 +55,7 @@
 | 2026-02-23 | Phase 4 | Auth-Aware Landing & Pricing CTAs                | Done        | Hero CTAs adapt for signed-in users ("Process a video" instead of "Try it free"/"See pricing"). Pricing buttons show "Buy credits" for authenticated users. Bottom CTA banner hidden when signed in. Tracked dashboard/checkout work in ROADMAP 4.5. |
 | 2026-02-24 | Phase 4 | 4.5 Dashboard + My Videos List                   | Done        | Added `GET /users/me/videos`, dashboard UI, and signed-in nav link. Updated README and ROADMAP.                                                                                                                                                      |
 | 2026-02-24 | Phase 4 | Free-beta guardrail                              | Done        | Enforced per-user free video cap for URL and upload submissions (failed videos excluded from cap), added config + tests, updated docs.                                                                                                               |
+| 2026-02-24 | Phase 3 | Production deployment configs                    | Done        | Added Railway Dockerfiles (`Dockerfile`, `Dockerfile.worker`), `vercel.json`, and deployment docs in README.                                                                                                                                       |
 
 ## Blockers
 

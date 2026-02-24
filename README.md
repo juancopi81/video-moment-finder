@@ -14,7 +14,56 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 1 — Production deployment**: Dockerfile for backend + worker (Railway), Vercel config for frontend, CORS / env var wiring for production, and deployment documentation.
+- **PR 1 — Lemon Squeezy integration (blocked)**: implement checkout + webhook after store activation is approved.
+
+## Production Deployment
+
+This repo ships with Railway-ready Dockerfiles for the API + worker and a Vercel config for the Next.js frontend.
+
+### Railway (API)
+
+- Service root: repository root
+- Dockerfile: `Dockerfile`
+- Start command: provided by `CMD`
+- Port: Railway injects `$PORT` (default 8000)
+
+Required environment (API + worker):
+
+- `SUPABASE_DB_URL`
+- `CLERK_ISSUER`
+- `CORS_ALLOWED_ORIGINS` (comma-separated; include your Vercel domain and local dev if needed)
+- `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL`
+- `QDRANT_URL`
+- `QDRANT_API_KEY` (if required by your Qdrant deployment)
+- `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
+
+Optional production tuning:
+
+- `VIDEO_MAX_DURATION_S`
+- `VIDEO_MAX_FREE_VIDEOS`
+- `VIDEO_SOURCE_URL_TTL_S`
+- `VIDEO_UPLOAD_URL_TTL_S`
+
+### Railway (Worker)
+
+- Service root: repository root
+- Dockerfile: `Dockerfile.worker`
+- Start command: provided by `CMD`
+
+### Vercel (Frontend)
+
+Vercel reads `vercel.json` at repo root and builds from `frontend/`.
+
+Required environment:
+
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+
+### First Deploy Checklist
+
+- Apply Supabase migrations in `supabase/migrations` to the target environment.
+- Configure Railway services (API + worker) with the environment above.
+- Set `CORS_ALLOWED_ORIGINS` to include the Vercel domain for the frontend.
 
 ## Local Setup (One Command)
 
