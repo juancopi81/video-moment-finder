@@ -200,18 +200,28 @@ export default function Home() {
           AI-powered semantic search finds the exact frame you need.
         </p>
         <div className="mt-8 flex gap-4">
-          <a
-            href="#tool"
-            className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
-          >
-            Try it free
-          </a>
-          <Link
-            href="/pricing"
-            className="rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:border-accent hover:text-accent dark:border-zinc-700"
-          >
-            See pricing
-          </Link>
+          <SignedOut>
+            <a
+              href="#tool"
+              className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
+            >
+              Try it free
+            </a>
+            <Link
+              href="/pricing"
+              className="rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:border-accent hover:text-accent dark:border-zinc-700"
+            >
+              See pricing
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <a
+              href="#tool"
+              className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
+            >
+              Process a video
+            </a>
+          </SignedIn>
         </div>
       </section>
 
@@ -348,20 +358,22 @@ export default function Home() {
       </section>
 
       {/* CTA banner */}
-      <section className="border-t border-zinc-200 bg-surface-card px-4 py-16 text-center dark:border-zinc-800">
-        <h2 className="font-heading text-2xl font-bold">
-          Ready to find your moments?
-        </h2>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          Start searching through your videos today.
-        </p>
-        <Link
-          href="/pricing"
-          className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
-        >
-          View pricing
-        </Link>
-      </section>
+      <SignedOut>
+        <section className="border-t border-zinc-200 bg-surface-card px-4 py-16 text-center dark:border-zinc-800">
+          <h2 className="font-heading text-2xl font-bold">
+            Ready to find your moments?
+          </h2>
+          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+            Start searching through your videos today.
+          </p>
+          <Link
+            href="/pricing"
+            className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
+          >
+            View pricing
+          </Link>
+        </section>
+      </SignedOut>
     </div>
   );
 }

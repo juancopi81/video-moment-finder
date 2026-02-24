@@ -1,10 +1,7 @@
-import type { Metadata } from "next";
-import { PricingCard } from "@/components/pricing-card";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Pricing - Video Moment Finder",
-  description: "Simple credit-based pricing. Start free, upgrade as you need.",
-};
+import { useAuth } from "@clerk/nextjs";
+import { PricingCard } from "@/components/pricing-card";
 
 const tiers = [
   {
@@ -17,7 +14,6 @@ const tiers = [
       "Text-based moment search",
       "Thumbnail previews",
     ],
-    ctaLabel: "Get started",
     ctaHref: "/",
   },
   {
@@ -32,7 +28,6 @@ const tiers = [
       "YouTube URL & direct upload",
     ],
     highlighted: true,
-    ctaLabel: "Get started",
     ctaHref: "/",
   },
   {
@@ -47,12 +42,14 @@ const tiers = [
       "YouTube URL & direct upload",
       "Priority processing",
     ],
-    ctaLabel: "Get started",
     ctaHref: "/",
   },
 ];
 
 export default function PricingPage() {
+  const { userId } = useAuth();
+  const isSignedIn = !!userId;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-16">
       <div className="text-center">
@@ -66,7 +63,11 @@ export default function PricingPage() {
 
       <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
         {tiers.map((tier) => (
-          <PricingCard key={tier.name} {...tier} />
+          <PricingCard
+            key={tier.name}
+            {...tier}
+            ctaLabel={isSignedIn ? "Buy credits" : "Get started"}
+          />
         ))}
       </div>
     </div>

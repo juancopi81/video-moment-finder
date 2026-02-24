@@ -52,6 +52,7 @@
 | 2026-02-23 | Phase 3 | R2 Namespace Split + Lifecycle Docs            | Done        | Standardized on `source/` and `thumb/` R2 prefixes (no legacy key compatibility) and documented lifecycle rule setup/verification.                                                                                                                   |
 | 2026-02-23 | Phase 3 | Presigned Upload Flow                          | Done        | Added presigned upload init/complete endpoints, frontend direct-to-R2 upload, and storage existence checks for large-file support. Validation: `uv run pytest tests/api/test_app.py tests/storage/test_r2.py`, `npm run lint` (after `npm ci`).    |
 | 2026-02-23 | Phase 4 | Public Pages for Payment-Onboarding Activation  | Done        | Added Header/Footer, landing hero + how-it-works, /pricing (3-tier credit model), /terms, /privacy, /support pages. Custom fonts (Outfit + Source Sans 3), accent color system, CSS animations. Implements Lemon Squeezy activation prerequisites.  |
+| 2026-02-23 | Phase 4 | Auth-Aware Landing & Pricing CTAs                | Done        | Hero CTAs adapt for signed-in users ("Process a video" instead of "Try it free"/"See pricing"). Pricing buttons show "Buy credits" for authenticated users. Bottom CTA banner hidden when signed in. Tracked dashboard/checkout work in ROADMAP 4.5. |
 
 ## Blockers
 
