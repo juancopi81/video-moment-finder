@@ -57,7 +57,7 @@ Run API:
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
-Protected API routes (`POST /videos`, `GET /videos/{id}`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
+Protected API routes (`POST /videos`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
 
 Upload a video via presigned direct-to-R2 flow (requires R2 env configured):
 
@@ -85,6 +85,13 @@ Small files can still use the API upload endpoint:
 curl -X POST "http://localhost:8000/videos/upload" \
   -H "Authorization: Bearer <CLERK_JWT>" \
   -F "file=@/path/to/video.mp4"
+```
+
+List your videos:
+
+```bash
+curl -X GET "http://localhost:8000/users/me/videos" \
+  -H "Authorization: Bearer <CLERK_JWT>"
 ```
 
 Run worker (required for processing queue):

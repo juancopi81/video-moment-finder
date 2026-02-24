@@ -18,6 +18,7 @@ from src.db.supabase import (
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_video as db_get_video,
+    list_videos as db_list_videos,
     update_video_status,
 )
 from src.storage.config import R2Config, StorageConfigError
@@ -520,6 +521,15 @@ def get_video(
         raise HTTPException(status_code=404, detail="Video not found")
 
     return _video_record_to_response(record)
+
+
+@app.get("/users/me/videos", response_model=list[VideoResponse])
+def list_my_videos(
+    user_id: str = Depends(get_current_user_id),
+) -> list[VideoResponse]:
+    """List videos for the authenticated user."""
+    records = db_list_videos(user_id=user_id)
+    return [_video_record_to_response(record) for record in records]
 
 
 @app.post("/videos/{video_id}/search", response_model=VideoSearchResponse)

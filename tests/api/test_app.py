@@ -247,6 +247,44 @@ def test_get_video_requires_authentication() -> None:
     assert response.headers.get("www-authenticate") == "Bearer"
 
 
+def test_list_my_videos_requires_authentication() -> None:
+    client = TestClient(app)
+    response = client.get("/users/me/videos")
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_list_my_videos_scopes_to_user(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    calls: list[str | None] = []
+
+    def fake_list_videos(user_id: str | None = None) -> list[VideoRecord]:
+        calls.append(user_id)
+        return [
+            _video_record("video_1", status="ready"),
+            _upload_video_record("video_2", status="ready"),
+        ]
+
+    monkeypatch.setattr("src.api.app.db_list_videos", fake_list_videos)
+    monkeypatch.setattr(
+        "src.api.app._source_url_for_record",
+        lambda record: "https://example.com/source.mp4"
+        if record.source_type == "upload"
+        else None,
+    )
+
+    response = client.get("/users/me/videos")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls == ["user_123"]
+    assert [item["id"] for item in payload] == ["video_1", "video_2"]
+    assert payload[0]["source_url"] is None
+    assert payload[1]["source_url"] == "https://example.com/source.mp4"
+
+
 def test_get_video_includes_source_url_for_uploaded_video(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
