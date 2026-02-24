@@ -42,6 +42,12 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
 export function Header() {
   const [menuOpenOnPath, setMenuOpenOnPath] = useState<string | null>(null);
   const pathname = usePathname();
+
+  // Clear stale menu state when pathname changes (React render-time adjustment)
+  if (menuOpenOnPath !== null && menuOpenOnPath !== pathname) {
+    setMenuOpenOnPath(null);
+  }
+
   const menuOpen = menuOpenOnPath === pathname;
 
   function toggleMenu() {
