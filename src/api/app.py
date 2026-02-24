@@ -26,7 +26,7 @@ from src.storage.qdrant import QdrantStorageError
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
 from src.video.youtube import normalize_youtube_url
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 load_env()
 logger = get_logger(__name__)
@@ -184,6 +184,15 @@ class UploadCompleteRequest(BaseModel):
     video_id: str = Field(min_length=1, max_length=200)
     filename: str = Field(min_length=1, max_length=200)
 
+    @field_validator("video_id")
+    @classmethod
+    def validate_video_id(cls, value: str) -> str:
+        try:
+            UUID(value)
+        except ValueError as exc:
+            raise ValueError("video_id must be a valid UUID") from exc
+        return value
+
 
 class VideoSearchRequest(BaseModel):
     query_text: str | None = Field(default=None, max_length=500)
@@ -241,6 +250,30 @@ def _sanitize_filename(value: str | None) -> str:
     if not name.strip():
         return "upload.mp4"
     return name
+
+
+def _get_idempotent_upload_record(
+    *,
+    video_id: str,
+    user_id: str,
+    source_r2_key: str,
+    source_filename: str,
+) -> VideoRecord | None:
+    """Return an existing upload record only when request metadata matches exactly."""
+    existing = db_get_video(video_id, user_id=user_id)
+    if existing is None:
+        return None
+    if existing.source_type != "upload":
+        raise HTTPException(
+            status_code=409,
+            detail="video_id already exists with a different source type",
+        )
+    if existing.source_r2_key != source_r2_key or existing.source_filename != source_filename:
+        raise HTTPException(
+            status_code=409,
+            detail="video_id already exists with different upload metadata",
+        )
+    return existing
 
 
 app = FastAPI(
@@ -413,6 +446,15 @@ def complete_upload(
     key = source_key(request.video_id, filename)
     store = R2Store(r2_config)
 
+    existing = _get_idempotent_upload_record(
+        video_id=request.video_id,
+        user_id=user_id,
+        source_r2_key=key,
+        source_filename=filename,
+    )
+    if existing is not None:
+        return _video_record_to_response(existing)
+
     try:
         if not store.source_exists(key):
             raise HTTPException(
@@ -426,13 +468,26 @@ def complete_upload(
             detail="Failed to verify upload",
         ) from exc
 
-    record = db_create_uploaded_video(
-        video_id=request.video_id,
-        source_r2_key=key,
-        source_filename=filename,
-        user_id=user_id,
-        status="queued",
-    )
+    try:
+        record = db_create_uploaded_video(
+            video_id=request.video_id,
+            source_r2_key=key,
+            source_filename=filename,
+            user_id=user_id,
+            status="queued",
+        )
+    except Exception:
+        # Handle the create race where another request inserted this upload first.
+        existing = _get_idempotent_upload_record(
+            video_id=request.video_id,
+            user_id=user_id,
+            source_r2_key=key,
+            source_filename=filename,
+        )
+        if existing is not None:
+            return _video_record_to_response(existing)
+        raise
+
     try:
         enqueue_video_job(record.id)
     except Exception as exc:
