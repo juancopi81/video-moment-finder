@@ -1,6 +1,7 @@
 """Database modules (Supabase PostgreSQL)."""
 
 from src.db.supabase import (
+    apply_billing_credit_grant,
     claim_next_video_job,
     complete_video_job,
     count_videos_for_user,
@@ -34,4 +35,5 @@ __all__ = [
     "requeue_video_job",
     "get_credits",
     "update_credits",
+    "apply_billing_credit_grant",
 ]

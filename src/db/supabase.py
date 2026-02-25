@@ -44,6 +44,13 @@ class CreditRecord:
 
 
 @dataclass
+class BillingCreditGrantResult:
+    """Result of applying a billing event credit grant."""
+
+    applied: bool
+
+
+@dataclass
 class VideoJobRecord:
     """Video processing job record."""
 
@@ -494,3 +501,48 @@ def update_credits(user_id: str, balance: int) -> CreditRecord:
     if not result.data:
         raise RuntimeError("Failed to upsert credit record")
     return _row_to_credit(result.data[0])
+
+
+def apply_billing_credit_grant(
+    *,
+    provider: str,
+    event_id: str,
+    event_type: str,
+    user_id: str,
+    credits: int,
+    payload: dict | None = None,
+) -> BillingCreditGrantResult:
+    """Apply billing credit grants atomically and idempotently.
+
+    Returns:
+        BillingCreditGrantResult where ``applied`` is False on duplicate events.
+    """
+    if not provider.strip():
+        raise ValueError("provider must be non-empty")
+    if not event_id.strip():
+        raise ValueError("event_id must be non-empty")
+    if not event_type.strip():
+        raise ValueError("event_type must be non-empty")
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+    if credits <= 0:
+        raise ValueError("credits must be > 0")
+
+    client = get_client()
+    result = client.rpc(
+        "apply_billing_credit_grant",
+        {
+            "p_provider": provider,
+            "p_event_id": event_id,
+            "p_event_type": event_type,
+            "p_user_id": user_id,
+            "p_credits": credits,
+            "p_payload": payload or {},
+        },
+    ).execute()
+    raw = result.data
+    if isinstance(raw, list):
+        applied = bool(raw[0]) if raw else False
+    else:
+        applied = bool(raw)
+    return BillingCreditGrantResult(applied=applied)

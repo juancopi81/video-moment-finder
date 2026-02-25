@@ -11,6 +11,7 @@ from src.db.supabase import (
     CreditRecord,
     _row_to_video,
     _row_to_credit,
+    apply_billing_credit_grant,
     count_videos_for_user,
     create_video,
     get_video,
@@ -138,3 +139,34 @@ def test_update_credits_rejects_negative_balance() -> None:
     """Test that update_credits raises ValueError for negative balance."""
     with pytest.raises(ValueError, match="cannot be negative"):
         update_credits("user_123", -10)
+
+
+def test_apply_billing_credit_grant_rejects_non_positive_credits() -> None:
+    with pytest.raises(ValueError, match="credits must be > 0"):
+        apply_billing_credit_grant(
+            provider="lemonsqueezy",
+            event_id="order_created:1",
+            event_type="order_created",
+            user_id="user_123",
+            credits=0,
+        )
+
+
+@patch("src.db.supabase.get_client")
+def test_apply_billing_credit_grant_calls_rpc(mock_get_client: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = True
+
+    result = apply_billing_credit_grant(
+        provider="lemonsqueezy",
+        event_id="order_created:123",
+        event_type="order_created",
+        user_id="user_123",
+        credits=5,
+        payload={"meta": {"event_name": "order_created"}},
+    )
+
+    assert result.applied is True
+    mock_client.rpc.assert_called_once()
+    assert mock_client.rpc.call_args.args[0] == "apply_billing_credit_grant"

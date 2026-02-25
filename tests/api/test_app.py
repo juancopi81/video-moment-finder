@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
+import hmac
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -938,6 +941,130 @@ def test_extract_youtube_video_id_supported_formats(
 )
 def test_extract_youtube_video_id_rejects_invalid_urls(url: str) -> None:
     assert extract_youtube_video_id(url) is None
+
+
+def _lemonsqueezy_signature(secret: str, payload: dict) -> tuple[bytes, str]:
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
+    return raw, signature
+
+
+def test_lemonsqueezy_webhook_rejects_missing_signature(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+
+    response = client.post("/webhooks/lemonsqueezy", content=b"{}")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing webhook signature"
+
+
+def test_lemonsqueezy_webhook_rejects_invalid_signature(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    raw, _ = _lemonsqueezy_signature("secret_123", {"meta": {"event_name": "order_created"}})
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": "bad-signature"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid webhook signature"
+
+
+def test_lemonsqueezy_webhook_ignores_untracked_events(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    payload = {
+        "meta": {"event_name": "order_refunded"},
+        "data": {"id": "evt_1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["processed"] is False
+    assert response.json()["granted"] is False
+
+
+def test_lemonsqueezy_webhook_applies_credit_grant(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "user_123", "credits": 5},
+        },
+        "data": {"id": "order_1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+    calls: list[dict] = []
+
+    class _Result:
+        applied = True
+
+    def fake_apply(**kwargs):
+        calls.append(kwargs)
+        return _Result()
+
+    monkeypatch.setattr("src.api.app.db_apply_billing_credit_grant", fake_apply)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "received": True,
+        "processed": True,
+        "granted": True,
+        "reason": None,
+    }
+    assert calls
+    assert calls[0]["provider"] == "lemonsqueezy"
+    assert calls[0]["event_id"] == "order_created:order_1"
+    assert calls[0]["user_id"] == "user_123"
+    assert calls[0]["credits"] == 5
+
+
+def test_lemonsqueezy_webhook_returns_duplicate_as_not_granted(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "user_123", "credits": 5},
+        },
+        "data": {"id": "order_1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    class _Result:
+        applied = False
+
+    monkeypatch.setattr("src.api.app.db_apply_billing_credit_grant", lambda **_kwargs: _Result())
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] is True
+    assert body["granted"] is False
+    assert body["reason"] == "Event already applied"
 
 
 def test_allowed_cors_origins_uses_env(monkeypatch) -> None:

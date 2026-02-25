@@ -57,12 +57,13 @@
 | 2026-02-24 | Phase 4 | Free-beta guardrail                              | Done        | Enforced per-user free video cap for URL and upload submissions (failed videos excluded from cap), added config + tests, updated docs.                                                                                                               |
 | 2026-02-24 | Phase 3 | Production deployment configs                    | Done        | Added Railway Dockerfiles (`Dockerfile`, `Dockerfile.worker`), `vercel.json`, and deployment docs in README.                                                                                                                                       |
 | 2026-02-24 | Phase 4 | Production deployment                            | Done        | Deployed frontend (Vercel, videomomentfinder.com), API + worker (Railway), Clerk production instance with Google OAuth (test mode), Cloudflare DNS + R2 CORS configured. Railway networking port must be 8080 (Railway injects `PORT=8080`; Dockerfile defaults to 8000 only without it). `NEXT_PUBLIC_API_URL` must include `https://` prefix. |
+| 2026-02-25 | Phase 4 | Lemon Squeezy webhook credit grants              | Done        | Added `/webhooks/lemonsqueezy` signature verification, event filtering, and DB-backed idempotent credit grants via `billing_credit_events` + `apply_billing_credit_grant` migration function. Validation: `uv run pytest -q tests/api/test_app.py tests/db/test_supabase.py` (58 passed) and backend phase of `./scripts/workflow/check_all.sh` (97 passed); frontend build blocked in sandbox by `fonts.googleapis.com` DNS. |
 
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Use uploaded ingest path or local cache fallback when cloud downloads fail.
 - Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`. (Production Supabase migrations already applied.)
-- Phase 4.2 payments implementation: public pages implemented (pricing, support, terms, privacy), pending deployment and Lemon Squeezy activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
+- Phase 4.2 payments implementation: webhook credit-grant foundation is live; checkout session creation + frontend paid CTA wiring still pending. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
 
 ## Decisions Made
 
