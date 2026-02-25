@@ -31,17 +31,21 @@ rw-status:
 rw-vars service="API":
     railway variable list --service "{{service}}" --json
 
+# List Railway service variable names only (no values).
+rw-vars-keys service="API":
+    railway variable list --service "{{service}}" --json | jq -r 'keys[]'
+
 # Set a Railway service variable.
-rw-set service key value:
-    railway variable set --service "{{service}}" "{{key}}={{value}}"
+rw-set key value confirm service="API":
+    if [[ "{{confirm}}" != "CONFIRM_PROD" ]]; then echo "Refusing mutation. Pass CONFIRM_PROD as the confirmation token."; echo "Usage: just rw-set <key> <value> CONFIRM_PROD [service]"; exit 2; fi; railway variable set --service "{{service}}" "{{key}}={{value}}"
 
 # Show recent Railway logs for a service.
 rw-logs service="API" lines="200":
     railway logs --service "{{service}}" --lines "{{lines}}"
 
 # Redeploy the latest Railway deployment for a service.
-rw-redeploy service="API":
-    railway redeploy --service "{{service}}" --yes
+rw-redeploy confirm service="API":
+    if [[ "{{confirm}}" != "CONFIRM_PROD" ]]; then echo "Refusing redeploy. Pass CONFIRM_PROD as the confirmation token."; echo "Usage: just rw-redeploy CONFIRM_PROD [service]"; exit 2; fi; railway redeploy --service "{{service}}" --yes
 
 # Probe browser preflight behavior for the authenticated videos endpoint.
 cors-preflight api_url origin:

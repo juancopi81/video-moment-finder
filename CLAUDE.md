@@ -76,13 +76,15 @@ just test          # Run backend tests
 just check         # Run backend tests + frontend lint/build
 just frontend-dev  # Run Next.js dev server
 just rw-status     # Railway status in JSON
-just rw-vars       # Railway variables for default service "API"
-just rw-vars worker                      # Railway variables for a specific service
-just rw-set API FOO bar                  # Set Railway variable
+just rw-vars-keys  # Railway variable names only (safe default)
+just rw-vars       # Railway variables with values (sensitive; use carefully)
+just rw-vars worker                      # Railway variables with values for a specific service
+just rw-set FOO bar CONFIRM_PROD         # Set Railway variable for default service "API"
+just rw-set FOO bar CONFIRM_PROD worker  # Set Railway variable for a specific service
 just rw-logs      # Railway logs for default service "API"
 just rw-logs worker 200                  # Railway logs for a specific service and line count
-just rw-redeploy  # Railway redeploy for default service "API"
-just rw-redeploy worker                  # Railway redeploy for a specific service
+just rw-redeploy CONFIRM_PROD            # Railway redeploy for default service "API"
+just rw-redeploy CONFIRM_PROD worker     # Railway redeploy for a specific service
 just cors-preflight https://api.example.com https://example.vercel.app
 just r2-cors-get video-storage https://<account>.r2.cloudflarestorage.com
 ```
@@ -91,6 +93,8 @@ just r2-cors-get video-storage https://<account>.r2.cloudflarestorage.com
 
 - Local shell aliases are for human convenience only.
 - Agents should prefer repository commands (`just`, scripts, and explicit commands in docs), not personal aliases.
+- For linked production environments, mutating Railway helper commands must require an explicit confirmation token (`CONFIRM_PROD`).
+- Prefer `just rw-vars-keys` over `just rw-vars`; `rw-vars` prints secret values.
 - Use safe git alias defaults and avoid brittle patterns:
   - avoid `git pull` without `--ff-only`
   - avoid branch-specific aliases targeting `master`
