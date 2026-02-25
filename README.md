@@ -18,6 +18,10 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Production Deployment
 
+**Live at [videomomentfinder.com](https://videomomentfinder.com)**
+
+Production environment variables are managed in the **Railway** (API + worker) and **Vercel** (frontend) dashboards — not in the local `.env` file. The local `.env` is for development only.
+
 This repo ships with Railway-ready Dockerfiles for the API + worker and a Vercel config for the Next.js frontend.
 
 ### Railway (API)
@@ -59,11 +63,18 @@ Required environment:
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 
-### First Deploy Checklist
+### Initial Deployment (Completed)
 
-- Apply Supabase migrations in `supabase/migrations` to the target environment.
-- Configure Railway services (API + worker) with the environment above.
-- Set `CORS_ALLOWED_ORIGINS` to include the Vercel domain for the frontend.
+The first production deploy has been completed. For reference, the steps were:
+
+- Applied Supabase migrations in `supabase/migrations` to production.
+- Configured Railway services (API + worker) with the environment variables listed above.
+- Set `CORS_ALLOWED_ORIGINS` to include the Vercel production domain.
+- Configured Clerk production instance with Google OAuth (test mode).
+- Set up Cloudflare DNS (A record + www CNAME for Vercel, CNAMEs for Clerk).
+- Updated R2 CORS for the production frontend origin.
+
+Production env vars live in: **Railway dashboard** (API + worker) and **Vercel dashboard** (frontend).
 
 ## Local Setup (One Command)
 

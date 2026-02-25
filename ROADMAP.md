@@ -161,9 +161,9 @@
 
 ### 4.4 Launch Checklist
 
-- Environment variables secured
-- Payment provider decision documented for Colombia launch context (Lemon Squeezy first, Paddle fallback), with implementation plan reflected in docs/config.
-- Public payment-onboarding URL is live and matches product/pricing/support/legal details used during provider activation.
+- ~~Environment variables secured~~ — **done** (managed in Railway + Vercel dashboards)
+- ~~Payment provider decision documented~~ — **done** (Lemon Squeezy first, Paddle fallback)
+- ~~Public payment-onboarding URL is live~~ — **done** (videomomentfinder.com)
 - Supabase Security Advisor errors and warnings resolved (including RLS disabled in `public` schema tables and mutable function `search_path` warnings)
 - Database backups configured
 - Monitoring dashboards

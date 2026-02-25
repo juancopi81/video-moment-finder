@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 3: Real Integrations + Reliability Hardening** - In Progress
+**Phase 4: Product Launch** - In Progress
 
 ## Progress Log
 
@@ -56,11 +56,12 @@
 | 2026-02-24 | Phase 4 | 4.5 Dashboard + My Videos List                   | Done        | Added `GET /users/me/videos`, dashboard UI, and signed-in nav link. Updated README and ROADMAP.                                                                                                                                                      |
 | 2026-02-24 | Phase 4 | Free-beta guardrail                              | Done        | Enforced per-user free video cap for URL and upload submissions (failed videos excluded from cap), added config + tests, updated docs.                                                                                                               |
 | 2026-02-24 | Phase 3 | Production deployment configs                    | Done        | Added Railway Dockerfiles (`Dockerfile`, `Dockerfile.worker`), `vercel.json`, and deployment docs in README.                                                                                                                                       |
+| 2026-02-24 | Phase 4 | Production deployment                            | Done        | Deployed frontend (Vercel, videomomentfinder.com), API + worker (Railway), Clerk production instance with Google OAuth (test mode), Cloudflare DNS + R2 CORS configured.                                                                            |
 
 ## Blockers
 
 - YouTube bot detection blocks yt-dlp from Modal IPs. Use uploaded ingest path or local cache fallback when cloud downloads fail.
-- Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`.
+- Apply latest Supabase migration in each deployed environment to activate RLS policies and the hardened `public.set_updated_at` `search_path`. (Production Supabase migrations already applied.)
 - Phase 4.2 payments implementation: public pages implemented (pricing, support, terms, privacy), pending deployment and Lemon Squeezy activation review. Reference: [`RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md`](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md).
 
 ## Decisions Made
