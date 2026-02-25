@@ -31,6 +31,7 @@ This repo ships with Railway-ready Dockerfiles for the API + worker and a Vercel
 
 - Service root: repository root
 - Dockerfile: `Dockerfile`
+- Runtime packages: includes `ffmpeg` for video frame extraction
 - Start command: provided by `CMD`
 - Port: Railway injects `$PORT` (default 8000)
 
@@ -62,6 +63,7 @@ Optional production tuning:
 
 - Service root: repository root
 - Dockerfile: `Dockerfile.worker`
+- Runtime packages: includes `ffmpeg` for video frame extraction
 - Start command: provided by `CMD`
 
 ### Vercel (Frontend)

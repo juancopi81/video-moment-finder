@@ -109,6 +109,11 @@ def extract_frames(
 def _run_ffmpeg(cmd: list[str]) -> None:
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise FrameExtractionError(
+            "ffmpeg binary not found in runtime environment. "
+            "Install ffmpeg in the service image."
+        ) from exc
     except subprocess.CalledProcessError as exc:
         message = format_subprocess_error(exc, "ffmpeg failed with no output")
         raise FrameExtractionError(message) from exc
