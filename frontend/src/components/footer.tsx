@@ -48,7 +48,20 @@ export function Footer() {
         </div>
 
         <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-800">
-          <p>&copy; {new Date().getFullYear()} Video Moment Finder. All rights reserved.</p>
+          <p>
+            &copy; {new Date().getFullYear()} Video Moment Finder. Open-source under AGPLv3.
+          </p>
+          <p className="mt-1">
+            Source code:{" "}
+            <a
+              href="https://github.com/juancopi81/video-moment-finder"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-foreground"
+            >
+              github.com/juancopi81/video-moment-finder
+            </a>
+          </p>
           <p className="mt-1">
             Contact:{" "}
             <a

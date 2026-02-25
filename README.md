@@ -1,5 +1,7 @@
 # Video Moment Finder
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
 Semantic video frame search. Paste a YouTube URL or upload a video, process it, and search moments with text queries.
 
 ## Documentation
@@ -275,3 +277,11 @@ If you test warm containers, redeploy with env set:
 ```bash
 MODAL_TEXT_EMBED_MIN_CONTAINERS=1 uv run modal deploy src/embedding/modal_app.py
 ```
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0](./LICENSE).
+
+You are free to use, modify, and distribute this software under the terms of the AGPL-3.0. If you run a modified version as a network service, you must make the complete source code available to its users.
+
+The hosted service at [videomomentfinder.com](https://videomomentfinder.com) is operated by the project author and subject to its own [Terms of Service](https://videomomentfinder.com/terms).
