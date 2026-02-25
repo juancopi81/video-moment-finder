@@ -57,6 +57,7 @@
 | 2026-02-24 | Phase 4 | Free-beta guardrail                              | Done        | Enforced per-user free video cap for URL and upload submissions (failed videos excluded from cap), added config + tests, updated docs.                                                                                                               |
 | 2026-02-24 | Phase 3 | Production deployment configs                    | Done        | Added Railway Dockerfiles (`Dockerfile`, `Dockerfile.worker`), `vercel.json`, and deployment docs in README.                                                                                                                                       |
 | 2026-02-24 | Phase 4 | Production deployment                            | Done        | Deployed frontend (Vercel, videomomentfinder.com), API + worker (Railway), Clerk production instance with Google OAuth (test mode), Cloudflare DNS + R2 CORS configured. Railway networking port must be 8080 (Railway injects `PORT=8080`; Dockerfile defaults to 8000 only without it). `NEXT_PUBLIC_API_URL` must include `https://` prefix. |
+| 2026-02-25 | Phase 4 | Preview CORS origin matching                     | Done        | Added backend CORS origin normalization plus wildcard/regex support to allow Vercel preview domains (`OPTIONS` preflight for auth headers) without breaking strict production origins.                                                              |
 
 ## Blockers
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app, _allowed_cors_origins
+from src.api.app import app, _allowed_cors_origin_regex, _allowed_cors_origins
 from src.api.auth import get_current_user_id
 from src.db.supabase import VideoRecord
 from src.storage.config import StorageConfigError
@@ -950,6 +951,46 @@ def test_allowed_cors_origins_uses_env(monkeypatch) -> None:
         "https://app.example.com",
         "https://staging.example.com",
     ]
+
+
+def test_allowed_cors_origins_normalize_trailing_slashes(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "https://app.example.com/, https://staging.example.com/path ",
+    )
+
+    assert _allowed_cors_origins() == [
+        "https://app.example.com",
+        "https://staging.example.com",
+    ]
+
+
+def test_allowed_cors_origin_regex_supports_wildcards(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "https://videomomentfinder.com, https://video-moment-finder-*.vercel.app",
+    )
+
+    regex = _allowed_cors_origin_regex()
+
+    assert _allowed_cors_origins() == ["https://videomomentfinder.com"]
+    assert regex is not None
+    assert re.match(regex, "https://video-moment-finder-git-pr-24-juancopi81.vercel.app")
+    assert not re.match(regex, "https://other-project-git-main-juancopi81.vercel.app")
+
+
+def test_allowed_cors_origin_regex_supports_explicit_regex(monkeypatch) -> None:
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGIN_REGEX",
+        r"^https://preview-[a-z0-9-]+\.example\.com$",
+    )
+
+    regex = _allowed_cors_origin_regex()
+
+    assert regex is not None
+    assert re.match(regex, "https://preview-pr-24.example.com")
+    assert not re.match(regex, "https://api.example.com")
 
 
 def test_allowed_cors_origins_defaults_to_localhost(monkeypatch) -> None:
