@@ -14,7 +14,8 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 1 — Lemon Squeezy integration (blocked)**: implement checkout + webhook after store activation is approved.
+- **PR 1 — Lemon Squeezy billing MVP**: implement checkout + webhook + idempotent credit grants after store activation is approved.
+- **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after PR 1 is merged.
 
 ## Production Deployment
 
@@ -33,10 +34,15 @@ This repo ships with Railway-ready Dockerfiles for the API + worker and a Vercel
 
 Required environment (API + worker):
 
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
 - `SUPABASE_DB_URL`
 - `CLERK_ISSUER`
+- `CLERK_AUDIENCE` (optional)
+- `CLERK_JWKS_URL` (optional override)
 - `CORS_ALLOWED_ORIGINS` (comma-separated; include your Vercel domain and local dev if needed)
-- `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL`
+- `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+- `R2_PUBLIC_URL` (optional, for public thumbnail URLs)
 - `QDRANT_URL`
 - `QDRANT_API_KEY` (if required by your Qdrant deployment)
 - `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
@@ -62,6 +68,23 @@ Required environment:
 
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+
+### Production/Preview Environment Checklist
+
+Use this checklist before enabling or changing auto-deploy behavior:
+
+- Vercel:
+  - Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in both **Production** and **Preview** env scopes.
+  - Ensure production branch is `main`.
+- Railway (API + worker):
+  - Keep the same backend env contract in both services (`SUPABASE_*`, `CLERK_*`, `R2_*`, `QDRANT_*`, `MODAL_*`, `CORS_ALLOWED_ORIGINS`).
+  - Ensure both services track the intended branch (`main`) and have auto-deploy enabled.
+- Clerk:
+  - Keep production deployments wired to the **Production** Clerk instance (`CLERK_ISSUER` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` must match that instance).
+  - Use Clerk **Development** instance keys only for local development.
+- Supabase:
+  - Keep production services on production project credentials.
+  - If/when adding a staging environment, use a separate Supabase project and keys.
 
 ### Initial Deployment (Completed)
 

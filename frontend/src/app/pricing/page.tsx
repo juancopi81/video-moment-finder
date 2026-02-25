@@ -59,6 +59,11 @@ export default function PricingPage() {
         <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
           Pay for what you use. Each credit processes one video up to 30 minutes.
         </p>
+        {isSignedIn && (
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            Paid checkout is being finalized. Join the waitlist for early access.
+          </p>
+        )}
       </div>
 
       <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
@@ -66,7 +71,18 @@ export default function PricingPage() {
           <PricingCard
             key={tier.name}
             {...tier}
-            ctaLabel={isSignedIn ? "Buy credits" : "Get started"}
+            ctaHref={
+              isSignedIn && tier.name !== "Free Trial"
+                ? "/support"
+                : tier.ctaHref
+            }
+            ctaLabel={
+              isSignedIn
+                ? tier.name === "Free Trial"
+                  ? "Process a video"
+                  : "Join waitlist"
+                : "Get started"
+            }
           />
         ))}
       </div>
