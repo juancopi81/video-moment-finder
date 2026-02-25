@@ -65,6 +65,18 @@ uv run modal setup        # Authenticate with Modal
 uv run modal run --help   # Test Modal CLI
 ```
 
+### Optional just Shortcuts
+
+If `just` is installed locally, you can use:
+
+```bash
+just api           # Run FastAPI with reload
+just worker        # Run the queue worker
+just test          # Run backend tests
+just check         # Run backend tests + frontend lint/build
+just frontend-dev  # Run Next.js dev server
+```
+
 ## Key Constraints
 
 - YouTube videos only (MVP)
