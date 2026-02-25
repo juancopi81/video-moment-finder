@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
+import hmac
+import json
 import os
 import re
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -16,6 +19,7 @@ from src.api.search import search_video as search_video_service
 from src.config.env import load_env
 from src.db.supabase import (
     VideoRecord,
+    apply_billing_credit_grant as db_apply_billing_credit_grant,
     count_videos_for_user as db_count_videos_for_user,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
@@ -38,6 +42,10 @@ logger = get_logger(__name__)
 StatusType = Literal["queued", "processing", "ready", "failed"]
 DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 DEFAULT_MAX_FREE_VIDEOS = 1
+DEFAULT_BILLING_GRANT_EVENTS = {
+    "order_created",
+    "subscription_payment_success",
+}
 DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
 
 
@@ -183,6 +191,74 @@ def _upload_url_ttl_s() -> int:
     return value
 
 
+def _billing_grant_event_names() -> set[str]:
+    raw = os.environ.get("BILLING_GRANT_EVENT_NAMES", "").strip()
+    if not raw:
+        return DEFAULT_BILLING_GRANT_EVENTS
+    names = {name.strip() for name in raw.split(",") if name.strip()}
+    return names or DEFAULT_BILLING_GRANT_EVENTS
+
+
+def _lemonsqueezy_webhook_secret() -> str:
+    secret = os.environ.get("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(status_code=503, detail="Billing webhook is not configured")
+    return secret
+
+
+def _verify_lemonsqueezy_signature(raw_body: bytes, signature: str) -> bool:
+    digest = hmac.new(
+        _lemonsqueezy_webhook_secret().encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(digest, signature.strip())
+
+
+def _lemonsqueezy_event_name(payload: dict) -> str | None:
+    meta = payload.get("meta")
+    if isinstance(meta, dict):
+        event_name = meta.get("event_name")
+        if isinstance(event_name, str) and event_name.strip():
+            return event_name.strip()
+    event_name = payload.get("event_name")
+    if isinstance(event_name, str) and event_name.strip():
+        return event_name.strip()
+    return None
+
+
+def _lemonsqueezy_event_id(payload: dict, raw_body: bytes, event_name: str) -> str:
+    data = payload.get("data")
+    if isinstance(data, dict):
+        value = data.get("id")
+        if isinstance(value, str) and value.strip():
+            return f"{event_name}:{value.strip()}"
+        if isinstance(value, int):
+            return f"{event_name}:{value}"
+    return f"{event_name}:sha256:{hashlib.sha256(raw_body).hexdigest()}"
+
+
+def _extract_credit_grant(payload: dict) -> tuple[str, int] | None:
+    meta = payload.get("meta")
+    if not isinstance(meta, dict):
+        return None
+    custom_data = meta.get("custom_data")
+    if not isinstance(custom_data, dict):
+        return None
+
+    user_id = custom_data.get("user_id")
+    credits_raw = custom_data.get("credits")
+    if not isinstance(user_id, str) or not user_id.strip():
+        return None
+    try:
+        credits = int(str(credits_raw))
+    except (TypeError, ValueError):
+        return None
+    if credits <= 0:
+        return None
+    return user_id.strip(), credits
+
+
 def _source_url_for_record(record: VideoRecord) -> str | None:
     if record.source_type != "upload":
         return None
@@ -291,6 +367,13 @@ class VideoSearchResponse(BaseModel):
     source_url: HttpUrl | None = None
     status: StatusType
     results: list[SearchResult]
+
+
+class BillingWebhookResponse(BaseModel):
+    received: bool
+    processed: bool
+    granted: bool
+    reason: str | None = None
 
 
 def _parse_iso_datetime(iso_string: str | None) -> datetime:
@@ -656,4 +739,68 @@ def search_video(
             )
             for r in results
         ],
+    )
+
+
+@app.post("/webhooks/lemonsqueezy", response_model=BillingWebhookResponse)
+async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
+    """Handle Lemon Squeezy webhook events and apply idempotent credit grants."""
+    signature = request.headers.get("x-signature", "").strip()
+    if not signature:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
+
+    raw_body = await request.body()
+    if not _verify_lemonsqueezy_signature(raw_body, signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
+
+    event_name = _lemonsqueezy_event_name(payload)
+    if not event_name:
+        raise HTTPException(status_code=400, detail="Missing event name")
+
+    if event_name not in _billing_grant_event_names():
+        return BillingWebhookResponse(
+            received=True,
+            processed=False,
+            granted=False,
+            reason=f"Event {event_name} is ignored",
+        )
+
+    grant = _extract_credit_grant(payload)
+    if grant is None:
+        return BillingWebhookResponse(
+            received=True,
+            processed=False,
+            granted=False,
+            reason="No credit grant metadata found in meta.custom_data",
+        )
+
+    user_id, credits = grant
+    event_id = _lemonsqueezy_event_id(payload, raw_body, event_name)
+    applied = db_apply_billing_credit_grant(
+        provider="lemonsqueezy",
+        event_id=event_id,
+        event_type=event_name,
+        user_id=user_id,
+        credits=credits,
+        payload=payload,
+    ).applied
+
+    logger.info(
+        "Lemon webhook processed event=%s event_id=%s user_id=%s credits=%s applied=%s",
+        event_name,
+        event_id,
+        user_id,
+        credits,
+        applied,
+    )
+    return BillingWebhookResponse(
+        received=True,
+        processed=True,
+        granted=applied,
+        reason=None if applied else "Event already applied",
     )

@@ -14,8 +14,8 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 1 — Lemon Squeezy billing MVP**: implement checkout + webhook + idempotent credit grants after store activation is approved.
-- **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after PR 1 is merged.
+- **PR 1 — Lemon Squeezy checkout session creation**: expose backend endpoint to create signed Lemon Squeezy checkout links with user/credit metadata.
+- **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after checkout endpoint and store products are wired.
 
 ## Production Deployment
 
@@ -47,6 +47,7 @@ Required environment (API + worker):
 - `QDRANT_URL`
 - `QDRANT_API_KEY` (if required by your Qdrant deployment)
 - `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
+- `LEMON_SQUEEZY_WEBHOOK_SECRET` (for webhook signature verification)
 
 Optional production tuning:
 
@@ -149,6 +150,19 @@ uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
 Protected API routes (`POST /videos`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
+
+Public billing webhook route:
+
+```bash
+POST /webhooks/lemonsqueezy
+```
+
+Webhook contract (current V0):
+
+- Signature header: `X-Signature` (HMAC SHA-256 of raw body, using `LEMON_SQUEEZY_WEBHOOK_SECRET`).
+- Grant events (default): `order_created`, `subscription_payment_success` (`BILLING_GRANT_EVENT_NAMES` override supported).
+- Credit metadata source: `meta.custom_data.user_id` and `meta.custom_data.credits`.
+- Idempotency key: `<event_name>:<data.id>` fallback to raw payload SHA-256 when `data.id` is absent.
 
 Upload a video via presigned direct-to-R2 flow (requires R2 env configured):
 
