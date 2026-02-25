@@ -40,7 +40,8 @@ Required environment (API + worker):
 - `CLERK_ISSUER`
 - `CLERK_AUDIENCE` (optional)
 - `CLERK_JWKS_URL` (optional override)
-- `CORS_ALLOWED_ORIGINS` (comma-separated; include your Vercel domain and local dev if needed)
+- `CORS_ALLOWED_ORIGINS` (comma-separated; supports exact origins plus `*` wildcards like `https://video-moment-finder-*.vercel.app`)
+- `CORS_ALLOWED_ORIGIN_REGEX` (optional regex for dynamic origins when wildcards are not enough)
 - `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
 - `R2_PUBLIC_URL` (optional, for public thumbnail URLs)
 - `QDRANT_URL`
@@ -79,6 +80,7 @@ Use this checklist before enabling or changing auto-deploy behavior:
   - Ensure production branch is `main`.
 - Railway (API + worker):
   - Keep the same backend env contract in both services (`SUPABASE_*`, `CLERK_*`, `R2_*`, `QDRANT_*`, `MODAL_*`, `CORS_ALLOWED_ORIGINS`).
+  - Ensure `CORS_ALLOWED_ORIGINS` includes production plus preview origins (for example `https://videomomentfinder.com,https://video-moment-finder-*.vercel.app`).
   - Ensure both services track the intended branch (`main`) and have auto-deploy enabled.
 - Clerk:
   - Keep production deployments wired to the **Production** Clerk instance (`CLERK_ISSUER` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` must match that instance).
@@ -93,7 +95,7 @@ The first production deploy has been completed. For reference, the steps were:
 
 - Applied Supabase migrations in `supabase/migrations` to production.
 - Configured Railway services (API + worker) with the environment variables listed above.
-- Set `CORS_ALLOWED_ORIGINS` to include the Vercel production domain.
+- Set `CORS_ALLOWED_ORIGINS` to include the Vercel production domain and preview wildcard (or configure `CORS_ALLOWED_ORIGIN_REGEX`).
 - Configured Clerk production instance with Google OAuth (test mode).
 - Set up Cloudflare DNS (A record + www CNAME for Vercel, CNAMEs for Clerk).
 - Updated R2 CORS for the production frontend origin.
@@ -123,7 +125,8 @@ Required auth/CORS env for local API + frontend:
 Backend (`.env`):
 
 - `CLERK_ISSUER` (JWT issuer verification)
-- `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; default `http://localhost:3000`)
+- `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; supports `*` wildcard entries; default `http://localhost:3000`)
+- `CORS_ALLOWED_ORIGIN_REGEX` (optional regex to match dynamic preview origins)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
 - `VIDEO_MAX_FREE_VIDEOS` (max free videos per user before payments; default `1`)
 - `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)

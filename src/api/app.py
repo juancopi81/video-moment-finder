@@ -6,7 +6,9 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from typing import Literal
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,14 +46,55 @@ DEFAULT_BILLING_GRANT_EVENTS = {
     "order_created",
     "subscription_payment_success",
 }
+DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
+
+
+def _normalize_cors_origin(origin: str) -> str:
+    value = origin.strip()
+    if not value:
+        return ""
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return value.rstrip("/")
+
+
+def _configured_cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        return DEFAULT_CORS_ORIGINS.copy()
+    origins = [_normalize_cors_origin(origin) for origin in raw.split(",")]
+    cleaned = [origin for origin in origins if origin]
+    return cleaned or DEFAULT_CORS_ORIGINS.copy()
 
 
 def _allowed_cors_origins() -> list[str]:
-    raw = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
-    if not raw:
-        return ["http://localhost:3000"]
-    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return origins or ["http://localhost:3000"]
+    return [origin for origin in _configured_cors_origins() if "*" not in origin]
+
+
+def _wildcard_origin_to_regex(origin: str) -> str:
+    escaped = re.escape(origin)
+    wildcard_pattern = escaped.replace(r"\*", r"[^/]+")
+    return f"^{wildcard_pattern}$"
+
+
+def _allowed_cors_origin_regex() -> str | None:
+    patterns: list[str] = []
+
+    explicit_regex = os.environ.get("CORS_ALLOWED_ORIGIN_REGEX", "").strip()
+    if explicit_regex:
+        patterns.append(f"(?:{explicit_regex})")
+
+    wildcard_patterns = [
+        _wildcard_origin_to_regex(origin)
+        for origin in _configured_cors_origins()
+        if "*" in origin
+    ]
+    patterns.extend(wildcard_patterns)
+
+    if not patterns:
+        return None
+    return "|".join(patterns)
 
 
 def _max_video_duration_s() -> int:
@@ -395,6 +438,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_cors_origins(),
+    allow_origin_regex=_allowed_cors_origin_regex(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

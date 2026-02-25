@@ -15,3 +15,4 @@ test_video*
 .env
 
 .DS_Store
+supabase/.temp/

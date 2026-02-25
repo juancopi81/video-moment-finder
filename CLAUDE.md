@@ -65,6 +65,84 @@ uv run modal setup        # Authenticate with Modal
 uv run modal run --help   # Test Modal CLI
 ```
 
+### Optional just Shortcuts
+
+If `just` is installed locally, you can use:
+
+```bash
+just api           # Run FastAPI with reload
+just worker        # Run the queue worker
+just test          # Run backend tests
+just check         # Run backend tests + frontend lint/build
+just frontend-dev  # Run Next.js dev server
+just rw-status     # Railway status in JSON
+just rw-vars-keys  # Railway variable names only (safe default)
+just rw-vars       # Railway variables with values (sensitive; use carefully)
+just rw-vars worker                      # Railway variables with values for a specific service
+just rw-set FOO bar CONFIRM_PROD         # Set Railway variable for default service "API"
+just rw-set FOO bar CONFIRM_PROD worker  # Set Railway variable for a specific service
+just rw-logs      # Railway logs for default service "API"
+just rw-logs worker 200                  # Railway logs for a specific service and line count
+just rw-redeploy CONFIRM_PROD            # Railway redeploy for default service "API"
+just rw-redeploy CONFIRM_PROD worker     # Railway redeploy for a specific service
+just cors-preflight https://api.example.com https://example.vercel.app
+just r2-cors-get video-storage https://<account>.r2.cloudflarestorage.com
+```
+
+## Developer Tooling Policy
+
+- Local shell aliases are for human convenience only.
+- Agents should prefer repository commands (`just`, scripts, and explicit commands in docs), not personal aliases.
+- For linked production environments, mutating Railway helper commands must require an explicit confirmation token (`CONFIRM_PROD`).
+- Prefer `just rw-vars-keys` over `just rw-vars`; `rw-vars` prints secret values.
+- Use safe git alias defaults and avoid brittle patterns:
+  - avoid `git pull` without `--ff-only`
+  - avoid branch-specific aliases targeting `master`
+  - avoid GUI/editor-dependent aliases in shared workflows
+  - rejected examples for this repo workflow:
+    - `gpom='git pull origin master'`
+    - `gd='git diff | mate'`
+    - `del='git branch -d'` (too generic; prefer `gbd`)
+
+### Safe Local Alias Block (for `~/.zshrc`)
+
+```zsh
+# VMF git aliases (safe defaults)
+alias gst='git status -sb'
+alias gc='git commit'
+alias gco='git switch'
+alias gcb='git switch -c'
+alias gcm='git switch main'
+alias gl='git pull --ff-only'
+alias gplm='git pull origin main --ff-only'
+alias gp='git push'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias gb='git branch'
+alias gba='git branch -a'
+alias gbd='git branch -d'
+```
+
+### Core Platform CLIs
+
+Required for this repository's deploy/debug loops:
+
+- `railway` (service status, env vars, logs, redeploys)
+- `supabase` (db/dev helpers)
+- `vercel` (frontend deployments/metadata)
+- `wrangler` (Cloudflare workflows)
+- `aws` (R2 via S3-compatible API)
+
+Quick checks:
+
+```bash
+railway whoami
+supabase --version
+vercel --version
+wrangler --version
+aws sts get-caller-identity
+```
+
 ## Key Constraints
 
 - YouTube videos only (MVP)
