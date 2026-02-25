@@ -14,7 +14,7 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 1 — Lemon Squeezy billing MVP**: implement checkout + webhook + idempotent credit grants after store activation is approved.
+- **PR 1 — Lemon Squeezy billing MVP**: implement checkout + webhook + idempotent credit grants after store activation is approved. (WIP)
 - **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after PR 1 is merged.
 
 ## Production Deployment
