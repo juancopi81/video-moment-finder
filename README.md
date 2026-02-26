@@ -142,6 +142,19 @@ Backend (`.env`):
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
 - `R2_*` (required for uploaded video ingest and thumbnails)
 
+Admin free-cap override (optional):
+
+- Add a row to `video_access_overrides` with the Clerk `user_id` (`sub`) and `unlimited_videos=true`.
+- This bypasses `VIDEO_MAX_FREE_VIDEOS` for that user only.
+- Email is not used directly by backend access checks.
+
+```sql
+insert into public.video_access_overrides (user_id, unlimited_videos, note)
+values ('user_abc123', true, 'Admin unlimited access')
+on conflict (user_id)
+do update set unlimited_videos = excluded.unlimited_videos, note = excluded.note;
+```
+
 Frontend (`frontend/.env.local`):
 
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (Clerk initialization)

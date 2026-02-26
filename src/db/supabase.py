@@ -287,6 +287,23 @@ def count_videos_for_user(user_id: str) -> int:
     return len(result.data or [])
 
 
+def has_unlimited_video_access(user_id: str) -> bool:
+    """Return whether a user bypasses the free video cap."""
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+
+    client = get_client()
+    result = (
+        client.table("video_access_overrides")
+        .select("user_id")
+        .eq("user_id", user_id)
+        .eq("unlimited_videos", True)
+        .limit(1)
+        .execute()
+    )
+    return bool(result.data)
+
+
 # ---------------------------------------------------------------------------
 # Video jobs (durable queue)
 # ---------------------------------------------------------------------------

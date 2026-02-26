@@ -15,6 +15,7 @@ from src.db.supabase import (
     count_videos_for_user,
     create_video,
     get_video,
+    has_unlimited_video_access,
     update_credits,
 )
 
@@ -133,6 +134,38 @@ def test_count_videos_for_user_excludes_failed(mock_get_client: MagicMock) -> No
     assert count == 2
     assert mock_query.eq.call_args.args == ("user_id", "user_456")
     assert mock_query.neq.call_args.args == ("status", "failed")
+
+
+@patch("src.db.supabase.get_client")
+def test_has_unlimited_video_access_returns_true_for_override(mock_get_client: MagicMock) -> None:
+    mock_query = MagicMock()
+    mock_query.eq.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    mock_query.execute.return_value.data = [{"user_id": "user_456"}]
+    mock_client = MagicMock()
+    mock_client.table.return_value.select.return_value = mock_query
+    mock_get_client.return_value = mock_client
+
+    result = has_unlimited_video_access("user_456")
+
+    assert result is True
+    assert mock_query.eq.call_args_list[0].args == ("user_id", "user_456")
+    assert mock_query.eq.call_args_list[1].args == ("unlimited_videos", True)
+
+
+@patch("src.db.supabase.get_client")
+def test_has_unlimited_video_access_returns_false_without_override(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_query = MagicMock()
+    mock_query.eq.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    mock_query.execute.return_value.data = []
+    mock_client = MagicMock()
+    mock_client.table.return_value.select.return_value = mock_query
+    mock_get_client.return_value = mock_client
+
+    assert has_unlimited_video_access("user_456") is False
 
 
 def test_update_credits_rejects_negative_balance() -> None:

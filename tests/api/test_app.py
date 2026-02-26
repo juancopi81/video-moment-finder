@@ -59,6 +59,7 @@ def _clear_dependency_overrides() -> None:
 
 @pytest.fixture(autouse=True)
 def _mock_free_video_count(monkeypatch) -> None:
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 0)
 
 
@@ -229,6 +230,33 @@ def test_create_video_rejects_when_free_limit_reached(monkeypatch) -> None:
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Free video limit reached"
+
+
+def test_create_video_allows_unlimited_user_override(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: True)
+    monkeypatch.setattr(
+        "src.api.app.db_count_videos_for_user",
+        lambda _user_id: (_ for _ in ()).throw(AssertionError("count should not run")),
+    )
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_video",
+        lambda youtube_url, user_id=None, status="queued": _video_record("video_123", status=status),
+    )
+    monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_get_video_requires_owner_scope(monkeypatch) -> None:
