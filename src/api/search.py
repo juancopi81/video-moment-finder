@@ -1,7 +1,7 @@
 """Search service for video moment finder."""
 from __future__ import annotations
 
-from src.config.modal import get_text_embedder_class
+from src.config.modal import get_text_embedder_class, raise_modal_auth_error
 from src.storage.config import QdrantConfig
 from src.storage.qdrant import QdrantStore, SearchResult
 from src.utils.logging import Timer, get_logger
@@ -28,7 +28,11 @@ def search_video(video_id: str, query_text: str, limit: int = 5) -> list[SearchR
     with Timer("Search total", logger, level="debug") as total_timer:
         with Timer("Search embed query", logger, level="debug") as embed_timer:
             text_embedder = get_text_embedder_class()
-            query_vector = text_embedder().embed.remote(query_text)
+            try:
+                query_vector = text_embedder().embed.remote(query_text)
+            except Exception as exc:
+                raise_modal_auth_error(exc, context="embedding a search query")
+                raise
         logger.debug("Got query embedding with %d dimensions", len(query_vector))
 
         with Timer("Search qdrant setup", logger, level="debug") as qdrant_setup_timer:

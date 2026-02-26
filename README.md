@@ -52,6 +52,10 @@ Required environment (API + worker):
 - `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
 - `LEMON_SQUEEZY_WEBHOOK_SECRET` (for webhook signature verification)
 
+Troubleshooting: if processing fails with `Token missing. Could not authenticate client.`,
+one of your Railway services is missing `MODAL_TOKEN_ID` and/or `MODAL_TOKEN_SECRET`.
+Set both vars in both API and worker services.
+
 Optional production tuning:
 
 - `VIDEO_MAX_DURATION_S`
