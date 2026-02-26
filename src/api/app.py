@@ -25,6 +25,7 @@ from src.db.supabase import (
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_video as db_get_video,
+    has_unlimited_video_access as db_has_unlimited_video_access,
     list_videos as db_list_videos,
     update_video_status,
 )
@@ -152,6 +153,8 @@ def _validate_video_duration(youtube_url: str) -> None:
 
 
 def _enforce_free_video_limit(user_id: str) -> None:
+    if db_has_unlimited_video_access(user_id):
+        return
     max_videos = _max_free_videos()
     current_count = db_count_videos_for_user(user_id)
     if current_count >= max_videos:
