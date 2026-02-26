@@ -8,6 +8,7 @@ from pathlib import Path
 from src.config.modal import (
     EMBED_IMAGES_FUNCTION_NAME,
     get_embedding_modal_function,
+    raise_modal_auth_error,
 )
 from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
 from src.db.supabase import VideoRecord
@@ -71,7 +72,11 @@ def process_video(video: VideoRecord) -> ProcessingResult:
             logger.info("Embedding %d frames via Modal", len(frames))
             frame_bytes = [frame.path.read_bytes() for frame in frames]
             embed_fn = get_embedding_modal_function(EMBED_IMAGES_FUNCTION_NAME)
-            embeddings = embed_fn.remote(frame_bytes, batch_size=8)
+            try:
+                embeddings = embed_fn.remote(frame_bytes, batch_size=8)
+            except Exception as exc:
+                raise_modal_auth_error(exc, context="embedding video frames")
+                raise
             logger.info("Got %d embeddings", len(embeddings))
 
             logger.info("Storing embeddings and thumbnails for video_id=%s", video.id)

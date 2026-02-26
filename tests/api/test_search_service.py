@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from src.api import search as search_module
+from src.config.modal import ModalAuthError
 from src.storage.qdrant import SearchResult
 
 
@@ -78,3 +81,30 @@ def test_search_video_logs_timing_and_returns_results(monkeypatch) -> None:
 
     timing_messages = [message for message, _ in info_calls if "Search timing" in message]
     assert timing_messages
+
+
+def test_search_video_raises_modal_auth_error_when_token_missing(monkeypatch) -> None:
+    class FakeEmbedMethod:
+        def remote(self, query_text: str) -> list[float]:
+            assert query_text == "find opening scene"
+            raise RuntimeError("Token missing. Could not authenticate client.")
+
+    class FakeEmbedderInstance:
+        embed = FakeEmbedMethod()
+
+    class FakeEmbedderClass:
+        def __call__(self) -> FakeEmbedderInstance:
+            return FakeEmbedderInstance()
+
+    monkeypatch.setattr(
+        search_module,
+        "get_text_embedder_class",
+        lambda: FakeEmbedderClass(),
+    )
+
+    with pytest.raises(ModalAuthError, match="MODAL_TOKEN_ID"):
+        search_module.search_video(
+            video_id="video_123",
+            query_text="find opening scene",
+            limit=7,
+        )
