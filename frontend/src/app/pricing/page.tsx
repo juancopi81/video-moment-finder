@@ -7,10 +7,19 @@ import { API_URL, parseApiError } from "@/lib/api";
 
 type BillingPlan = "starter" | "pro";
 type TierId = "free" | BillingPlan;
+type Tier = {
+  id: TierId;
+  name: string;
+  price: string;
+  description: string;
+  features: string[];
+  highlighted?: boolean;
+  ctaHref: string;
+};
 
-const tiers = [
+const tiers: Tier[] = [
   {
-    id: "free" as TierId,
+    id: "free",
     name: "Free Trial",
     price: "$0",
     description: "Try it out with one video",
@@ -23,7 +32,7 @@ const tiers = [
     ctaHref: "/",
   },
   {
-    id: "starter" as TierId,
+    id: "starter",
     name: "Starter",
     price: "$5",
     description: "5 video credits",
@@ -38,7 +47,7 @@ const tiers = [
     ctaHref: "/",
   },
   {
-    id: "pro" as TierId,
+    id: "pro",
     name: "Pro",
     price: "$15",
     description: "20 video credits",
@@ -53,6 +62,27 @@ const tiers = [
     ctaHref: "/",
   },
 ];
+
+function ctaLabel({
+  isSignedIn,
+  paidPlan,
+  isCheckoutLoading,
+}: {
+  isSignedIn: boolean;
+  paidPlan: BillingPlan | null;
+  isCheckoutLoading: boolean;
+}): string {
+  if (!isSignedIn) {
+    return "Get started";
+  }
+  if (!paidPlan) {
+    return "Process a video";
+  }
+  if (isCheckoutLoading) {
+    return "Opening checkout...";
+  }
+  return "Buy credits";
+}
 
 export default function PricingPage() {
   const { userId, getToken, isLoaded } = useAuth();
@@ -127,28 +157,42 @@ export default function PricingPage() {
       <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">
         {tiers.map((tier) => {
           const paidPlan = tier.id === "free" ? null : tier.id;
-          const isPaidTier = paidPlan !== null;
           const isCheckoutLoading = paidPlan !== null && checkoutPlanLoading === paidPlan;
+
+          if (isSignedIn && paidPlan) {
+            return (
+              <PricingCard
+                key={tier.name}
+                name={tier.name}
+                price={tier.price}
+                description={tier.description}
+                features={tier.features}
+                highlighted={tier.highlighted}
+                onCtaClick={() => startCheckout(paidPlan)}
+                ctaDisabled={checkoutPlanLoading !== null}
+                ctaLabel={ctaLabel({
+                  isSignedIn,
+                  paidPlan,
+                  isCheckoutLoading,
+                })}
+              />
+            );
+          }
+
           return (
             <PricingCard
               key={tier.name}
-              {...tier}
-              ctaHref={!isSignedIn || !isPaidTier ? tier.ctaHref : undefined}
-              onCtaClick={
-                isSignedIn && paidPlan
-                  ? () => startCheckout(paidPlan)
-                  : undefined
-              }
-              ctaDisabled={checkoutPlanLoading !== null}
-              ctaLabel={
-                isSignedIn
-                  ? paidPlan
-                    ? isCheckoutLoading
-                      ? "Opening checkout..."
-                      : "Buy credits"
-                    : "Process a video"
-                  : "Get started"
-              }
+              name={tier.name}
+              price={tier.price}
+              description={tier.description}
+              features={tier.features}
+              highlighted={tier.highlighted}
+              ctaHref={tier.ctaHref}
+              ctaLabel={ctaLabel({
+                isSignedIn,
+                paidPlan,
+                isCheckoutLoading,
+              })}
             />
           );
         })}
