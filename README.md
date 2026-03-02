@@ -126,7 +126,14 @@ set -a && source .env && set +a
 ./scripts/setup_local.sh
 ```
 
-This applies SQL migrations in `supabase/migrations`, installs Python deps with `uv`, and installs frontend deps with `npm ci`.
+This applies only pending SQL migrations in `supabase/migrations` (tracked in `public.schema_migrations`), installs Python deps with `uv`, and installs frontend deps with `npm ci`.
+
+If your DB was already migrated before tracking was added, run once with:
+
+```bash
+set -a && source .env && set +a
+./scripts/setup_local.sh --baseline-existing-db
+```
 
 Required auth/CORS env for local API + frontend:
 

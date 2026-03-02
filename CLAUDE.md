@@ -48,6 +48,8 @@ uv run <command>          # Run commands in the virtual environment
 # One-command local setup (migrations + deps)
 set -a && source .env && set +a
 ./scripts/setup_local.sh
+# Existing DB without migration history:
+./scripts/setup_local.sh --baseline-existing-db
 
 # Run API
 uv run uvicorn src.api.app:app --reload --port 8000
