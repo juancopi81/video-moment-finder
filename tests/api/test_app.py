@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from src.api.app import app, _allowed_cors_origin_regex, _allowed_cors_origins
 from src.api.auth import get_current_user_id
+from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import VideoRecord
 from src.storage.config import StorageConfigError
 from src.storage.qdrant import SearchResult
@@ -970,6 +971,87 @@ def test_extract_youtube_video_id_supported_formats(
 )
 def test_extract_youtube_video_id_rejects_invalid_urls(url: str) -> None:
     assert extract_youtube_video_id(url) is None
+
+
+def test_billing_checkout_requires_authentication() -> None:
+    client = TestClient(app)
+
+    response = client.post("/billing/checkout", json={"plan": "starter"})
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_billing_checkout_rejects_invalid_plan() -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    response = client.post("/billing/checkout", json={"plan": "enterprise"})
+
+    assert response.status_code == 422
+
+
+def test_billing_checkout_returns_503_when_variant_config_missing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.delenv("LEMON_SQUEEZY_VARIANT_ID_STARTER", raising=False)
+
+    response = client.post("/billing/checkout", json={"plan": "starter"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Billing checkout is not configured"
+
+
+def test_billing_checkout_creates_starter_session(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_STARTER", "var_starter_123")
+    calls: list[dict] = []
+
+    class _Session:
+        url = "https://app.lemonsqueezy.com/checkout/buy/session_123"
+        test_mode = True
+
+    def fake_create_checkout_session(**kwargs):
+        calls.append(kwargs)
+        return _Session()
+
+    monkeypatch.setattr("src.api.app.create_checkout_session", fake_create_checkout_session)
+
+    response = client.post("/billing/checkout", json={"plan": "starter"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "lemonsqueezy",
+        "plan": "starter",
+        "credits": 5,
+        "checkout_url": "https://app.lemonsqueezy.com/checkout/buy/session_123",
+        "test_mode": True,
+    }
+    assert calls == [
+        {
+            "user_id": "user_123",
+            "plan": "starter",
+            "credits": 5,
+            "variant_id": "var_starter_123",
+        }
+    ]
+
+
+def test_billing_checkout_returns_502_when_provider_fails(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_PRO", "var_pro_123")
+
+    def _raise_provider_error(**_kwargs):
+        raise LemonSqueezyProviderError("upstream unavailable")
+
+    monkeypatch.setattr("src.api.app.create_checkout_session", _raise_provider_error)
+
+    response = client.post("/billing/checkout", json={"plan": "pro"})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Billing checkout is temporarily unavailable"
 
 
 def _lemonsqueezy_signature(secret: str, payload: dict) -> tuple[bytes, str]:
