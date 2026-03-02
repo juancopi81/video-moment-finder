@@ -16,8 +16,8 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after store products are wired.
 - **PR 3 — Credit deduction enforcement**: enforce paid credit deduction in video processing once free-trial cap is exhausted.
+- **PR 4 — Billing status UX**: show clear post-checkout success/failure feedback and refreshed credit balance in dashboard/pricing.
 
 ## Production Deployment
 
@@ -209,7 +209,7 @@ Required checkout environment:
 - `LEMON_SQUEEZY_VARIANT_ID_STARTER`
 - `LEMON_SQUEEZY_VARIANT_ID_PRO`
 - `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`
-- `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (`true`/`false`, optional; default `false`)
+- `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (`true`/`false`, optional; default `false`; set `true` while validating checkout in test mode)
 
 Example call:
 

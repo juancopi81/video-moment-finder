@@ -29,7 +29,7 @@ const faqs = [
   {
     question: "How do credits work?",
     answer:
-      "Each credit allows you to process one video (up to 30 minutes). Free accounts include 1 credit to try the service. Paid credit packs are in final setup; email support@videomomentfinder.com if you want early access to checkout. Credits do not expire.",
+      "Each credit allows you to process one video (up to 30 minutes). Free accounts include 1 credit to try the service. Paid credit packs are available on the pricing page for signed-in users. Credits do not expire.",
   },
   {
     question: "Can I get a refund?",

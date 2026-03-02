@@ -1,24 +1,43 @@
 import Link from "next/link";
 
-type PricingCardProps = {
+type PricingCardBaseProps = {
   name: string;
   price: string;
   description: string;
   features: string[];
   highlighted?: boolean;
   ctaLabel: string;
-  ctaHref: string;
 };
 
-export function PricingCard({
-  name,
-  price,
-  description,
-  features,
-  highlighted = false,
-  ctaLabel,
-  ctaHref,
-}: PricingCardProps) {
+type PricingCardLinkProps = PricingCardBaseProps & {
+  ctaHref: string;
+  onCtaClick?: never;
+  ctaDisabled?: never;
+};
+
+type PricingCardButtonProps = PricingCardBaseProps & {
+  ctaHref?: never;
+  onCtaClick: () => void | Promise<void>;
+  ctaDisabled?: boolean;
+};
+
+type PricingCardProps = PricingCardLinkProps | PricingCardButtonProps;
+
+export function PricingCard(props: PricingCardProps) {
+  const {
+    name,
+    price,
+    description,
+    features,
+    highlighted = false,
+    ctaLabel,
+  } = props;
+  const ctaClassName = `mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-medium ${
+    highlighted
+      ? "bg-accent text-white"
+      : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+  }`;
+
   return (
     <div
       className={`relative flex flex-col rounded-xl border p-6 ${
@@ -62,16 +81,20 @@ export function PricingCard({
         ))}
       </ul>
 
-      <Link
-        href={ctaHref}
-        className={`mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-medium ${
-          highlighted
-            ? "bg-accent text-white"
-            : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-        }`}
-      >
-        {ctaLabel}
-      </Link>
+      {"onCtaClick" in props ? (
+        <button
+          type="button"
+          onClick={props.onCtaClick}
+          disabled={props.ctaDisabled ?? false}
+          className={`${ctaClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {ctaLabel}
+        </button>
+      ) : (
+        <Link href={props.ctaHref} className={ctaClassName}>
+          {ctaLabel}
+        </Link>
+      )}
     </div>
   );
 }
