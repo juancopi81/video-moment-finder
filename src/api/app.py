@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from src.api.auth import get_current_user_id
 from src.api.search import search_video as search_video_service
+from src.billing.lemonsqueezy import (
+    LemonSqueezyConfigError,
+    LemonSqueezyProviderError,
+    create_checkout_session,
+)
 from src.config.env import load_env
 from src.db.supabase import (
     VideoRecord,
@@ -41,6 +46,7 @@ load_env()
 logger = get_logger(__name__)
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
+BillingPlanType = Literal["starter", "pro"]
 DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 DEFAULT_MAX_FREE_VIDEOS = 1
 DEFAULT_BILLING_GRANT_EVENTS = {
@@ -48,6 +54,14 @@ DEFAULT_BILLING_GRANT_EVENTS = {
     "subscription_payment_success",
 }
 DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
+DEFAULT_BILLING_PLAN_CREDITS: dict[BillingPlanType, int] = {
+    "starter": 5,
+    "pro": 20,
+}
+BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
+    "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
+    "pro": "LEMON_SQUEEZY_VARIANT_ID_PRO",
+}
 
 
 def _normalize_cors_origin(origin: str) -> str:
@@ -262,6 +276,14 @@ def _extract_credit_grant(payload: dict) -> tuple[str, int] | None:
     return user_id.strip(), credits
 
 
+def _billing_plan_variant_id(plan: BillingPlanType) -> str:
+    env_name = BILLING_PLAN_VARIANT_ENV[plan]
+    variant_id = os.environ.get(env_name, "").strip()
+    if not variant_id:
+        raise LemonSqueezyConfigError(f"{env_name} environment variable is required")
+    return variant_id
+
+
 def _source_url_for_record(record: VideoRecord) -> str | None:
     if record.source_type != "upload":
         return None
@@ -377,6 +399,18 @@ class BillingWebhookResponse(BaseModel):
     processed: bool
     granted: bool
     reason: str | None = None
+
+
+class BillingCheckoutRequest(BaseModel):
+    plan: BillingPlanType
+
+
+class BillingCheckoutResponse(BaseModel):
+    provider: Literal["lemonsqueezy"]
+    plan: BillingPlanType
+    credits: int
+    checkout_url: HttpUrl
+    test_mode: bool
 
 
 def _parse_iso_datetime(iso_string: str | None) -> datetime:
@@ -742,6 +776,44 @@ def search_video(
             )
             for r in results
         ],
+    )
+
+
+@app.post("/billing/checkout", response_model=BillingCheckoutResponse)
+def create_billing_checkout(
+    request: BillingCheckoutRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> BillingCheckoutResponse:
+    """Create a Lemon Squeezy checkout session for a paid credit pack."""
+    credits = DEFAULT_BILLING_PLAN_CREDITS[request.plan]
+    try:
+        session = create_checkout_session(
+            user_id=user_id,
+            plan=request.plan,
+            credits=credits,
+            variant_id=_billing_plan_variant_id(request.plan),
+        )
+    except LemonSqueezyConfigError as exc:
+        logger.error("Lemon Squeezy checkout config error: %s", exc)
+        raise HTTPException(status_code=503, detail="Billing checkout is not configured") from exc
+    except LemonSqueezyProviderError as exc:
+        logger.exception(
+            "Lemon Squeezy checkout failed for user_id=%s plan=%s: %s",
+            user_id,
+            request.plan,
+            exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Billing checkout is temporarily unavailable",
+        ) from exc
+
+    return BillingCheckoutResponse(
+        provider="lemonsqueezy",
+        plan=request.plan,
+        credits=credits,
+        checkout_url=session.url,
+        test_mode=session.test_mode,
     )
 
 

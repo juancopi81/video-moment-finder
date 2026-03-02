@@ -16,8 +16,8 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 1 — Lemon Squeezy checkout session creation**: expose backend endpoint to create signed Lemon Squeezy checkout links with user/credit metadata.
-- **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after checkout endpoint and store products are wired.
+- **PR 2 — Paid pricing CTA go-live**: replace waitlist CTAs with live checkout URLs after store products are wired.
+- **PR 3 — Credit deduction enforcement**: enforce paid credit deduction in video processing once free-trial cap is exhausted.
 
 ## Production Deployment
 
@@ -50,6 +50,10 @@ Required environment (API + worker):
 - `QDRANT_URL`
 - `QDRANT_API_KEY` (if required by your Qdrant deployment)
 - `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
+- `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`
+- `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`
+- `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`
+- `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (optional, default `false`)
 - `LEMON_SQUEEZY_WEBHOOK_SECRET` (for webhook signature verification)
 
 Troubleshooting: if processing fails with `Token missing. Could not authenticate client.`,
@@ -177,7 +181,44 @@ Run API:
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
-Protected API routes (`POST /videos`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`) now require `Authorization: Bearer <Clerk JWT>`.
+Protected API routes (`POST /videos`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`, `POST /billing/checkout`) now require `Authorization: Bearer <Clerk JWT>`.
+
+Authenticated billing checkout route:
+
+```bash
+POST /billing/checkout
+```
+
+Request contract:
+
+- JSON body: `{"plan":"starter"}` or `{"plan":"pro"}`
+- Requires `Authorization: Bearer <Clerk JWT>`
+
+Response contract:
+
+- `provider`: always `lemonsqueezy`
+- `plan`: selected plan (`starter` or `pro`)
+- `credits`: `5` for starter, `20` for pro
+- `checkout_url`: hosted Lemon Squeezy checkout URL
+- `test_mode`: checkout mode from `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`
+
+Required checkout environment:
+
+- `LEMON_SQUEEZY_API_KEY`
+- `LEMON_SQUEEZY_STORE_ID`
+- `LEMON_SQUEEZY_VARIANT_ID_STARTER`
+- `LEMON_SQUEEZY_VARIANT_ID_PRO`
+- `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`
+- `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (`true`/`false`, optional; default `false`)
+
+Example call:
+
+```bash
+curl -X POST "http://localhost:8000/billing/checkout" \
+  -H "Authorization: Bearer <CLERK_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"plan":"starter"}'
+```
 
 Public billing webhook route:
 
@@ -191,6 +232,11 @@ Webhook contract (current V0):
 - Grant events (default): `order_created`, `subscription_payment_success` (`BILLING_GRANT_EVENT_NAMES` override supported).
 - Credit metadata source: `meta.custom_data.user_id` and `meta.custom_data.credits`.
 - Idempotency key: `<event_name>:<data.id>` fallback to raw payload SHA-256 when `data.id` is absent.
+
+Checkout metadata note:
+
+- `POST /billing/checkout` sends `checkout_data.custom` with `user_id`, `credits`, and `plan`.
+- Webhook grant logic is unchanged and still reads `meta.custom_data.user_id` + `meta.custom_data.credits`.
 
 Upload a video via presigned direct-to-R2 flow (requires R2 env configured):
 
