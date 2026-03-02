@@ -7,7 +7,9 @@ type PricingCardProps = {
   features: string[];
   highlighted?: boolean;
   ctaLabel: string;
-  ctaHref: string;
+  ctaHref?: string;
+  onCtaClick?: () => void | Promise<void>;
+  ctaDisabled?: boolean;
 };
 
 export function PricingCard({
@@ -18,7 +20,15 @@ export function PricingCard({
   highlighted = false,
   ctaLabel,
   ctaHref,
+  onCtaClick,
+  ctaDisabled = false,
 }: PricingCardProps) {
+  const ctaClassName = `mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-medium ${
+    highlighted
+      ? "bg-accent text-white"
+      : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+  }`;
+
   return (
     <div
       className={`relative flex flex-col rounded-xl border p-6 ${
@@ -62,16 +72,20 @@ export function PricingCard({
         ))}
       </ul>
 
-      <Link
-        href={ctaHref}
-        className={`mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-medium ${
-          highlighted
-            ? "bg-accent text-white"
-            : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-        }`}
-      >
-        {ctaLabel}
-      </Link>
+      {onCtaClick ? (
+        <button
+          type="button"
+          onClick={onCtaClick}
+          disabled={ctaDisabled}
+          className={`${ctaClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {ctaLabel}
+        </button>
+      ) : (
+        <Link href={ctaHref || "/"} className={ctaClassName}>
+          {ctaLabel}
+        </Link>
+      )}
     </div>
   );
 }

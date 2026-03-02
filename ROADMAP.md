@@ -146,7 +146,8 @@
 - Credit deduction on video process
 - ~~Webhook signature verification and idempotent credit grants~~ — **done** (2026-02-25)
 - ~~Checkout session creation endpoint~~ — **done** (2026-03-02)
-- **Next milestone**: wire pricing CTA to live checkout and enforce paid credits after free-trial cap.
+- ~~Pricing CTA wired to live checkout~~ — **done** (2026-03-02)
+- **Next milestone**: enforce paid credits after free-trial cap.
 
 ### 4.3 Production Hardening
 
@@ -158,7 +159,7 @@
 
 ### 4.5 Authenticated User Experience
 
-- Pricing page CTAs link to actual Lemon Squeezy checkout URLs (pending frontend wiring to `POST /billing/checkout`)
+- ~~Pricing page CTAs link to actual Lemon Squeezy checkout URLs~~ — **done** (2026-03-02)
 
 ### 4.4 Launch Checklist
 
