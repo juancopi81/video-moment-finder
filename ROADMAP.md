@@ -158,7 +158,7 @@
 
 ### 4.5 Authenticated User Experience
 
-- Pricing page CTAs link to actual Lemon Squeezy checkout URLs (blocked on payment provider activation)
+- Pricing page CTAs link to actual Lemon Squeezy checkout URLs (pending frontend wiring to `POST /billing/checkout`)
 
 ### 4.4 Launch Checklist
 
