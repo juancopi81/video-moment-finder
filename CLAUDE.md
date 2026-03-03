@@ -179,3 +179,6 @@ After completing significant work, update STATUS.md with:
 
 - `VIDEO_JOB_MAX_ATTEMPTS=3` controls terminal failure threshold.
 - `VIDEO_JOB_STALE_LOCK_TIMEOUT_S=600` controls stale `processing` lock recovery.
+- `VIDEO_JOB_IDLE_BACKOFF_MAX_S=15` caps empty-queue exponential polling backoff.
+- `VIDEO_JOB_DB_RETRY_BASE_DELAY_S=1` sets initial retry delay after transient DB transport errors.
+- `VIDEO_JOB_DB_RETRY_MAX_DELAY_S=30` caps transient DB transport retry delay.

@@ -98,7 +98,7 @@ def test_create_checkout_session_builds_expected_payload(
     assert payload["data"]["relationships"]["variant"]["data"]["id"] == variant_id
     assert payload["data"]["attributes"]["checkout_data"]["custom"] == {
         "user_id": "user_abc",
-        "credits": credits,
+        "credits": str(credits),
         "plan": plan,
     }
     assert (
@@ -207,4 +207,3 @@ def test_create_checkout_session_rejects_invalid_test_mode(monkeypatch) -> None:
             credits=5,
             variant_id="var_starter_1",
         )
-

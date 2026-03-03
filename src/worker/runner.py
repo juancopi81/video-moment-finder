@@ -7,6 +7,8 @@ import socket
 import time
 from datetime import datetime, timedelta, timezone
 
+import httpx
+
 from src.api.processing import process_video
 from src.config.env import load_env
 from src.db.supabase import (
@@ -16,6 +18,7 @@ from src.db.supabase import (
     get_video,
     list_stale_processing_video_jobs,
     requeue_video_job,
+    reset_client,
     update_video_status,
 )
 from src.utils.logging import get_logger
@@ -24,6 +27,9 @@ logger = get_logger(__name__)
 DEFAULT_POLL_INTERVAL_S = 3.0
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_STALE_LOCK_TIMEOUT_S = 600.0
+DEFAULT_IDLE_BACKOFF_MAX_S = 15.0
+DEFAULT_DB_RETRY_BASE_DELAY_S = 1.0
+DEFAULT_DB_RETRY_MAX_DELAY_S = 30.0
 STALE_RECOVERY_BATCH_LIMIT = 25
 
 
@@ -283,6 +289,9 @@ def run_forever(
     poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     stale_lock_timeout_s: float = DEFAULT_STALE_LOCK_TIMEOUT_S,
+    idle_backoff_max_s: float = DEFAULT_IDLE_BACKOFF_MAX_S,
+    db_retry_base_delay_s: float = DEFAULT_DB_RETRY_BASE_DELAY_S,
+    db_retry_max_delay_s: float = DEFAULT_DB_RETRY_MAX_DELAY_S,
 ) -> None:
     """Continuously process jobs from queue."""
     if poll_interval_s <= 0:
@@ -291,26 +300,62 @@ def run_forever(
         raise ValueError("max_attempts must be > 0")
     if stale_lock_timeout_s <= 0:
         raise ValueError("stale_lock_timeout_s must be > 0")
+    if idle_backoff_max_s <= 0:
+        raise ValueError("idle_backoff_max_s must be > 0")
+    if db_retry_base_delay_s <= 0:
+        raise ValueError("db_retry_base_delay_s must be > 0")
+    if db_retry_max_delay_s <= 0:
+        raise ValueError("db_retry_max_delay_s must be > 0")
+    if db_retry_max_delay_s < db_retry_base_delay_s:
+        raise ValueError("db_retry_max_delay_s must be >= db_retry_base_delay_s")
 
     current_worker_id = worker_id or _default_worker_id()
     logger.info(
         (
             "Starting worker loop worker_id=%s poll_interval_s=%.1f "
-            "max_attempts=%d stale_lock_timeout_s=%.1f"
+            "max_attempts=%d stale_lock_timeout_s=%.1f "
+            "idle_backoff_max_s=%.1f db_retry_base_delay_s=%.1f "
+            "db_retry_max_delay_s=%.1f"
         ),
         current_worker_id,
         poll_interval_s,
         max_attempts,
         stale_lock_timeout_s,
+        idle_backoff_max_s,
+        db_retry_base_delay_s,
+        db_retry_max_delay_s,
     )
+    idle_sleep_s = poll_interval_s
+    db_retry_delay_s = db_retry_base_delay_s
     while True:
-        processed = run_once(
-            worker_id=current_worker_id,
-            max_attempts=max_attempts,
-            stale_lock_timeout_s=stale_lock_timeout_s,
-        )
+        try:
+            processed = run_once(
+                worker_id=current_worker_id,
+                max_attempts=max_attempts,
+                stale_lock_timeout_s=stale_lock_timeout_s,
+            )
+        except httpx.TransportError as exc:
+            logger.warning(
+                (
+                    "Transient Supabase transport error worker_id=%s "
+                    "error_type=%s retry_in_s=%.1f: %s"
+                ),
+                current_worker_id,
+                type(exc).__name__,
+                db_retry_delay_s,
+                exc,
+            )
+            reset_client()
+            time.sleep(db_retry_delay_s)
+            db_retry_delay_s = min(db_retry_delay_s * 2, db_retry_max_delay_s)
+            continue
+
+        db_retry_delay_s = db_retry_base_delay_s
         if not processed:
-            time.sleep(poll_interval_s)
+            time.sleep(idle_sleep_s)
+            idle_sleep_s = min(idle_sleep_s * 2, idle_backoff_max_s)
+            continue
+        idle_sleep_s = poll_interval_s
 
 
 def _env_int(name: str, default: int) -> int:
@@ -339,6 +384,18 @@ def main() -> None:
     default_stale_lock_timeout_s = _env_float(
         "VIDEO_JOB_STALE_LOCK_TIMEOUT_S",
         DEFAULT_STALE_LOCK_TIMEOUT_S,
+    )
+    default_idle_backoff_max_s = _env_float(
+        "VIDEO_JOB_IDLE_BACKOFF_MAX_S",
+        DEFAULT_IDLE_BACKOFF_MAX_S,
+    )
+    default_db_retry_base_delay_s = _env_float(
+        "VIDEO_JOB_DB_RETRY_BASE_DELAY_S",
+        DEFAULT_DB_RETRY_BASE_DELAY_S,
+    )
+    default_db_retry_max_delay_s = _env_float(
+        "VIDEO_JOB_DB_RETRY_MAX_DELAY_S",
+        DEFAULT_DB_RETRY_MAX_DELAY_S,
     )
 
     parser = argparse.ArgumentParser(description="Video job queue worker")
@@ -393,6 +450,9 @@ def main() -> None:
         poll_interval_s=args.poll_interval,
         max_attempts=args.max_attempts,
         stale_lock_timeout_s=args.stale_lock_timeout,
+        idle_backoff_max_s=default_idle_backoff_max_s,
+        db_retry_base_delay_s=default_db_retry_base_delay_s,
+        db_retry_max_delay_s=default_db_retry_max_delay_s,
     )
 
 
