@@ -88,6 +88,26 @@ def get_client() -> Client:
     return _client
 
 
+def reset_client() -> None:
+    """Drop cached Supabase client and best-effort close HTTP sessions."""
+    global _client
+    client = _client
+    _client = None
+    if client is None:
+        return
+
+    for attr_name in ("postgrest", "storage"):
+        sub_client = getattr(client, attr_name, None)
+        session = getattr(sub_client, "session", None)
+        close = getattr(session, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                # Ignore close failures; a fresh client will be built on next use.
+                pass
+
+
 def _row_to_video(row: dict) -> VideoRecord:
     """Convert database row to VideoRecord."""
     return VideoRecord(

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import httpx
 import pytest
 
 from src.db.supabase import VideoJobRecord, VideoRecord
-from src.worker.runner import run_once
+from src.worker.runner import run_forever, run_once
 
 
 def _job(
@@ -319,3 +320,106 @@ def test_run_once_marks_stale_job_terminal_after_retry_cap(monkeypatch) -> None:
     assert "max attempts" in completions[0][2]
     assert [metric["event"] for metric in metrics] == ["job_terminal_failure"]
     assert metrics[0]["reason"] == "stale_lock_max_attempts"
+
+
+class _StopLoop(Exception):
+    """Test-only exception to break infinite loop worker."""
+
+
+def test_run_forever_retries_on_transient_transport_error(monkeypatch) -> None:
+    run_once_calls: list[str] = []
+    sleep_calls: list[float] = []
+    reset_calls: list[str] = []
+
+    responses: list[object] = [httpx.RemoteProtocolError("goaway"), False]
+
+    def _run_once(**kwargs):
+        run_once_calls.append("called")
+        next_response = responses.pop(0)
+        if isinstance(next_response, Exception):
+            raise next_response
+        return next_response
+
+    def _sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise _StopLoop
+
+    monkeypatch.setattr("src.worker.runner.run_once", _run_once)
+    monkeypatch.setattr("src.worker.runner.reset_client", lambda: reset_calls.append("reset"))
+    monkeypatch.setattr("src.worker.runner.time.sleep", _sleep)
+
+    with pytest.raises(_StopLoop):
+        run_forever(
+            worker_id="worker:test",
+            poll_interval_s=2.0,
+            idle_backoff_max_s=8.0,
+            db_retry_base_delay_s=1.0,
+            db_retry_max_delay_s=8.0,
+        )
+
+    assert len(run_once_calls) == 2
+    assert reset_calls == ["reset"]
+    assert sleep_calls == [1.0, 2.0]
+
+
+def test_run_forever_applies_idle_backoff_until_cap(monkeypatch) -> None:
+    sleep_calls: list[float] = []
+
+    monkeypatch.setattr("src.worker.runner.run_once", lambda **kwargs: False)
+
+    def _sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 4:
+            raise _StopLoop
+
+    monkeypatch.setattr("src.worker.runner.time.sleep", _sleep)
+
+    with pytest.raises(_StopLoop):
+        run_forever(
+            worker_id="worker:test",
+            poll_interval_s=1.0,
+            idle_backoff_max_s=3.0,
+        )
+
+    assert sleep_calls == [1.0, 2.0, 3.0, 3.0]
+
+
+def test_run_forever_resets_idle_backoff_after_processed_job(monkeypatch) -> None:
+    sleep_calls: list[float] = []
+    responses: list[bool] = [False, False, True, False]
+
+    def _run_once(**kwargs) -> bool:
+        return responses.pop(0)
+
+    def _sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 3:
+            raise _StopLoop
+
+    monkeypatch.setattr("src.worker.runner.run_once", _run_once)
+    monkeypatch.setattr("src.worker.runner.time.sleep", _sleep)
+
+    with pytest.raises(_StopLoop):
+        run_forever(
+            worker_id="worker:test",
+            poll_interval_s=1.0,
+            idle_backoff_max_s=8.0,
+        )
+
+    assert sleep_calls == [1.0, 2.0, 1.0]
+
+
+def test_run_forever_reraises_non_transient_exception(monkeypatch) -> None:
+    reset_calls: list[str] = []
+
+    def _raise(**kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("src.worker.runner.run_once", _raise)
+    monkeypatch.setattr("src.worker.runner.reset_client", lambda: reset_calls.append("reset"))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        run_forever(worker_id="worker:test", poll_interval_s=1.0)
+
+    assert reset_calls == []

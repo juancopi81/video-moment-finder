@@ -299,6 +299,11 @@ uv run python -m src.worker.runner --max-attempts 3 --stale-lock-timeout 600
 - Failed jobs are retried up to `VIDEO_JOB_MAX_ATTEMPTS` (default `3`).
 - `processing` jobs with stale locks older than `VIDEO_JOB_STALE_LOCK_TIMEOUT_S` seconds
   (default `600`) are recovered and requeued.
+- Idle polling backs off exponentially from `--poll-interval` to
+  `VIDEO_JOB_IDLE_BACKOFF_MAX_S` seconds (default `15`) when the queue is empty.
+- Transient Supabase transport failures are retried with client reset using exponential
+  delay from `VIDEO_JOB_DB_RETRY_BASE_DELAY_S` (default `1`) up to
+  `VIDEO_JOB_DB_RETRY_MAX_DELAY_S` (default `30`).
 
 ## Quality Checks
 
