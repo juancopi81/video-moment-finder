@@ -8,12 +8,14 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from supabase import create_client, Client
+from src.utils.logging import get_logger
 
 # Video status type
 VideoStatus = Literal["queued", "processing", "ready", "failed"]
 SourceType = Literal["youtube", "upload"]
 JobStatus = Literal["queued", "processing", "completed", "failed"]
 TerminalJobStatus = Literal["completed", "failed"]
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -103,9 +105,21 @@ def reset_client() -> None:
         if callable(close):
             try:
                 close()
-            except Exception:
-                # Ignore close failures; a fresh client will be built on next use.
-                pass
+            except Exception as exc:
+                logger.debug(
+                    "Failed to close Supabase %s session: %s",
+                    attr_name,
+                    exc,
+                    exc_info=True,
+                )
+
+    auth_client = getattr(client, "auth", None)
+    auth_close = getattr(auth_client, "close", None)
+    if callable(auth_close):
+        try:
+            auth_close()
+        except Exception as exc:
+            logger.debug("Failed to close Supabase auth client: %s", exc, exc_info=True)
 
 
 def _row_to_video(row: dict) -> VideoRecord:

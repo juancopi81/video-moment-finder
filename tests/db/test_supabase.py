@@ -210,10 +210,12 @@ def test_apply_billing_credit_grant_calls_rpc(mock_get_client: MagicMock) -> Non
 def test_reset_client_clears_singleton_and_closes_sessions(monkeypatch) -> None:
     postgrest_session = MagicMock()
     storage_session = MagicMock()
+    auth_client = MagicMock()
 
     fake_client = MagicMock()
     fake_client.postgrest = MagicMock(session=postgrest_session)
     fake_client.storage = MagicMock(session=storage_session)
+    fake_client.auth = auth_client
 
     monkeypatch.setattr(supabase_module, "_client", fake_client)
 
@@ -221,16 +223,20 @@ def test_reset_client_clears_singleton_and_closes_sessions(monkeypatch) -> None:
 
     postgrest_session.close.assert_called_once()
     storage_session.close.assert_called_once()
+    auth_client.close.assert_called_once()
     assert supabase_module._client is None
 
 
 def test_reset_client_ignores_session_close_errors(monkeypatch) -> None:
     broken_session = MagicMock()
     broken_session.close.side_effect = RuntimeError("close failed")
+    broken_auth = MagicMock()
+    broken_auth.close.side_effect = RuntimeError("auth close failed")
 
     fake_client = MagicMock()
     fake_client.postgrest = MagicMock(session=broken_session)
     fake_client.storage = MagicMock(session=MagicMock())
+    fake_client.auth = broken_auth
 
     monkeypatch.setattr(supabase_module, "_client", fake_client)
 
