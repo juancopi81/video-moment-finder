@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
+from dataclasses import dataclass
 from urllib import error, request
 
 
@@ -78,7 +78,7 @@ def _checkout_payload(
                 "checkout_data": {
                     "custom": {
                         "user_id": user_id,
-                        "credits": credits,
+                        "credits": str(credits),
                         "plan": plan,
                     }
                 },
@@ -154,7 +154,9 @@ def create_checkout_session(
             f"Lemon Squeezy checkout request failed with status {exc.code}"
         ) from exc
     except error.URLError as exc:
-        raise LemonSqueezyProviderError("Lemon Squeezy checkout request failed") from exc
+        raise LemonSqueezyProviderError(
+            "Lemon Squeezy checkout request failed"
+        ) from exc
 
     try:
         parsed = json.loads(raw_response.decode("utf-8"))
@@ -165,7 +167,9 @@ def create_checkout_session(
 
     data = parsed.get("data")
     if not isinstance(data, dict):
-        raise LemonSqueezyProviderError("Lemon Squeezy checkout response missing data object")
+        raise LemonSqueezyProviderError(
+            "Lemon Squeezy checkout response missing data object"
+        )
     attributes = data.get("attributes")
     if not isinstance(attributes, dict):
         raise LemonSqueezyProviderError(
@@ -181,4 +185,3 @@ def create_checkout_session(
         url=checkout_url.strip(),
         test_mode=settings.test_mode,
     )
-
