@@ -16,7 +16,7 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 4 — Billing status UX**: show clear post-checkout success/failure feedback and refreshed credit balance in dashboard/pricing.
+- **PR 5 — Production hardening (error monitoring)**: add Sentry for API/worker runtime errors.
 
 ## Production Deployment
 
@@ -180,7 +180,7 @@ Run API:
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
-Protected API routes (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/init`, `POST /videos/upload/complete`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`, `POST /billing/checkout`) require `Authorization: Bearer <Clerk JWT>`.
+Protected API routes (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/init`, `POST /videos/upload/complete`, `GET /videos/{id}`, `GET /users/me/videos`, `GET /users/me/billing-summary`, `POST /videos/{id}/search`, `POST /billing/checkout`) require `Authorization: Bearer <Clerk JWT>`.
 
 Video admission policy:
 
@@ -207,6 +207,25 @@ Response contract:
 - `credits`: `5` for starter, `20` for pro
 - `checkout_url`: hosted Lemon Squeezy checkout URL
 - `test_mode`: checkout mode from `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`
+
+Post-checkout UX:
+
+- Configure Lemon Squeezy redirects to include checkout status query params (for example `/dashboard?checkout=success`).
+- Pricing and dashboard pages both render checkout result banners and fetch `GET /users/me/billing-summary` to display refreshed credits.
+
+Authenticated billing summary route:
+
+```bash
+GET /users/me/billing-summary
+```
+
+Response contract:
+
+- `credits_balance`: current paid credit balance.
+- `free_videos_limit`: configured free-trial allowance from `VIDEO_MAX_FREE_VIDEOS`.
+- `free_videos_used`: number of submitted videos for the authenticated user.
+- `free_videos_remaining`: non-negative `limit - used`.
+- `has_unlimited_access`: whether the user has an override in `video_access_overrides`.
 
 Required checkout environment:
 

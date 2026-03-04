@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   SignInButton,
   SignedIn,
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { BillingSummaryCard } from "@/components/billing-summary-card";
+import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { API_URL, parseApiError } from "@/lib/api";
+import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
 
 type VideoStatus = "queued" | "processing" | "ready" | "failed";
 
@@ -43,23 +47,29 @@ function statusBadgeClass(status: VideoStatus): string {
   }
 }
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const { getToken, isLoaded, userId } = useAuth();
+  const searchParams = useSearchParams();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const checkoutStatus = searchParams.get("checkout");
 
   useEffect(() => {
     if (!isLoaded) return;
     if (!userId) {
       setIsLoading(false);
       setVideos([]);
+      setBillingSummary(null);
+      setBillingSummaryError(null);
       return;
     }
 
     let cancelled = false;
 
-    async function loadVideos() {
+    async function loadDashboardData() {
       setIsLoading(true);
       setError(null);
 
@@ -69,19 +79,30 @@ export default function DashboardPage() {
           throw new Error("Please sign in to continue.");
         }
 
-        const response = await fetch(`${API_URL}/users/me/videos`, {
+        const videosResponse = await fetch(`${API_URL}/users/me/videos`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
-        if (!response.ok) {
-          throw new Error(await parseApiError(response, "Failed to load videos"));
+        if (!videosResponse.ok) {
+          throw new Error(await parseApiError(videosResponse, "Failed to load videos"));
         }
 
-        const data: VideoListItem[] = await response.json();
+        const videosData = (await videosResponse.json()) as VideoListItem[];
+        let summary: BillingSummary | null = null;
+        let summaryError: string | null = null;
+        try {
+          summary = await fetchBillingSummary(token);
+        } catch (err) {
+          summary = null;
+          summaryError =
+            err instanceof Error ? err.message : "Failed to load billing summary.";
+        }
         if (!cancelled) {
-          setVideos(data);
+          setVideos(videosData);
+          setBillingSummary(summary);
+          setBillingSummaryError(summaryError);
         }
       } catch (err) {
         if (!cancelled) {
@@ -98,12 +119,12 @@ export default function DashboardPage() {
       }
     }
 
-    void loadVideos();
+    void loadDashboardData();
 
     return () => {
       cancelled = true;
     };
-  }, [getToken, isLoaded, userId]);
+  }, [getToken, isLoaded, userId, checkoutStatus]);
 
   if (!isLoaded) {
     return (
@@ -120,6 +141,12 @@ export default function DashboardPage() {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Track processing status and jump back into search results.
         </p>
+        <CheckoutStatusBanner
+          status={checkoutStatus}
+          successMessage="Checkout completed. Balance refreshed below."
+          cancelMessage="Checkout was canceled. No credits were added."
+          className="mt-1"
+        />
       </div>
 
       {error && (
@@ -146,6 +173,14 @@ export default function DashboardPage() {
 
       <SignedIn>
         <div className="mt-8">
+          {billingSummary && (
+            <BillingSummaryCard summary={billingSummary} className="mb-4" />
+          )}
+          {billingSummaryError && (
+            <p className="mb-4 text-sm text-red-600 dark:text-red-400">
+              {billingSummaryError}
+            </p>
+          )}
           {isLoading ? (
             <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
@@ -198,5 +233,19 @@ export default function DashboardPage() {
         </div>
       </SignedIn>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-zinc-600 dark:text-zinc-400">Loading dashboard...</p>
+        </div>
+      }
+    >
+      <DashboardPageContent />
+    </Suspense>
   );
 }

@@ -148,7 +148,8 @@
 - ~~Checkout session creation endpoint~~ — **done** (2026-03-02)
 - ~~Pricing CTA wired to live checkout~~ — **done** (2026-03-02)
 - ~~Enforce paid credits after free-trial cap~~ — **done** (2026-03-04)
-- **Next milestone**: billing status UX (post-checkout feedback + refreshed credit balance).
+- ~~Billing status UX (post-checkout feedback + refreshed credit balance)~~ — **done** (2026-03-04)
+- **Next milestone**: production hardening slice (error monitoring + rate limiting baseline).
 
 ### 4.3 Production Hardening
 

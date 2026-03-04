@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useSearchParams } from "next/navigation";
+import { BillingSummaryCard } from "@/components/billing-summary-card";
+import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { PricingCard } from "@/components/pricing-card";
 import { API_URL, parseApiError } from "@/lib/api";
+import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
 
 type BillingPlan = "starter" | "pro";
 type TierId = "free" | BillingPlan;
@@ -63,6 +67,9 @@ const tiers: Tier[] = [
   },
 ];
 
+const CHECKOUT_POLL_ATTEMPTS = 4;
+const CHECKOUT_POLL_INTERVAL_MS = 2500;
+
 function ctaLabel({
   isSignedIn,
   paidPlan,
@@ -84,13 +91,81 @@ function ctaLabel({
   return "Buy credits";
 }
 
-export default function PricingPage() {
+function PricingPageContent() {
   const { userId, getToken, isLoaded } = useAuth();
+  const searchParams = useSearchParams();
   const [checkoutPlanLoading, setCheckoutPlanLoading] = useState<BillingPlan | null>(
     null,
   );
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
+  const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
   const isSignedIn = !!userId;
+  const checkoutStatus = searchParams.get("checkout");
+
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+    if (!userId) {
+      setBillingSummary(null);
+      setBillingSummaryError(null);
+      setIsRefreshingBalance(false);
+      return;
+    }
+
+    let cancelled = false;
+    const shouldPollForBalance = checkoutStatus === "success";
+    const pollAttempts = shouldPollForBalance ? CHECKOUT_POLL_ATTEMPTS : 1;
+    setIsRefreshingBalance(shouldPollForBalance);
+
+    async function loadSummary(): Promise<void> {
+      try {
+        const token = await getToken();
+        if (!token) {
+          throw new Error("Please sign in to continue.");
+        }
+        const summary = await fetchBillingSummary(token);
+        if (!cancelled) {
+          setBillingSummary(summary);
+          setBillingSummaryError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setBillingSummaryError(
+            err instanceof Error ? err.message : "Failed to load billing summary.",
+          );
+        }
+      }
+    }
+
+    void loadSummary();
+
+    if (pollAttempts <= 1) {
+      setIsRefreshingBalance(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    let runs = 1;
+    const intervalId = window.setInterval(() => {
+      runs += 1;
+      void loadSummary();
+      if (runs >= pollAttempts) {
+        window.clearInterval(intervalId);
+        if (!cancelled) {
+          setIsRefreshingBalance(false);
+        }
+      }
+    }, CHECKOUT_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [checkoutStatus, getToken, isLoaded, userId]);
 
   async function startCheckout(plan: BillingPlan): Promise<void> {
     setCheckoutError(null);
@@ -147,9 +222,28 @@ export default function PricingPage() {
         <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
           Pay for what you use. Each credit processes one video up to 30 minutes.
         </p>
+        <CheckoutStatusBanner
+          status={checkoutStatus}
+          successMessage="Checkout completed. Your latest credit balance is shown below."
+          cancelMessage="Checkout was canceled. You can try again when ready."
+          className="mt-3"
+        />
+        {isSignedIn && isRefreshingBalance && (
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Refreshing your credit balance...
+          </p>
+        )}
         {checkoutError && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">
             {checkoutError}
+          </p>
+        )}
+        {isSignedIn && billingSummary && (
+          <BillingSummaryCard summary={billingSummary} className="mt-4 text-left" />
+        )}
+        {isSignedIn && billingSummaryError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            {billingSummaryError}
           </p>
         )}
       </div>
@@ -198,5 +292,19 @@ export default function PricingPage() {
         })}
       </div>
     </div>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-5xl px-4 py-16 text-center">
+          <p className="text-zinc-600 dark:text-zinc-400">Loading pricing...</p>
+        </div>
+      }
+    >
+      <PricingPageContent />
+    </Suspense>
   );
 }

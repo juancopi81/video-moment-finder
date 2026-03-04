@@ -400,6 +400,14 @@ class BillingCheckoutResponse(BaseModel):
     test_mode: bool
 
 
+class BillingSummaryResponse(BaseModel):
+    credits_balance: int
+    free_videos_limit: int
+    free_videos_used: int
+    free_videos_remaining: int
+    has_unlimited_access: bool
+
+
 def _video_record_to_response(record: VideoRecord) -> VideoResponse:
     """Convert VideoRecord to VideoResponse."""
     parsed = parse_iso_datetime(record.created_at)
@@ -700,6 +708,28 @@ def list_my_videos(
     """List videos for the authenticated user."""
     records = db_list_videos(user_id=user_id)
     return [_video_record_to_response(record) for record in records]
+
+
+@app.get("/users/me/billing-summary", response_model=BillingSummaryResponse)
+def get_billing_summary(
+    user_id: str = Depends(get_current_user_id),
+) -> BillingSummaryResponse:
+    """Return billing-relevant usage and credit balance for the authenticated user."""
+    max_free_videos = _max_free_videos()
+    used_videos = db_count_videos_for_user(user_id)
+    credit_record = db_get_credits(user_id)
+    has_unlimited_access = db_has_unlimited_video_access(user_id)
+    free_videos_remaining = max(max_free_videos - used_videos, 0)
+    raw_credits_balance = credit_record.balance if credit_record else 0
+    credits_balance = max(raw_credits_balance, 0)
+
+    return BillingSummaryResponse(
+        credits_balance=credits_balance,
+        free_videos_limit=max_free_videos,
+        free_videos_used=used_videos,
+        free_videos_remaining=free_videos_remaining,
+        has_unlimited_access=has_unlimited_access,
+    )
 
 
 @app.post("/videos/{video_id}/search", response_model=VideoSearchResponse)
