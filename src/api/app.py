@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
+from math import ceil
 import os
 import re
 from typing import Literal
@@ -15,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from src.api.auth import get_current_user_id
+from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import search_video as search_video_service
 from src.billing.lemonsqueezy import (
     LemonSqueezyConfigError,
@@ -63,10 +65,17 @@ DEFAULT_BILLING_PLAN_CREDITS: dict[BillingPlanType, int] = {
     "starter": 5,
     "pro": 20,
 }
+DEFAULT_RATE_LIMIT_WINDOW_S = 60
+DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW = 12
+DEFAULT_RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW = 30
+DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW = 60
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
     "pro": "LEMON_SQUEEZY_VARIANT_ID_PRO",
 }
+USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
+SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
+WEBHOOK_RATE_LIMITER = SlidingWindowRateLimiter()
 
 
 def _normalize_cors_origin(origin: str) -> str:
@@ -193,6 +202,82 @@ def _source_url_ttl_s() -> int:
 
 def _upload_url_ttl_s() -> int:
     return get_env_int("VIDEO_UPLOAD_URL_TTL_S", 900)
+
+
+def _rate_limit_window_s() -> int:
+    return get_env_int("RATE_LIMIT_WINDOW_S", DEFAULT_RATE_LIMIT_WINDOW_S)
+
+
+def _user_write_rate_limit() -> int:
+    return get_env_int(
+        "RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW",
+        DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW,
+    )
+
+
+def _search_rate_limit() -> int:
+    return get_env_int(
+        "RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW",
+        DEFAULT_RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW,
+    )
+
+
+def _webhook_rate_limit() -> int:
+    return get_env_int(
+        "RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW",
+        DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW,
+    )
+
+
+def _raise_rate_limit_exceeded(retry_after_s: float) -> None:
+    retry_after_seconds = max(1, ceil(retry_after_s))
+    raise HTTPException(
+        status_code=429,
+        detail="Rate limit exceeded. Please retry later.",
+        headers={"Retry-After": str(retry_after_seconds)},
+    )
+
+
+def _enforce_user_write_rate_limit(user_id: str) -> None:
+    result = USER_WRITE_RATE_LIMITER.check(
+        key=user_id,
+        limit=_user_write_rate_limit(),
+        window_s=_rate_limit_window_s(),
+    )
+    if not result.allowed:
+        _raise_rate_limit_exceeded(result.retry_after_s)
+
+
+def _enforce_search_rate_limit(user_id: str) -> None:
+    result = SEARCH_RATE_LIMITER.check(
+        key=user_id,
+        limit=_search_rate_limit(),
+        window_s=_rate_limit_window_s(),
+    )
+    if not result.allowed:
+        _raise_rate_limit_exceeded(result.retry_after_s)
+
+
+def _request_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded_for:
+        first = forwarded_for.split(",")[0].strip()
+        if first:
+            return first
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _enforce_webhook_rate_limit(request: Request) -> None:
+    ip = _request_ip(request)
+    result = WEBHOOK_RATE_LIMITER.check(
+        key=ip,
+        limit=_webhook_rate_limit(),
+        window_s=_rate_limit_window_s(),
+    )
+    if not result.allowed:
+        _raise_rate_limit_exceeded(result.retry_after_s)
 
 
 def _billing_grant_event_names() -> set[str]:
@@ -482,6 +567,12 @@ def _enqueue_video_or_fail(video_id: str) -> None:
         ) from exc
 
 
+def _reset_rate_limiters_for_tests() -> None:
+    USER_WRITE_RATE_LIMITER.reset()
+    SEARCH_RATE_LIMITER.reset()
+    WEBHOOK_RATE_LIMITER.reset()
+
+
 app = FastAPI(
     title="Video Moment Finder API",
     version="0.2.0",
@@ -502,6 +593,7 @@ def create_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Create a new video and enqueue durable processing job."""
+    _enforce_user_write_rate_limit(user_id)
     _validate_video_duration(request.youtube_url)
     _consume_and_admit_video_processing(user_id)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
@@ -515,6 +607,7 @@ def upload_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Upload a video file and enqueue durable processing job."""
+    _enforce_user_write_rate_limit(user_id)
     if not file.filename and not file.content_type:
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
@@ -580,6 +673,7 @@ def init_upload(
     user_id: str = Depends(get_current_user_id),
 ) -> UploadInitResponse:
     """Generate a presigned upload URL for direct-to-R2 uploads."""
+    _enforce_user_write_rate_limit(user_id)
     if request.content_type and not request.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
     _precheck_video_processing_admission(user_id)
@@ -625,6 +719,7 @@ def complete_upload(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Finalize a presigned upload and enqueue processing."""
+    _enforce_user_write_rate_limit(user_id)
     filename = _sanitize_filename(request.filename)
     key = source_key(request.video_id, filename)
 
@@ -739,6 +834,7 @@ def search_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoSearchResponse:
     """Search for moments in a processed video."""
+    _enforce_search_rate_limit(user_id)
     record = db_get_video(video_id, user_id=user_id)
     if not record:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -790,6 +886,7 @@ def create_billing_checkout(
     user_id: str = Depends(get_current_user_id),
 ) -> BillingCheckoutResponse:
     """Create a Lemon Squeezy checkout session for a paid credit pack."""
+    _enforce_user_write_rate_limit(user_id)
     credits = DEFAULT_BILLING_PLAN_CREDITS[request.plan]
     try:
         session = create_checkout_session(
@@ -825,6 +922,7 @@ def create_billing_checkout(
 @app.post("/webhooks/lemonsqueezy", response_model=BillingWebhookResponse)
 async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
     """Handle Lemon Squeezy webhook events and apply idempotent credit grants."""
+    _enforce_webhook_rate_limit(request)
     signature = request.headers.get("x-signature", "").strip()
     if not signature:
         raise HTTPException(status_code=401, detail="Missing webhook signature")

@@ -9,7 +9,13 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app, _allowed_cors_origin_regex, _allowed_cors_origins, _video_record_to_response
+from src.api.app import (
+    _allowed_cors_origin_regex,
+    _allowed_cors_origins,
+    _reset_rate_limiters_for_tests,
+    _video_record_to_response,
+    app,
+)
 from src.api.auth import get_current_user_id
 from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
@@ -64,8 +70,10 @@ def _credit_record(balance: int) -> CreditRecord:
 @pytest.fixture(autouse=True)
 def _clear_dependency_overrides() -> None:
     app.dependency_overrides.clear()
+    _reset_rate_limiters_for_tests()
     yield
     app.dependency_overrides.clear()
+    _reset_rate_limiters_for_tests()
 
 
 @pytest.fixture(autouse=True)
@@ -286,6 +294,39 @@ def test_create_video_consumes_paid_credit_when_free_limit_reached(monkeypatch) 
 
     assert response.status_code == 200
     assert response.json()["id"] == "video_paid"
+
+
+def test_create_video_returns_429_when_write_rate_limit_exceeded(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+    monkeypatch.setenv("RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW", "1")
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_video",
+        lambda youtube_url, user_id=None, status="queued": _video_record(
+            "video_rate_limited",
+            status=status,
+        ),
+    )
+    monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
+
+    first = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+    second = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
+    assert second.headers.get("retry-after") is not None
 
 
 def test_create_video_allows_unlimited_user_override(monkeypatch) -> None:
@@ -1474,6 +1515,42 @@ def test_lemonsqueezy_webhook_returns_duplicate_as_not_granted(monkeypatch) -> N
     assert body["processed"] is True
     assert body["granted"] is False
     assert body["reason"] == "Event already applied"
+
+
+def test_lemonsqueezy_webhook_returns_429_when_ip_rate_limit_exceeded(monkeypatch) -> None:
+    client = TestClient(app)
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+    monkeypatch.setenv("RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW", "1")
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "user_123", "credits": 5},
+        },
+        "data": {"id": "order_123"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    class _Result:
+        applied = True
+
+    monkeypatch.setattr("src.api.app.db_apply_billing_credit_grant", lambda **_kwargs: _Result())
+
+    first = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature, "x-forwarded-for": "198.51.100.10"},
+    )
+    second = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature, "x-forwarded-for": "198.51.100.10"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
+    assert second.headers.get("retry-after") is not None
 
 
 def test_allowed_cors_origins_uses_env(monkeypatch) -> None:

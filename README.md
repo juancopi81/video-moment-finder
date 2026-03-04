@@ -65,6 +65,10 @@ Optional production tuning:
 - `VIDEO_MAX_FREE_VIDEOS`
 - `VIDEO_SOURCE_URL_TTL_S`
 - `VIDEO_UPLOAD_URL_TTL_S`
+- `RATE_LIMIT_WINDOW_S`
+- `RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW`
+- `RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW`
+- `RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW`
 
 ### Railway (Worker)
 
@@ -149,6 +153,10 @@ Backend (`.env`):
 - `VIDEO_MAX_FREE_VIDEOS` (max free videos per user before paid-credit enforcement; default `1`)
 - `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)
 - `VIDEO_UPLOAD_URL_TTL_S` (signed upload URL lifetime in seconds for direct-to-R2 uploads; default `900`)
+- `RATE_LIMIT_WINDOW_S` (shared rate-limit window in seconds; default `60`)
+- `RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW` (per-user write budget for `POST /videos`, upload routes, and `POST /billing/checkout`; default `12`)
+- `RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW` (per-user budget for `POST /videos/{id}/search`; default `30`)
+- `RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW` (per-source-IP budget for `POST /webhooks/lemonsqueezy`; default `60`)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
 - `R2_*` (required for uploaded video ingest and thumbnails)
 
@@ -188,6 +196,7 @@ Video admission policy:
 - Once free quota is exhausted, processing admission (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/complete`) consumes one credit atomically.
 - If no credits are available after free quota, these endpoints return `402` with `Insufficient credits. Buy credits to process another video.`
 - `POST /videos/upload/init` is a non-consuming precheck and only verifies eligibility.
+- When configured per-window budgets are exhausted, the API returns `429` with `Retry-After` headers for protected write/search/webhook endpoints.
 
 Authenticated billing checkout route:
 

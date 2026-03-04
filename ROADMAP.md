@@ -154,7 +154,7 @@
 ### 4.3 Production Hardening
 
 - Error monitoring (Sentry or similar)
-- Rate limiting
+- ~~Rate limiting~~ — **done** (2026-03-04)
 - Input validation (URL format, video length check)
 - Enable Supabase Row Level Security (RLS) on `public.videos`, `public.credits`, and `public.video_jobs`, with per-user access policies
 - Resolve Supabase "Function Search Path Mutable" warnings by setting explicit `search_path` on custom DB functions (including update timestamp trigger functions)
