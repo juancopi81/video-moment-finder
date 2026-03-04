@@ -57,7 +57,6 @@ class ProcessingCreditConsumeResult:
     """Result of consuming one processing credit."""
 
     allowed: bool
-    charged: bool
     remaining_balance: int
 
 
@@ -178,6 +177,13 @@ def _row_to_video_job(row: dict) -> VideoJobRecord:
 def _utc_now_iso() -> str:
     """Return current UTC timestamp in ISO 8601 format."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def _rpc_first_item(raw: object) -> object:
+    """Return the first RPC payload item when Supabase wraps responses in a list."""
+    if isinstance(raw, list):
+        return raw[0] if raw else None
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -573,12 +579,14 @@ def consume_processing_credit(user_id: str) -> ProcessingCreditConsumeResult:
         "consume_processing_credit",
         {"p_user_id": user_id},
     ).execute()
-    raw = result.data
-    if isinstance(raw, list):
-        row = raw[0] if raw else {}
-    elif isinstance(raw, dict):
-        row = raw
+    first_item = _rpc_first_item(result.data)
+    if isinstance(first_item, dict):
+        row = first_item
     else:
+        logger.warning(
+            "Unexpected consume_processing_credit RPC response shape: %s",
+            type(first_item).__name__,
+        )
         row = {}
 
     remaining_raw = row.get("remaining_balance", 0)
@@ -589,7 +597,6 @@ def consume_processing_credit(user_id: str) -> ProcessingCreditConsumeResult:
 
     return ProcessingCreditConsumeResult(
         allowed=bool(row.get("allowed")),
-        charged=bool(row.get("charged")),
         remaining_balance=remaining,
     )
 
@@ -631,9 +638,5 @@ def apply_billing_credit_grant(
             "p_payload": payload or {},
         },
     ).execute()
-    raw = result.data
-    if isinstance(raw, list):
-        applied = bool(raw[0]) if raw else False
-    else:
-        applied = bool(raw)
+    applied = bool(_rpc_first_item(result.data))
     return BillingCreditGrantResult(applied=applied)

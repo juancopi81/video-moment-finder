@@ -193,7 +193,6 @@ def test_consume_processing_credit_calls_rpc(mock_get_client: MagicMock) -> None
     result = consume_processing_credit("user_123")
 
     assert result.allowed is True
-    assert result.charged is True
     assert result.remaining_balance == 4
     mock_client.rpc.assert_called_once_with(
         "consume_processing_credit",
@@ -212,7 +211,27 @@ def test_consume_processing_credit_parses_denied_response(mock_get_client: Magic
     result = consume_processing_credit("user_123")
 
     assert result.allowed is False
-    assert result.charged is False
+    assert result.remaining_balance == 0
+
+
+@patch("src.db.supabase.get_client")
+def test_consume_processing_credit_warns_on_unexpected_response_shape(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = "unexpected"
+    warning = MagicMock()
+    original_warning = supabase_module.logger.warning
+    supabase_module.logger.warning = warning
+    try:
+        result = consume_processing_credit("user_123")
+    finally:
+        supabase_module.logger.warning = original_warning
+
+    warning.assert_called_once()
+    assert "Unexpected consume_processing_credit RPC response shape" in warning.call_args.args[0]
+    assert result.allowed is False
     assert result.remaining_balance == 0
 
 

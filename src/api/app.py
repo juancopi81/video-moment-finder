@@ -169,26 +169,34 @@ def _validate_video_duration(youtube_url: str) -> None:
         )
 
 
-def _enforce_video_processing_admission(
-    user_id: str,
-    *,
-    consume_credit: bool,
-) -> None:
+def _is_video_processing_free_for_user(user_id: str) -> bool:
     if db_has_unlimited_video_access(user_id):
-        return
+        return True
     max_videos = _max_free_videos()
     current_count = db_count_videos_for_user(user_id)
     if current_count < max_videos:
-        return
+        return True
+    return False
 
-    if consume_credit:
-        credit_result = db_consume_processing_credit(user_id)
-        if credit_result.allowed and credit_result.charged:
-            return
-    else:
-        credit_record = db_get_credits(user_id)
-        if credit_record is not None and credit_record.balance > 0:
-            return
+
+def _precheck_video_processing_admission(user_id: str) -> None:
+    if _is_video_processing_free_for_user(user_id):
+        return
+    credit_record = db_get_credits(user_id)
+    if credit_record is not None and credit_record.balance > 0:
+        return
+    raise HTTPException(
+        status_code=402,
+        detail=INSUFFICIENT_CREDITS_DETAIL,
+    )
+
+
+def _consume_and_admit_video_processing(user_id: str) -> None:
+    if _is_video_processing_free_for_user(user_id):
+        return
+    credit_result = db_consume_processing_credit(user_id)
+    if credit_result.allowed:
+        return
 
     raise HTTPException(
         status_code=402,
@@ -506,7 +514,7 @@ def create_video(
 ) -> VideoResponse:
     """Create a new video and enqueue durable processing job."""
     _validate_video_duration(request.youtube_url)
-    _enforce_video_processing_admission(user_id, consume_credit=True)
+    _consume_and_admit_video_processing(user_id)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
     try:
         enqueue_video_job(record.id)
@@ -539,6 +547,7 @@ def upload_video(
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
+    _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -566,7 +575,20 @@ def upload_video(
             detail="Failed to store uploaded video",
         ) from exc
 
-    _enforce_video_processing_admission(user_id, consume_credit=True)
+    try:
+        _consume_and_admit_video_processing(user_id)
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            try:
+                store.delete_source_object(upload_result.key)
+            except R2StorageError as cleanup_exc:
+                logger.warning(
+                    "Failed to cleanup uploaded source video for user_id=%s key=%s: %s",
+                    user_id,
+                    upload_result.key,
+                    cleanup_exc,
+                )
+        raise
 
     record = db_create_uploaded_video(
         video_id=video_id,
@@ -604,7 +626,7 @@ def init_upload(
     """Generate a presigned upload URL for direct-to-R2 uploads."""
     if request.content_type and not request.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
-    _enforce_video_processing_admission(user_id, consume_credit=False)
+    _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -658,6 +680,7 @@ def complete_upload(
     )
     if existing is not None:
         return _video_record_to_response(existing)
+    _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -682,7 +705,7 @@ def complete_upload(
             detail="Failed to verify upload",
         ) from exc
 
-    _enforce_video_processing_admission(user_id, consume_credit=True)
+    _consume_and_admit_video_processing(user_id)
 
     try:
         record = db_create_uploaded_video(
