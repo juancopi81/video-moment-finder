@@ -179,21 +179,19 @@ def _is_video_processing_free_for_user(user_id: str) -> bool:
     return False
 
 
-def _precheck_video_processing_admission(user_id: str) -> None:
+def _precheck_video_processing_admission(user_id: str) -> bool:
     if _is_video_processing_free_for_user(user_id):
-        return
+        return False
     credit_record = db_get_credits(user_id)
     if credit_record is not None and credit_record.balance > 0:
-        return
+        return True
     raise HTTPException(
         status_code=402,
         detail=INSUFFICIENT_CREDITS_DETAIL,
     )
 
 
-def _consume_and_admit_video_processing(user_id: str) -> None:
-    if _is_video_processing_free_for_user(user_id):
-        return
+def _consume_processing_credit_or_raise(user_id: str) -> None:
     credit_result = db_consume_processing_credit(user_id)
     if credit_result.allowed:
         return
@@ -203,6 +201,11 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
         detail=INSUFFICIENT_CREDITS_DETAIL,
     )
 
+
+def _consume_and_admit_video_processing(user_id: str) -> None:
+    if _is_video_processing_free_for_user(user_id):
+        return
+    _consume_processing_credit_or_raise(user_id)
 
 def _source_url_ttl_s() -> int:
     raw = os.environ.get("VIDEO_SOURCE_URL_TTL_S", "").strip()
@@ -547,7 +550,7 @@ def upload_video(
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
-    _precheck_video_processing_admission(user_id)
+    requires_credit = _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -576,7 +579,8 @@ def upload_video(
         ) from exc
 
     try:
-        _consume_and_admit_video_processing(user_id)
+        if requires_credit:
+            _consume_processing_credit_or_raise(user_id)
     except HTTPException as exc:
         if exc.status_code == 402:
             try:
@@ -680,7 +684,7 @@ def complete_upload(
     )
     if existing is not None:
         return _video_record_to_response(existing)
-    _precheck_video_processing_admission(user_id)
+    requires_credit = _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -705,7 +709,8 @@ def complete_upload(
             detail="Failed to verify upload",
         ) from exc
 
-    _consume_and_admit_video_processing(user_id)
+    if requires_credit:
+        _consume_processing_credit_or_raise(user_id)
 
     try:
         record = db_create_uploaded_video(
