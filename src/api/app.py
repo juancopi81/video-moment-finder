@@ -720,7 +720,8 @@ def get_billing_summary(
     credit_record = db_get_credits(user_id)
     has_unlimited_access = db_has_unlimited_video_access(user_id)
     free_videos_remaining = max(max_free_videos - used_videos, 0)
-    credits_balance = max((credit_record.balance if credit_record else 0), 0)
+    raw_credits_balance = credit_record.balance if credit_record else 0
+    credits_balance = max(raw_credits_balance, 0)
 
     return BillingSummaryResponse(
         credits_balance=credits_balance,

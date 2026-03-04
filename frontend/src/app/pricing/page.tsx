@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
+import { BillingSummaryCard } from "@/components/billing-summary-card";
+import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { PricingCard } from "@/components/pricing-card";
 import { API_URL, parseApiError } from "@/lib/api";
 import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
@@ -65,6 +67,9 @@ const tiers: Tier[] = [
   },
 ];
 
+const CHECKOUT_POLL_ATTEMPTS = 4;
+const CHECKOUT_POLL_INTERVAL_MS = 2500;
+
 function ctaLabel({
   isSignedIn,
   paidPlan,
@@ -95,6 +100,7 @@ function PricingPageContent() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
   const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
+  const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
   const isSignedIn = !!userId;
   const checkoutStatus = searchParams.get("checkout");
 
@@ -105,14 +111,16 @@ function PricingPageContent() {
     if (!userId) {
       setBillingSummary(null);
       setBillingSummaryError(null);
+      setIsRefreshingBalance(false);
       return;
     }
 
     let cancelled = false;
-    const pollAttempts = checkoutStatus === "success" ? 4 : 1;
-    const pollIntervalMs = 2500;
+    const shouldPollForBalance = checkoutStatus === "success";
+    const pollAttempts = shouldPollForBalance ? CHECKOUT_POLL_ATTEMPTS : 1;
+    setIsRefreshingBalance(shouldPollForBalance);
 
-    const loadSummary = async (): Promise<void> => {
+    async function loadSummary(): Promise<void> {
       try {
         const token = await getToken();
         if (!token) {
@@ -130,11 +138,12 @@ function PricingPageContent() {
           );
         }
       }
-    };
+    }
 
     void loadSummary();
 
     if (pollAttempts <= 1) {
+      setIsRefreshingBalance(false);
       return () => {
         cancelled = true;
       };
@@ -146,8 +155,11 @@ function PricingPageContent() {
       void loadSummary();
       if (runs >= pollAttempts) {
         window.clearInterval(intervalId);
+        if (!cancelled) {
+          setIsRefreshingBalance(false);
+        }
       }
-    }, pollIntervalMs);
+    }, CHECKOUT_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
@@ -210,14 +222,15 @@ function PricingPageContent() {
         <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
           Pay for what you use. Each credit processes one video up to 30 minutes.
         </p>
-        {checkoutStatus === "success" && (
-          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-            Checkout completed. Your latest credit balance is shown below.
-          </p>
-        )}
-        {checkoutStatus === "cancel" && (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-            Checkout was canceled. You can try again when ready.
+        <CheckoutStatusBanner
+          status={checkoutStatus}
+          successMessage="Checkout completed. Your latest credit balance is shown below."
+          cancelMessage="Checkout was canceled. You can try again when ready."
+          className="mt-3"
+        />
+        {isSignedIn && isRefreshingBalance && (
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Refreshing your credit balance...
           </p>
         )}
         {checkoutError && (
@@ -226,16 +239,7 @@ function PricingPageContent() {
           </p>
         )}
         {isSignedIn && billingSummary && (
-          <div className="mt-4 rounded-xl border border-zinc-200 bg-surface-card px-4 py-3 text-left text-sm dark:border-zinc-800">
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">
-              Credits available: {billingSummary.credits_balance}
-            </p>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              {billingSummary.has_unlimited_access
-                ? "Unlimited access enabled."
-                : `Free trial remaining: ${billingSummary.free_videos_remaining}/${billingSummary.free_videos_limit}`}
-            </p>
-          </div>
+          <BillingSummaryCard summary={billingSummary} className="mt-4 text-left" />
         )}
         {isSignedIn && billingSummaryError && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">

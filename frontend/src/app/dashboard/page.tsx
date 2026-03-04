@@ -9,6 +9,8 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { BillingSummaryCard } from "@/components/billing-summary-card";
+import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { API_URL, parseApiError } from "@/lib/api";
 import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
 
@@ -50,6 +52,7 @@ function DashboardPageContent() {
   const searchParams = useSearchParams();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const checkoutStatus = searchParams.get("checkout");
@@ -59,6 +62,8 @@ function DashboardPageContent() {
     if (!userId) {
       setIsLoading(false);
       setVideos([]);
+      setBillingSummary(null);
+      setBillingSummaryError(null);
       return;
     }
 
@@ -86,14 +91,18 @@ function DashboardPageContent() {
 
         const videosData = (await videosResponse.json()) as VideoListItem[];
         let summary: BillingSummary | null = null;
+        let summaryError: string | null = null;
         try {
           summary = await fetchBillingSummary(token);
-        } catch {
+        } catch (err) {
           summary = null;
+          summaryError =
+            err instanceof Error ? err.message : "Failed to load billing summary.";
         }
         if (!cancelled) {
           setVideos(videosData);
           setBillingSummary(summary);
+          setBillingSummaryError(summaryError);
         }
       } catch (err) {
         if (!cancelled) {
@@ -132,16 +141,12 @@ function DashboardPageContent() {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Track processing status and jump back into search results.
         </p>
-        {checkoutStatus === "success" && (
-          <p className="mt-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-            Checkout completed. Balance refreshed below.
-          </p>
-        )}
-        {checkoutStatus === "cancel" && (
-          <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-            Checkout was canceled. No credits were added.
-          </p>
-        )}
+        <CheckoutStatusBanner
+          status={checkoutStatus}
+          successMessage="Checkout completed. Balance refreshed below."
+          cancelMessage="Checkout was canceled. No credits were added."
+          className="mt-1"
+        />
       </div>
 
       {error && (
@@ -169,16 +174,12 @@ function DashboardPageContent() {
       <SignedIn>
         <div className="mt-8">
           {billingSummary && (
-            <div className="mb-4 rounded-xl border border-zinc-200 bg-surface-card px-4 py-3 text-sm dark:border-zinc-800">
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                Credits available: {billingSummary.credits_balance}
-              </p>
-              <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-                {billingSummary.has_unlimited_access
-                  ? "Unlimited access enabled."
-                  : `Free trial remaining: ${billingSummary.free_videos_remaining}/${billingSummary.free_videos_limit}`}
-              </p>
-            </div>
+            <BillingSummaryCard summary={billingSummary} className="mb-4" />
+          )}
+          {billingSummaryError && (
+            <p className="mb-4 text-sm text-red-600 dark:text-red-400">
+              {billingSummaryError}
+            </p>
           )}
           {isLoading ? (
             <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">

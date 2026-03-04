@@ -445,6 +445,26 @@ def test_billing_summary_clamps_non_positive_remaining(monkeypatch) -> None:
     }
 
 
+def test_billing_summary_clamps_negative_credit_balance(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: _credit_record(-3))
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
+    monkeypatch.setattr("src.api.app._max_free_videos", lambda: 5)
+
+    response = client.get("/users/me/billing-summary")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "credits_balance": 0,
+        "free_videos_limit": 5,
+        "free_videos_used": 1,
+        "free_videos_remaining": 4,
+        "has_unlimited_access": False,
+    }
+
+
 def test_get_video_includes_source_url_for_uploaded_video(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
