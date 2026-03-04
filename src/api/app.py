@@ -1,7 +1,7 @@
 """FastAPI app with real Supabase, Modal, and Qdrant integrations."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
@@ -39,6 +39,8 @@ from src.db.supabase import (
 from src.storage.config import R2Config, StorageConfigError
 from src.storage.r2 import R2Store, R2StorageError, source_key
 from src.storage.qdrant import QdrantStorageError
+from src.utils.datetime import parse_iso_datetime
+from src.utils.env import get_env_int
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
 from src.video.youtube import normalize_youtube_url
@@ -116,33 +118,11 @@ def _allowed_cors_origin_regex() -> str | None:
 
 
 def _max_video_duration_s() -> int:
-    raw = os.environ.get("VIDEO_MAX_DURATION_S", "").strip()
-    if not raw:
-        return DEFAULT_MAX_VIDEO_DURATION_S
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning("Invalid VIDEO_MAX_DURATION_S=%r; using default", raw)
-        return DEFAULT_MAX_VIDEO_DURATION_S
-    if value <= 0:
-        logger.warning("VIDEO_MAX_DURATION_S must be positive; using default")
-        return DEFAULT_MAX_VIDEO_DURATION_S
-    return value
+    return get_env_int("VIDEO_MAX_DURATION_S", DEFAULT_MAX_VIDEO_DURATION_S)
 
 
 def _max_free_videos() -> int:
-    raw = os.environ.get("VIDEO_MAX_FREE_VIDEOS", "").strip()
-    if not raw:
-        return DEFAULT_MAX_FREE_VIDEOS
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning("Invalid VIDEO_MAX_FREE_VIDEOS=%r; using default", raw)
-        return DEFAULT_MAX_FREE_VIDEOS
-    if value <= 0:
-        logger.warning("VIDEO_MAX_FREE_VIDEOS must be positive; using default")
-        return DEFAULT_MAX_FREE_VIDEOS
-    return value
+    return get_env_int("VIDEO_MAX_FREE_VIDEOS", DEFAULT_MAX_FREE_VIDEOS)
 
 
 def _validate_video_duration(youtube_url: str) -> None:
@@ -208,33 +188,11 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
 
 
 def _source_url_ttl_s() -> int:
-    raw = os.environ.get("VIDEO_SOURCE_URL_TTL_S", "").strip()
-    if not raw:
-        return 3600
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning("Invalid VIDEO_SOURCE_URL_TTL_S=%r; using default", raw)
-        return 3600
-    if value <= 0:
-        logger.warning("VIDEO_SOURCE_URL_TTL_S must be positive; using default")
-        return 3600
-    return value
+    return get_env_int("VIDEO_SOURCE_URL_TTL_S", 3600)
 
 
 def _upload_url_ttl_s() -> int:
-    raw = os.environ.get("VIDEO_UPLOAD_URL_TTL_S", "").strip()
-    if not raw:
-        return 900
-    try:
-        value = int(raw)
-    except ValueError:
-        logger.warning("Invalid VIDEO_UPLOAD_URL_TTL_S=%r; using default", raw)
-        return 900
-    if value <= 0:
-        logger.warning("VIDEO_UPLOAD_URL_TTL_S must be positive; using default")
-        return 900
-    return value
+    return get_env_int("VIDEO_UPLOAD_URL_TTL_S", 900)
 
 
 def _billing_grant_event_names() -> set[str]:
@@ -442,15 +400,14 @@ class BillingCheckoutResponse(BaseModel):
     test_mode: bool
 
 
-def _parse_iso_datetime(iso_string: str | None) -> datetime:
-    """Parse ISO 8601 datetime string from Supabase."""
-    if not iso_string:
-        return datetime.now()
-    return datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
-
-
 def _video_record_to_response(record: VideoRecord) -> VideoResponse:
     """Convert VideoRecord to VideoResponse."""
+    parsed = parse_iso_datetime(record.created_at)
+    if parsed is None and record.created_at:
+        # parse_iso_datetime already logged a warning for the bad value
+        parsed = datetime.now(timezone.utc)
+    created_at = parsed or datetime.now(timezone.utc)
+
     return VideoResponse(
         id=record.id,
         youtube_url=record.youtube_url,
@@ -458,7 +415,7 @@ def _video_record_to_response(record: VideoRecord) -> VideoResponse:
         source_type=record.source_type,
         source_filename=record.source_filename,
         source_url=_source_url_for_record(record),
-        created_at=_parse_iso_datetime(record.created_at),
+        created_at=created_at,
         error_message=record.error_message,
     )
 
@@ -496,6 +453,27 @@ def _get_idempotent_upload_record(
     return existing
 
 
+def _enqueue_video_or_fail(video_id: str) -> None:
+    """Enqueue a video processing job, marking the video as failed on error."""
+    try:
+        enqueue_video_job(video_id)
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue processing job for video_id=%s: %s",
+            video_id,
+            exc,
+        )
+        update_video_status(
+            video_id,
+            "failed",
+            error_message=f"Failed to enqueue processing job: {exc}",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to enqueue processing job",
+        ) from exc
+
+
 app = FastAPI(
     title="Video Moment Finder API",
     version="0.2.0",
@@ -519,24 +497,7 @@ def create_video(
     _validate_video_duration(request.youtube_url)
     _consume_and_admit_video_processing(user_id)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
-    try:
-        enqueue_video_job(record.id)
-    except Exception as exc:
-        logger.exception(
-            "Failed to enqueue processing job for video_id=%s: %s",
-            record.id,
-            exc,
-        )
-        update_video_status(
-            record.id,
-            "failed",
-            error_message=f"Failed to enqueue processing job: {exc}",
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to enqueue processing job",
-        ) from exc
-
+    _enqueue_video_or_fail(record.id)
     return _video_record_to_response(record)
 
 
@@ -601,24 +562,7 @@ def upload_video(
         user_id=user_id,
         status="queued",
     )
-    try:
-        enqueue_video_job(record.id)
-    except Exception as exc:
-        logger.exception(
-            "Failed to enqueue processing job for video_id=%s: %s",
-            record.id,
-            exc,
-        )
-        update_video_status(
-            record.id,
-            "failed",
-            error_message=f"Failed to enqueue processing job: {exc}",
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to enqueue processing job",
-        ) from exc
-
+    _enqueue_video_or_fail(record.id)
     return _video_record_to_response(record)
 
 
@@ -732,24 +676,7 @@ def complete_upload(
             return _video_record_to_response(existing)
         raise
 
-    try:
-        enqueue_video_job(record.id)
-    except Exception as exc:
-        logger.exception(
-            "Failed to enqueue processing job for video_id=%s: %s",
-            record.id,
-            exc,
-        )
-        update_video_status(
-            record.id,
-            "failed",
-            error_message=f"Failed to enqueue processing job: {exc}",
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to enqueue processing job",
-        ) from exc
-
+    _enqueue_video_or_fail(record.id)
     return _video_record_to_response(record)
 
 
