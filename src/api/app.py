@@ -174,12 +174,11 @@ def _is_video_processing_free_for_user(user_id: str) -> bool:
         return True
     max_videos = _max_free_videos()
     current_count = db_count_videos_for_user(user_id)
-    if current_count < max_videos:
-        return True
-    return False
+    return current_count < max_videos
 
 
 def _precheck_video_processing_admission(user_id: str) -> bool:
+    """Raise 402 when admission fails; return whether paid credit consume is needed."""
     if _is_video_processing_free_for_user(user_id):
         return False
     credit_record = db_get_credits(user_id)
@@ -206,6 +205,7 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
     if _is_video_processing_free_for_user(user_id):
         return
     _consume_processing_credit_or_raise(user_id)
+
 
 def _source_url_ttl_s() -> int:
     raw = os.environ.get("VIDEO_SOURCE_URL_TTL_S", "").strip()

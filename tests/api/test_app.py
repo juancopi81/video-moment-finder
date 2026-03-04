@@ -601,25 +601,11 @@ def test_upload_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch)
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
-    upload_called = {"value": False}
-
-    class FakeR2Store:
-        def __init__(self, *_args, **_kwargs) -> None:
-            pass
-
-        def upload_source_video(self, *args, **kwargs):
-            upload_called["value"] = True
-
-            class Result:
-                key = "source/video_123/upload.mp4"
-
-            return Result()
 
     monkeypatch.setattr(
         "src.api.app.R2Config.from_env",
         lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
     )
-    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr(
         "src.api.app.db_create_uploaded_video",
         lambda *args, **kwargs: (_ for _ in ()).throw(
@@ -632,7 +618,6 @@ def test_upload_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch)
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
-    assert upload_called["value"] is False
     assert response.status_code == 402
     assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
 
