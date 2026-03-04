@@ -53,6 +53,15 @@ class BillingCreditGrantResult:
 
 
 @dataclass
+class ProcessingCreditConsumeResult:
+    """Result of consuming one processing credit."""
+
+    allowed: bool
+    charged: bool
+    remaining_balance: int
+
+
+@dataclass
 class VideoJobRecord:
     """Video processing job record."""
 
@@ -552,6 +561,37 @@ def update_credits(user_id: str, balance: int) -> CreditRecord:
     if not result.data:
         raise RuntimeError("Failed to upsert credit record")
     return _row_to_credit(result.data[0])
+
+
+def consume_processing_credit(user_id: str) -> ProcessingCreditConsumeResult:
+    """Consume one processing credit atomically."""
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+
+    client = get_client()
+    result = client.rpc(
+        "consume_processing_credit",
+        {"p_user_id": user_id},
+    ).execute()
+    raw = result.data
+    if isinstance(raw, list):
+        row = raw[0] if raw else {}
+    elif isinstance(raw, dict):
+        row = raw
+    else:
+        row = {}
+
+    remaining_raw = row.get("remaining_balance", 0)
+    try:
+        remaining = int(remaining_raw)
+    except (TypeError, ValueError):
+        remaining = 0
+
+    return ProcessingCreditConsumeResult(
+        allowed=bool(row.get("allowed")),
+        charged=bool(row.get("charged")),
+        remaining_balance=remaining,
+    )
 
 
 def apply_billing_credit_grant(

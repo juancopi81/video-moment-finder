@@ -147,7 +147,8 @@
 - ~~Webhook signature verification and idempotent credit grants~~ — **done** (2026-02-25)
 - ~~Checkout session creation endpoint~~ — **done** (2026-03-02)
 - ~~Pricing CTA wired to live checkout~~ — **done** (2026-03-02)
-- **Next milestone**: enforce paid credits after free-trial cap.
+- ~~Enforce paid credits after free-trial cap~~ — **done** (2026-03-04)
+- **Next milestone**: billing status UX (post-checkout feedback + refreshed credit balance).
 
 ### 4.3 Production Hardening
 

@@ -13,6 +13,7 @@ from src.db.supabase import (
     _row_to_video,
     _row_to_credit,
     apply_billing_credit_grant,
+    consume_processing_credit,
     count_videos_for_user,
     create_video,
     get_video,
@@ -174,6 +175,45 @@ def test_update_credits_rejects_negative_balance() -> None:
     """Test that update_credits raises ValueError for negative balance."""
     with pytest.raises(ValueError, match="cannot be negative"):
         update_credits("user_123", -10)
+
+
+def test_consume_processing_credit_rejects_empty_user_id() -> None:
+    with pytest.raises(ValueError, match="user_id must be non-empty"):
+        consume_processing_credit("   ")
+
+
+@patch("src.db.supabase.get_client")
+def test_consume_processing_credit_calls_rpc(mock_get_client: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = [
+        {"allowed": True, "charged": True, "remaining_balance": 4}
+    ]
+
+    result = consume_processing_credit("user_123")
+
+    assert result.allowed is True
+    assert result.charged is True
+    assert result.remaining_balance == 4
+    mock_client.rpc.assert_called_once_with(
+        "consume_processing_credit",
+        {"p_user_id": "user_123"},
+    )
+
+
+@patch("src.db.supabase.get_client")
+def test_consume_processing_credit_parses_denied_response(mock_get_client: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = [
+        {"allowed": False, "charged": False, "remaining_balance": 0}
+    ]
+
+    result = consume_processing_credit("user_123")
+
+    assert result.allowed is False
+    assert result.charged is False
+    assert result.remaining_balance == 0
 
 
 def test_apply_billing_credit_grant_rejects_non_positive_credits() -> None:
