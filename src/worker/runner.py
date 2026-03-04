@@ -11,6 +11,8 @@ import httpx
 
 from src.api.processing import process_video
 from src.config.env import load_env
+from src.utils.datetime import parse_iso_datetime
+from src.utils.env import get_env_float, get_env_int
 from src.db.supabase import (
     VideoJobRecord,
     claim_next_video_job,
@@ -48,18 +50,6 @@ def _log_worker_metric(event: str, **fields: object) -> None:
     logger.info("worker_metric %s", " ".join(parts))
 
 
-def _parse_iso_datetime(iso_value: str | None) -> datetime | None:
-    if not iso_value:
-        return None
-    try:
-        dt = datetime.fromisoformat(iso_value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
 def _recover_stale_jobs(
     *,
     worker_id: str,
@@ -76,7 +66,7 @@ def _recover_stale_jobs(
 
     recovered = 0
     for job in stale_jobs:
-        locked_at = _parse_iso_datetime(job.locked_at)
+        locked_at = parse_iso_datetime(job.locked_at)
         lock_age_s = (
             round((datetime.now(timezone.utc) - locked_at).total_seconds(), 3)
             if locked_at is not None
@@ -358,44 +348,22 @@ def run_forever(
         idle_sleep_s = poll_interval_s
 
 
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return default
-    value = int(raw)
-    if value <= 0:
-        raise ValueError(f"{name} must be > 0")
-    return value
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return default
-    value = float(raw)
-    if value <= 0:
-        raise ValueError(f"{name} must be > 0")
-    return value
-
-
 def main() -> None:
     load_env()
-    default_max_attempts = _env_int("VIDEO_JOB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS)
-    default_stale_lock_timeout_s = _env_float(
-        "VIDEO_JOB_STALE_LOCK_TIMEOUT_S",
-        DEFAULT_STALE_LOCK_TIMEOUT_S,
+    default_max_attempts = get_env_int(
+        "VIDEO_JOB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, strict=True
     )
-    default_idle_backoff_max_s = _env_float(
-        "VIDEO_JOB_IDLE_BACKOFF_MAX_S",
-        DEFAULT_IDLE_BACKOFF_MAX_S,
+    default_stale_lock_timeout_s = get_env_float(
+        "VIDEO_JOB_STALE_LOCK_TIMEOUT_S", DEFAULT_STALE_LOCK_TIMEOUT_S, strict=True
     )
-    default_db_retry_base_delay_s = _env_float(
-        "VIDEO_JOB_DB_RETRY_BASE_DELAY_S",
-        DEFAULT_DB_RETRY_BASE_DELAY_S,
+    default_idle_backoff_max_s = get_env_float(
+        "VIDEO_JOB_IDLE_BACKOFF_MAX_S", DEFAULT_IDLE_BACKOFF_MAX_S, strict=True
     )
-    default_db_retry_max_delay_s = _env_float(
-        "VIDEO_JOB_DB_RETRY_MAX_DELAY_S",
-        DEFAULT_DB_RETRY_MAX_DELAY_S,
+    default_db_retry_base_delay_s = get_env_float(
+        "VIDEO_JOB_DB_RETRY_BASE_DELAY_S", DEFAULT_DB_RETRY_BASE_DELAY_S, strict=True
+    )
+    default_db_retry_max_delay_s = get_env_float(
+        "VIDEO_JOB_DB_RETRY_MAX_DELAY_S", DEFAULT_DB_RETRY_MAX_DELAY_S, strict=True
     )
 
     parser = argparse.ArgumentParser(description="Video job queue worker")

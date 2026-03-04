@@ -46,6 +46,18 @@ def generate_point_id(video_id: str, frame_index: int) -> str:
     return str(uuid.uuid5(NAMESPACE_UUID, name))
 
 
+def _video_id_filter(video_id: str) -> models.Filter:
+    """Build a Qdrant filter matching a single video_id."""
+    return models.Filter(
+        must=[
+            models.FieldCondition(
+                key="video_id",
+                match=models.MatchValue(value=video_id),
+            )
+        ]
+    )
+
+
 class QdrantStore:
     """Qdrant vector storage for frame embeddings."""
 
@@ -122,14 +134,7 @@ class QdrantStore:
         limit: int = 5,
     ) -> list[SearchResult]:
         """Search for similar frames within a video."""
-        query_filter = models.Filter(
-            must=[
-                models.FieldCondition(
-                    key="video_id",
-                    match=models.MatchValue(value=video_id),
-                )
-            ]
-        )
+        query_filter = _video_id_filter(video_id)
 
         try:
             if hasattr(self._client, "query_points"):
@@ -169,14 +174,7 @@ class QdrantStore:
             # First count existing points for this video
             count_result = self._client.count(
                 collection_name=self._config.collection_name,
-                count_filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="video_id",
-                            match=models.MatchValue(value=video_id),
-                        )
-                    ]
-                ),
+                count_filter=_video_id_filter(video_id),
             )
             count = count_result.count
 
@@ -184,14 +182,7 @@ class QdrantStore:
                 self._client.delete(
                     collection_name=self._config.collection_name,
                     points_selector=models.FilterSelector(
-                        filter=models.Filter(
-                            must=[
-                                models.FieldCondition(
-                                    key="video_id",
-                                    match=models.MatchValue(value=video_id),
-                                )
-                            ]
-                        )
+                        filter=_video_id_filter(video_id)
                     ),
                 )
 

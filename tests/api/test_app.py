@@ -9,7 +9,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app, _allowed_cors_origin_regex, _allowed_cors_origins
+from src.api.app import app, _allowed_cors_origin_regex, _allowed_cors_origins, _video_record_to_response
 from src.api.auth import get_current_user_id
 from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
@@ -1511,3 +1511,29 @@ def test_allowed_cors_origin_regex_supports_explicit_regex(monkeypatch) -> None:
 def test_allowed_cors_origins_defaults_to_localhost(monkeypatch) -> None:
     monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
     assert _allowed_cors_origins() == ["http://localhost:3000"]
+
+
+def test_video_record_to_response_with_malformed_created_at(caplog) -> None:
+    record = VideoRecord(
+        id="vid_malformed",
+        youtube_url="https://www.youtube.com/watch?v=abc123xyz45",
+        status="ready",
+        user_id="user_123",
+        error_message=None,
+        source_type="youtube",
+        source_r2_key=None,
+        source_filename=None,
+        created_at="not-a-date",
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    import logging
+
+    dt_logger = logging.getLogger("src.utils.datetime")
+    dt_logger.propagate = True
+    try:
+        with caplog.at_level(logging.WARNING, logger="src.utils.datetime"):
+            response = _video_record_to_response(record)
+        assert isinstance(response.created_at, datetime)
+        assert "Unparseable ISO datetime" in caplog.text
+    finally:
+        dt_logger.propagate = False
