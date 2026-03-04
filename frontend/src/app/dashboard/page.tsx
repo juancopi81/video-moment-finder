@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   SignInButton,
   SignedIn,
@@ -9,6 +10,7 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import { API_URL, parseApiError } from "@/lib/api";
+import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
 
 type VideoStatus = "queued" | "processing" | "ready" | "failed";
 
@@ -45,9 +47,12 @@ function statusBadgeClass(status: VideoStatus): string {
 
 export default function DashboardPage() {
   const { getToken, isLoaded, userId } = useAuth();
+  const searchParams = useSearchParams();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const checkoutStatus = searchParams.get("checkout");
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -59,7 +64,7 @@ export default function DashboardPage() {
 
     let cancelled = false;
 
-    async function loadVideos() {
+    async function loadDashboardData() {
       setIsLoading(true);
       setError(null);
 
@@ -69,19 +74,26 @@ export default function DashboardPage() {
           throw new Error("Please sign in to continue.");
         }
 
-        const response = await fetch(`${API_URL}/users/me/videos`, {
+        const videosResponse = await fetch(`${API_URL}/users/me/videos`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
-        if (!response.ok) {
-          throw new Error(await parseApiError(response, "Failed to load videos"));
+        if (!videosResponse.ok) {
+          throw new Error(await parseApiError(videosResponse, "Failed to load videos"));
         }
 
-        const data: VideoListItem[] = await response.json();
+        const videosData = (await videosResponse.json()) as VideoListItem[];
+        let summary: BillingSummary | null = null;
+        try {
+          summary = await fetchBillingSummary(token);
+        } catch {
+          summary = null;
+        }
         if (!cancelled) {
-          setVideos(data);
+          setVideos(videosData);
+          setBillingSummary(summary);
         }
       } catch (err) {
         if (!cancelled) {
@@ -98,12 +110,12 @@ export default function DashboardPage() {
       }
     }
 
-    void loadVideos();
+    void loadDashboardData();
 
     return () => {
       cancelled = true;
     };
-  }, [getToken, isLoaded, userId]);
+  }, [getToken, isLoaded, userId, checkoutStatus]);
 
   if (!isLoaded) {
     return (
@@ -120,6 +132,16 @@ export default function DashboardPage() {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Track processing status and jump back into search results.
         </p>
+        {checkoutStatus === "success" && (
+          <p className="mt-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+            Checkout completed. Balance refreshed below.
+          </p>
+        )}
+        {checkoutStatus === "cancel" && (
+          <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+            Checkout was canceled. No credits were added.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -146,6 +168,18 @@ export default function DashboardPage() {
 
       <SignedIn>
         <div className="mt-8">
+          {billingSummary && (
+            <div className="mb-4 rounded-xl border border-zinc-200 bg-surface-card px-4 py-3 text-sm dark:border-zinc-800">
+              <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                Credits available: {billingSummary.credits_balance}
+              </p>
+              <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                {billingSummary.has_unlimited_access
+                  ? "Unlimited access enabled."
+                  : `Free trial remaining: ${billingSummary.free_videos_remaining}/${billingSummary.free_videos_limit}`}
+              </p>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />

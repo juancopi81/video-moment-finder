@@ -397,6 +397,54 @@ def test_list_my_videos_scopes_to_user(monkeypatch) -> None:
     assert payload[1]["source_url"] == "https://example.com/source.mp4"
 
 
+def test_billing_summary_requires_authentication() -> None:
+    client = TestClient(app)
+    response = client.get("/users/me/billing-summary")
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_billing_summary_returns_usage_and_balance(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: _credit_record(7))
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 3)
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
+    monkeypatch.setattr("src.api.app._max_free_videos", lambda: 5)
+
+    response = client.get("/users/me/billing-summary")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "credits_balance": 7,
+        "free_videos_limit": 5,
+        "free_videos_used": 3,
+        "free_videos_remaining": 2,
+        "has_unlimited_access": False,
+    }
+
+
+def test_billing_summary_clamps_non_positive_remaining(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: None)
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 6)
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: True)
+    monkeypatch.setattr("src.api.app._max_free_videos", lambda: 2)
+
+    response = client.get("/users/me/billing-summary")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "credits_balance": 0,
+        "free_videos_limit": 2,
+        "free_videos_used": 6,
+        "free_videos_remaining": 0,
+        "has_unlimited_access": True,
+    }
+
+
 def test_get_video_includes_source_url_for_uploaded_video(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
