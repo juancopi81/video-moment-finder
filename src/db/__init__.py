@@ -4,6 +4,7 @@ from src.db.supabase import (
     apply_billing_credit_grant,
     claim_next_video_job,
     complete_video_job,
+    consume_processing_credit,
     count_videos_for_user,
     create_video,
     enqueue_video_job,
@@ -24,6 +25,7 @@ from src.db.supabase import (
 __all__ = [
     "claim_next_video_job",
     "complete_video_job",
+    "consume_processing_credit",
     "count_videos_for_user",
     "get_client",
     "create_video",

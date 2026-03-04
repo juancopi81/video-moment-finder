@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from src.api.app import app, _allowed_cors_origin_regex, _allowed_cors_origins
 from src.api.auth import get_current_user_id
 from src.billing.lemonsqueezy import LemonSqueezyProviderError
-from src.db.supabase import VideoRecord
+from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
 from src.storage.config import StorageConfigError
 from src.storage.qdrant import SearchResult
 from src.video.download import VideoMetadata
@@ -51,6 +51,16 @@ def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord
     )
 
 
+def _credit_record(balance: int) -> CreditRecord:
+    return CreditRecord(
+        id="credit_123",
+        user_id="user_123",
+        balance=balance,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 @pytest.fixture(autouse=True)
 def _clear_dependency_overrides() -> None:
     app.dependency_overrides.clear()
@@ -62,6 +72,14 @@ def _clear_dependency_overrides() -> None:
 def _mock_free_video_count(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 0)
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: None)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: ProcessingCreditConsumeResult(
+            allowed=False,
+            remaining_balance=0,
+        ),
+    )
 
 
 def _authenticate(user_id: str = "user_123") -> None:
@@ -214,14 +232,20 @@ def test_create_video_rejects_long_video(monkeypatch) -> None:
     assert response.json()["detail"] == "Video exceeds 1-minute limit"
 
 
-def test_create_video_rejects_when_free_limit_reached(monkeypatch) -> None:
+def test_create_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
     monkeypatch.setattr(
         "src.api.app.fetch_video_metadata",
-        lambda _: (_ for _ in ()).throw(AssertionError("metadata call should not run")),
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_video",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run when credits are unavailable")
+        ),
     )
 
     response = client.post(
@@ -229,8 +253,39 @@ def test_create_video_rejects_when_free_limit_reached(monkeypatch) -> None:
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Free video limit reached"
+    assert response.status_code == 402
+    assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
+
+
+def test_create_video_consumes_paid_credit_when_free_limit_reached(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: ProcessingCreditConsumeResult(
+            allowed=True,
+            remaining_balance=2,
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_video",
+        lambda youtube_url, user_id=None, status="queued": _video_record("video_paid", status=status),
+    )
+    monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "video_paid"
 
 
 def test_create_video_allows_unlimited_user_override(monkeypatch) -> None:
@@ -446,7 +501,7 @@ def test_init_upload_returns_503_when_r2_missing(monkeypatch) -> None:
     assert response.json()["detail"] == "Upload storage is not configured"
 
 
-def test_init_upload_rejects_when_free_limit_reached(monkeypatch) -> None:
+def test_init_upload_rejects_when_no_paid_credits_after_free_limit(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
@@ -461,8 +516,39 @@ def test_init_upload_rejects_when_free_limit_reached(monkeypatch) -> None:
         json={"filename": "upload.mp4", "content_type": "video/mp4"},
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Free video limit reached"
+    assert response.status_code == 402
+    assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
+
+
+def test_init_upload_allows_paid_user_without_consuming(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: _credit_record(3))
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("init precheck must not consume credits")
+        ),
+    )
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def generate_presigned_upload_url(self, key, content_type=None, expires_in=900):
+            return f"https://signed.example.com/{key}"
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+    response = client.post(
+        "/videos/upload/init",
+        json={"filename": "upload.mp4", "content_type": "video/mp4"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_init_upload_returns_presigned_url(monkeypatch) -> None:
@@ -510,14 +596,21 @@ def test_upload_video_returns_503_when_r2_missing(monkeypatch) -> None:
     assert response.json()["detail"] == "Upload storage is not configured"
 
 
-def test_upload_video_rejects_when_free_limit_reached(monkeypatch) -> None:
+def test_upload_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+
     monkeypatch.setattr(
         "src.api.app.R2Config.from_env",
         lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_uploaded_video",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run when credits are unavailable")
+        ),
     )
 
     response = client.post(
@@ -525,8 +618,54 @@ def test_upload_video_rejects_when_free_limit_reached(monkeypatch) -> None:
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Free video limit reached"
+    assert response.status_code == 402
+    assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
+
+
+def test_upload_video_cleans_up_source_on_post_upload_credit_denial(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: _credit_record(1))
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: ProcessingCreditConsumeResult(
+            allowed=False,
+            remaining_balance=0,
+        ),
+    )
+    cleanup_calls: list[str] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def upload_source_video(self, *args, **kwargs):
+            class Result:
+                key = "source/video_123/upload.mp4"
+
+            return Result()
+
+        def delete_source_object(self, key: str) -> None:
+            cleanup_calls.append(key)
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr(
+        "src.api.app.db_create_uploaded_video",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run when credit consume denies")
+        ),
+    )
+
+    response = client.post(
+        "/videos/upload",
+        files={"file": ("upload.mp4", b"data", "video/mp4")},
+    )
+
+    assert response.status_code == 402
+    assert cleanup_calls == ["source/video_123/upload.mp4"]
 
 
 def test_complete_upload_requires_authentication() -> None:
@@ -577,15 +716,30 @@ def test_complete_upload_returns_400_when_source_missing(monkeypatch) -> None:
     assert response.json()["detail"] == "Uploaded source not found"
 
 
-def test_complete_upload_rejects_when_free_limit_reached(monkeypatch) -> None:
+def test_complete_upload_rejects_when_no_paid_credits_after_free_limit(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, _key: str) -> bool:
+            raise AssertionError("source_exists should not run when precheck denies")
+
     monkeypatch.setattr(
         "src.api.app.R2Config.from_env",
         lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
+    )
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr(
+        "src.api.app.db_create_uploaded_video",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run when credits are unavailable")
+        ),
     )
 
     response = client.post(
@@ -593,8 +747,8 @@ def test_complete_upload_rejects_when_free_limit_reached(monkeypatch) -> None:
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Free video limit reached"
+    assert response.status_code == 402
+    assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
 
 
 def test_complete_upload_enqueues_job(monkeypatch) -> None:
@@ -656,6 +810,76 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
     assert create_calls
 
 
+def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+
+    enqueue_calls: list[str] = []
+    create_calls: list[tuple[str, str, str | None, str]] = []
+    consume_calls: list[str] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
+
+    def fake_consume(user_id: str) -> ProcessingCreditConsumeResult:
+        consume_calls.append(user_id)
+        return ProcessingCreditConsumeResult(
+            allowed=True,
+            remaining_balance=0,
+        )
+
+    def fake_create_uploaded_video(
+        video_id: str,
+        source_r2_key: str,
+        source_filename: str | None = None,
+        user_id: str | None = None,
+        status: str = "queued",
+    ) -> VideoRecord:
+        create_calls.append((video_id, source_r2_key, source_filename, status))
+        return VideoRecord(
+            id=video_id,
+            youtube_url=None,
+            status=status,  # type: ignore[arg-type]
+            user_id=user_id,
+            error_message=None,
+            source_type="upload",
+            source_r2_key=source_r2_key,
+            source_filename=source_filename,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def fake_enqueue(video_id: str) -> object:
+        enqueue_calls.append(video_id)
+        return object()
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: _credit_record(1))
+    monkeypatch.setattr("src.api.app.db_consume_processing_credit", fake_consume)
+    monkeypatch.setattr("src.api.app.db_create_uploaded_video", fake_create_uploaded_video)
+    monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "queued"
+    assert consume_calls == ["user_123"]
+    assert enqueue_calls == [payload["id"]]
+    assert create_calls
+
+
 def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
@@ -683,6 +907,12 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("credit consume should not run for matching retry")
+        ),
+    )
     monkeypatch.setattr(
         "src.api.app.db_create_uploaded_video",
         lambda *args, **kwargs: (_ for _ in ()).throw(

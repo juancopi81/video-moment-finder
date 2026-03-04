@@ -41,6 +41,9 @@ class FakeClient:
     def delete_objects(self, Bucket: str, Delete: dict) -> None:  # noqa: N803
         self.deleted.extend(Delete.get("Objects", []))
 
+    def delete_object(self, Bucket: str, Key: str) -> None:  # noqa: N803
+        self.deleted.append({"Key": Key})
+
     def generate_presigned_url(self, operation_name: str, Params: dict, ExpiresIn: int):
         self.presigned.append((operation_name, Params, ExpiresIn))
         return f"https://signed.example.com/{Params['Key']}"
@@ -193,3 +196,16 @@ def test_source_exists_checks_head_object(monkeypatch) -> None:
     store = R2Store(_make_config())
     assert store.source_exists("source/video_a/upload.mp4") is True
     assert store.source_exists("source/video_a/missing.mp4") is False
+
+
+def test_delete_source_object(monkeypatch) -> None:
+    fake_client = FakeClient(existing_keys={"source/video_a/upload.mp4"})
+
+    def fake_boto_client(*args, **kwargs):
+        return fake_client
+
+    monkeypatch.setattr(boto3, "client", fake_boto_client)
+
+    store = R2Store(_make_config())
+    store.delete_source_object("source/video_a/upload.mp4")
+    assert fake_client.deleted == [{"Key": "source/video_a/upload.mp4"}]

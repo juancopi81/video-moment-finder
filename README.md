@@ -16,7 +16,6 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 3 — Credit deduction enforcement**: enforce paid credit deduction in video processing once free-trial cap is exhausted.
 - **PR 4 — Billing status UX**: show clear post-checkout success/failure feedback and refreshed credit balance in dashboard/pricing.
 
 ## Production Deployment
@@ -147,7 +146,7 @@ Backend (`.env`):
 - `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; supports `*` wildcard entries; default `http://localhost:3000`)
 - `CORS_ALLOWED_ORIGIN_REGEX` (optional regex to match dynamic preview origins)
 - `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
-- `VIDEO_MAX_FREE_VIDEOS` (max free videos per user before payments; default `1`)
+- `VIDEO_MAX_FREE_VIDEOS` (max free videos per user before paid-credit enforcement; default `1`)
 - `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)
 - `VIDEO_UPLOAD_URL_TTL_S` (signed upload URL lifetime in seconds for direct-to-R2 uploads; default `900`)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
@@ -181,7 +180,14 @@ Run API:
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
-Protected API routes (`POST /videos`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`, `POST /billing/checkout`) now require `Authorization: Bearer <Clerk JWT>`.
+Protected API routes (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/init`, `POST /videos/upload/complete`, `GET /videos/{id}`, `GET /users/me/videos`, `POST /videos/{id}/search`, `POST /billing/checkout`) require `Authorization: Bearer <Clerk JWT>`.
+
+Video admission policy:
+
+- While under `VIDEO_MAX_FREE_VIDEOS`, submissions are admitted without paid-credit deduction.
+- Once free quota is exhausted, processing admission (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/complete`) consumes one credit atomically.
+- If no credits are available after free quota, these endpoints return `402` with `Insufficient credits. Buy credits to process another video.`
+- `POST /videos/upload/init` is a non-consuming precheck and only verifies eligibility.
 
 Authenticated billing checkout route:
 

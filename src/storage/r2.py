@@ -182,6 +182,13 @@ class R2Store:
             raise R2StorageError(f"Failed to check source object: {exc}") from exc
         return True
 
+    def delete_source_object(self, key: str) -> None:
+        """Delete one uploaded source object."""
+        try:
+            self._client.delete_object(Bucket=self._config.bucket_name, Key=key)
+        except Exception as exc:
+            raise R2StorageError(f"Failed to delete source object: {exc}") from exc
+
     def upload_thumbnails(
         self,
         video_id: str,

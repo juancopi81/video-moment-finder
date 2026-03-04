@@ -25,10 +25,12 @@ from src.config.env import load_env
 from src.db.supabase import (
     VideoRecord,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
+    consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
+    get_credits as db_get_credits,
     get_video as db_get_video,
     has_unlimited_video_access as db_has_unlimited_video_access,
     list_videos as db_list_videos,
@@ -53,6 +55,7 @@ DEFAULT_BILLING_GRANT_EVENTS = {
     "order_created",
     "subscription_payment_success",
 }
+INSUFFICIENT_CREDITS_DETAIL = "Insufficient credits. Buy credits to process another video."
 DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
 DEFAULT_BILLING_PLAN_CREDITS: dict[BillingPlanType, int] = {
     "starter": 5,
@@ -166,16 +169,42 @@ def _validate_video_duration(youtube_url: str) -> None:
         )
 
 
-def _enforce_free_video_limit(user_id: str) -> None:
+def _is_video_processing_free_for_user(user_id: str) -> bool:
     if db_has_unlimited_video_access(user_id):
-        return
+        return True
     max_videos = _max_free_videos()
     current_count = db_count_videos_for_user(user_id)
-    if current_count >= max_videos:
-        raise HTTPException(
-            status_code=403,
-            detail="Free video limit reached",
-        )
+    return current_count < max_videos
+
+
+def _precheck_video_processing_admission(user_id: str) -> bool:
+    """Raise 402 when admission fails; return whether paid credit consume is needed."""
+    if _is_video_processing_free_for_user(user_id):
+        return False
+    credit_record = db_get_credits(user_id)
+    if credit_record is not None and credit_record.balance > 0:
+        return True
+    raise HTTPException(
+        status_code=402,
+        detail=INSUFFICIENT_CREDITS_DETAIL,
+    )
+
+
+def _consume_processing_credit_or_raise(user_id: str) -> None:
+    credit_result = db_consume_processing_credit(user_id)
+    if credit_result.allowed:
+        return
+
+    raise HTTPException(
+        status_code=402,
+        detail=INSUFFICIENT_CREDITS_DETAIL,
+    )
+
+
+def _consume_and_admit_video_processing(user_id: str) -> None:
+    if _is_video_processing_free_for_user(user_id):
+        return
+    _consume_processing_credit_or_raise(user_id)
 
 
 def _source_url_ttl_s() -> int:
@@ -487,8 +516,8 @@ def create_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     """Create a new video and enqueue durable processing job."""
-    _enforce_free_video_limit(user_id)
     _validate_video_duration(request.youtube_url)
+    _consume_and_admit_video_processing(user_id)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
     try:
         enqueue_video_job(record.id)
@@ -521,7 +550,7 @@ def upload_video(
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
-    _enforce_free_video_limit(user_id)
+    requires_credit = _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -548,6 +577,22 @@ def upload_video(
             status_code=503,
             detail="Failed to store uploaded video",
         ) from exc
+
+    try:
+        if requires_credit:
+            _consume_processing_credit_or_raise(user_id)
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            try:
+                store.delete_source_object(upload_result.key)
+            except R2StorageError as cleanup_exc:
+                logger.warning(
+                    "Failed to cleanup uploaded source video for user_id=%s key=%s: %s",
+                    user_id,
+                    upload_result.key,
+                    cleanup_exc,
+                )
+        raise
 
     record = db_create_uploaded_video(
         video_id=video_id,
@@ -585,7 +630,7 @@ def init_upload(
     """Generate a presigned upload URL for direct-to-R2 uploads."""
     if request.content_type and not request.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
-    _enforce_free_video_limit(user_id)
+    _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -639,7 +684,7 @@ def complete_upload(
     )
     if existing is not None:
         return _video_record_to_response(existing)
-    _enforce_free_video_limit(user_id)
+    requires_credit = _precheck_video_processing_admission(user_id)
 
     try:
         r2_config = R2Config.from_env()
@@ -663,6 +708,9 @@ def complete_upload(
             status_code=503,
             detail="Failed to verify upload",
         ) from exc
+
+    if requires_credit:
+        _consume_processing_credit_or_raise(user_id)
 
     try:
         record = db_create_uploaded_video(
