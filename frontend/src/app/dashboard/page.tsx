@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -45,7 +45,7 @@ function statusBadgeClass(status: VideoStatus): string {
   }
 }
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const { getToken, isLoaded, userId } = useAuth();
   const searchParams = useSearchParams();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
@@ -232,5 +232,19 @@ export default function DashboardPage() {
         </div>
       </SignedIn>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-zinc-600 dark:text-zinc-400">Loading dashboard...</p>
+        </div>
+      }
+    >
+      <DashboardPageContent />
+    </Suspense>
   );
 }

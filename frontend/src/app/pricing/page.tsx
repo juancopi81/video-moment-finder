@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { PricingCard } from "@/components/pricing-card";
@@ -86,7 +86,7 @@ function ctaLabel({
   return "Buy credits";
 }
 
-export default function PricingPage() {
+function PricingPageContent() {
   const { userId, getToken, isLoaded } = useAuth();
   const searchParams = useSearchParams();
   const [checkoutPlanLoading, setCheckoutPlanLoading] = useState<BillingPlan | null>(
@@ -288,5 +288,19 @@ export default function PricingPage() {
         })}
       </div>
     </div>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-5xl px-4 py-16 text-center">
+          <p className="text-zinc-600 dark:text-zinc-400">Loading pricing...</p>
+        </div>
+      }
+    >
+      <PricingPageContent />
+    </Suspense>
   );
 }
