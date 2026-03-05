@@ -8,11 +8,12 @@ import json
 import re
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from src.api.app import (
+    UploadDurationLimitExceededError,
+    UploadDurationProbeUnavailableError,
     _allowed_cors_origin_regex,
     _allowed_cors_origins,
     _video_record_to_response,
@@ -98,8 +99,12 @@ def _mock_free_video_count(monkeypatch) -> None:
 @pytest.fixture(autouse=True)
 def _mock_upload_duration_validation(monkeypatch) -> None:
     monkeypatch.setattr(
-        "src.api.app._validate_uploaded_source_duration_or_raise",
-        lambda store, key: None,
+        "src.api.app._validate_upload_file_duration_or_raise",
+        lambda file: None,
+    )
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_duration_with_cleanup",
+        lambda store, key, user_id: None,
     )
 
 
@@ -837,26 +842,17 @@ def test_upload_video_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) 
     create_called = {"value": False}
     enqueue_calls: list[str] = []
 
-    class FakeR2Store:
-        def __init__(self, *_args, **_kwargs) -> None:
-            pass
+    def _raise_duration(_file) -> None:
+        raise UploadDurationLimitExceededError("Video exceeds 30-minute limit")
 
-        def upload_source_video(self, *args, **kwargs):
-            class Result:
-                key = "source/video_123/upload.mp4"
-
-            return Result()
-
-        def delete_source_object(self, key: str) -> None:
-            return None
-
-    def _raise_duration(*_args, **_kwargs) -> None:
-        raise HTTPException(status_code=400, detail="Video exceeds 30-minute limit")
-
-    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
-    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr(
-        "src.api.app._validate_uploaded_source_duration_or_raise",
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("R2 config should not load when duration validation fails")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app._validate_upload_file_duration_or_raise",
         _raise_duration,
     )
     monkeypatch.setattr(
@@ -883,6 +879,33 @@ def test_upload_video_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) 
     assert consume_calls == []
     assert create_called["value"] is False
     assert enqueue_calls == []
+
+
+def test_upload_video_returns_503_when_duration_probe_unavailable(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    def _raise_probe(_file) -> None:
+        raise UploadDurationProbeUnavailableError("ffprobe unavailable")
+
+    monkeypatch.setattr(
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("R2 config should not load when duration probe is unavailable")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app._validate_upload_file_duration_or_raise",
+        _raise_probe,
+    )
+
+    response = client.post(
+        "/videos/upload",
+        files={"file": ("upload.mp4", b"data", "video/mp4")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Failed to verify upload"
 
 
 def test_complete_upload_requires_authentication() -> None:
@@ -986,13 +1009,13 @@ def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatc
             return None
 
     def _raise_duration(*_args, **_kwargs) -> None:
-        raise HTTPException(status_code=400, detail="Video exceeds 30-minute limit")
+        raise UploadDurationLimitExceededError("Video exceeds 30-minute limit")
 
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr(
-        "src.api.app._validate_uploaded_source_duration_or_raise",
+        "src.api.app._validate_uploaded_source_duration_with_cleanup",
         _raise_duration,
     )
     monkeypatch.setattr(
@@ -1019,6 +1042,37 @@ def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatc
     assert consume_calls == []
     assert create_called["value"] is False
     assert enqueue_calls == []
+
+
+def test_complete_upload_returns_503_when_duration_probe_unavailable(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
+
+    def _raise_probe(*_args, **_kwargs) -> None:
+        raise UploadDurationProbeUnavailableError("ffprobe unavailable")
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_duration_with_cleanup",
+        _raise_probe,
+    )
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Failed to verify upload"
 
 
 def test_complete_upload_enqueues_job(monkeypatch) -> None:

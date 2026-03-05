@@ -3,11 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
+from src.utils.env import get_env_int
 from src.utils.subprocess import format_subprocess_error
+
+DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 
 
 class VideoMetadataProbeError(RuntimeError):
     """Raised when local video metadata probing fails."""
+
+
+def max_video_duration_s() -> int:
+    """Return configured max allowed video duration in seconds."""
+    return get_env_int("VIDEO_MAX_DURATION_S", DEFAULT_MAX_VIDEO_DURATION_S)
 
 
 def probe_video_duration_s(video_path: Path) -> float:

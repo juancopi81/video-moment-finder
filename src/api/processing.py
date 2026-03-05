@@ -14,16 +14,14 @@ from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
 from src.db.supabase import VideoRecord
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
 from src.storage.r2 import R2Store, R2StorageError
-from src.utils.env import get_env_int
 from src.utils.logging import get_logger
 from src.video.download import download_video
 from src.video.frames import extract_frames
-from src.video.metadata import VideoMetadataProbeError, probe_video_duration_s
+from src.video.metadata import VideoMetadataProbeError, max_video_duration_s, probe_video_duration_s
 
 logger = get_logger(__name__)
 
 MAX_FRAMES = 1800  # 30 min at 1fps
-DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 
 
 class VideoProcessingError(RuntimeError):
@@ -32,10 +30,6 @@ class VideoProcessingError(RuntimeError):
 
 class VideoValidationError(VideoProcessingError):
     """Raised when input validation fails and retries should not continue."""
-
-
-def _max_video_duration_s() -> int:
-    return get_env_int("VIDEO_MAX_DURATION_S", DEFAULT_MAX_VIDEO_DURATION_S)
 
 
 def process_video(video: VideoRecord) -> ProcessingResult:
@@ -123,12 +117,14 @@ def _validate_video_duration(video: VideoRecord, video_path: Path) -> None:
     if video.source_type != "upload":
         return
 
+    # Defense in depth: upload endpoints validate duration before enqueue, but
+    # worker-side validation prevents retries/processing for bypassed invalid sources.
     try:
         duration_s = probe_video_duration_s(video_path)
     except VideoMetadataProbeError as exc:
         raise VideoProcessingError(f"Unable to determine uploaded video duration: {exc}") from exc
 
-    max_duration_s = _max_video_duration_s()
+    max_duration_s = max_video_duration_s()
     if duration_s > max_duration_s:
         max_minutes = max_duration_s // 60
         raise VideoValidationError(f"Uploaded video exceeds {max_minutes}-minute limit")
