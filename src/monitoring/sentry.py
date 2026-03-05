@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
+import traceback
 from typing import Any
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -41,9 +42,8 @@ def _build_config(dsn: str, *, service: str) -> _SentryConfig | None:
     project_id = path_parts[-1]
     base_path = "/".join(path_parts[:-1])
     prefix = f"/{base_path}" if base_path else ""
-    endpoint = f"{parsed.scheme}://{parsed.hostname}{prefix}/api/{project_id}/store/"
-    if parsed.port:
-        endpoint = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}{prefix}/api/{project_id}/store/"
+    host = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
+    endpoint = f"{parsed.scheme}://{host}{prefix}/api/{project_id}/store/"
 
     auth_parts = [
         "Sentry sentry_version=7",
@@ -64,12 +64,8 @@ def _build_config(dsn: str, *, service: str) -> _SentryConfig | None:
     )
 
 
-def init_sentry(*, service: str, include_fastapi_integration: bool = False) -> bool:
-    """Initialize Sentry if SENTRY_DSN is configured.
-
-    `include_fastapi_integration` is accepted for API call-site parity and ignored.
-    """
-    del include_fastapi_integration
+def init_sentry(*, service: str) -> bool:
+    """Initialize Sentry if SENTRY_DSN is configured."""
     global _SENTRY_CONFIG
 
     dsn = os.environ.get("SENTRY_DSN", "").strip()
@@ -91,10 +87,36 @@ def init_sentry(*, service: str, include_fastapi_integration: bool = False) -> b
     return True
 
 
+def _exception_stacktrace(exc: BaseException) -> dict[str, list[dict[str, Any]]] | None:
+    tb = exc.__traceback__
+    if tb is None:
+        return None
+    frames = [
+        {
+            "filename": frame.filename,
+            "function": frame.name,
+            "lineno": frame.lineno,
+            "in_app": True,
+        }
+        for frame in traceback.extract_tb(tb)
+    ]
+    if not frames:
+        return None
+    return {"frames": frames}
+
+
 def capture_exception(exc: BaseException, *, context: dict[str, Any] | None = None) -> None:
     config = _SENTRY_CONFIG
     if config is None:
         return
+
+    exception_value: dict[str, Any] = {
+        "type": type(exc).__name__,
+        "value": str(exc),
+    }
+    stacktrace_payload = _exception_stacktrace(exc)
+    if stacktrace_payload is not None:
+        exception_value["stacktrace"] = stacktrace_payload
 
     event = {
         "event_id": uuid4().hex,
@@ -106,12 +128,7 @@ def capture_exception(exc: BaseException, *, context: dict[str, Any] | None = No
         "logger": "video-moment-finder",
         "tags": {"service": config.service},
         "exception": {
-            "values": [
-                {
-                    "type": type(exc).__name__,
-                    "value": str(exc),
-                }
-            ]
+            "values": [exception_value]
         },
         "extra": context or {},
     }

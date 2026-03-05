@@ -27,7 +27,7 @@ def test_init_sentry_builds_store_endpoint(monkeypatch) -> None:
     monkeypatch.setenv("SENTRY_RELEASE", "abc123")
     monkeypatch.setattr(module, "_SENTRY_CONFIG", None)
 
-    assert module.init_sentry(service="api", include_fastapi_integration=True) is True
+    assert module.init_sentry(service="api") is True
     config = module._SENTRY_CONFIG
     assert config is not None
     assert config.endpoint == "https://example.ingest.sentry.io/api/123/store/"
@@ -64,13 +64,19 @@ def test_capture_exception_posts_event(monkeypatch) -> None:
     monkeypatch.setattr(module, "urlopen", _fake_urlopen)
 
     assert module.init_sentry(service="worker")
-    module.capture_exception(RuntimeError("boom"), context={"job_id": "job_1"})
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as exc:
+        module.capture_exception(exc, context={"job_id": "job_1"})
 
     assert len(sent_requests) == 1
     url, headers, payload = sent_requests[0]
     assert url == "https://example.ingest.sentry.io/api/1/store/"
     assert headers["X-sentry-auth"].startswith("Sentry sentry_version=7")
     assert payload["exception"]["values"][0]["value"] == "boom"
+    frames = payload["exception"]["values"][0]["stacktrace"]["frames"]
+    assert frames
+    assert any(frame["filename"].endswith("test_sentry.py") for frame in frames)
     assert payload["extra"]["job_id"] == "job_1"
 
 

@@ -1,6 +1,7 @@
 """FastAPI app with real Supabase, Modal, and Qdrant integrations."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -51,7 +52,7 @@ from uuid import UUID, uuid4
 
 load_env()
 logger = get_logger(__name__)
-init_sentry(service="api", include_fastapi_integration=True)
+init_sentry(service="api")
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
 BillingPlanType = Literal["starter", "pro"]
@@ -659,7 +660,8 @@ async def report_unhandled_exceptions(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
-        capture_exception(
+        await asyncio.to_thread(
+            capture_exception,
             exc,
             context={
                 "path": request.url.path,

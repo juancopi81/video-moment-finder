@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -8,12 +9,14 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from src.api.app import (
     _allowed_cors_origin_regex,
     _allowed_cors_origins,
     _video_record_to_response,
     app,
+    report_unhandled_exceptions,
 )
 from src.api.auth import get_current_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
@@ -1959,3 +1962,38 @@ def test_video_record_to_response_with_malformed_created_at(caplog) -> None:
         assert "Unparseable ISO datetime" in caplog.text
     finally:
         dt_logger.propagate = False
+
+
+def test_report_unhandled_exceptions_uses_to_thread(monkeypatch) -> None:
+    to_thread_calls: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+    capture_calls: list[tuple[BaseException, dict[str, object] | None]] = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        to_thread_calls.append((func, args, kwargs))
+        return func(*args, **kwargs)
+
+    def fake_capture_exception(exc: BaseException, *, context=None) -> None:
+        capture_calls.append((exc, context))
+
+    async def fake_call_next(_request: Request):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("src.api.app.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr("src.api.app.capture_exception", fake_capture_exception)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/videos",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        asyncio.run(report_unhandled_exceptions(request, fake_call_next))
+
+    assert len(to_thread_calls) == 1
+    assert len(capture_calls) == 1
+    assert capture_calls[0][1] == {"path": "/videos", "method": "POST"}
