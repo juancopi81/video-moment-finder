@@ -16,3 +16,4 @@ test_video*
 
 .DS_Store
 supabase/.temp/
+.claude/worktrees/
