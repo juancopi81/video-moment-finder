@@ -8,7 +8,10 @@ import hmac
 import json
 from math import ceil
 import os
+from pathlib import Path
 import re
+import shutil
+import tempfile
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -47,6 +50,7 @@ from src.utils.datetime import parse_iso_datetime
 from src.utils.env import get_env_int
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
+from src.video.metadata import VideoMetadataProbeError, max_video_duration_s, probe_video_duration_s
 from src.video.youtube import normalize_youtube_url
 from uuid import UUID, uuid4
 
@@ -56,7 +60,6 @@ init_sentry(service="api")
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
 BillingPlanType = Literal["starter", "pro"]
-DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
 DEFAULT_MAX_FREE_VIDEOS = 1
 DEFAULT_BILLING_GRANT_EVENTS = {
     "order_created",
@@ -79,6 +82,18 @@ BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
 WEBHOOK_RATE_LIMITER = SlidingWindowRateLimiter()
+
+
+class UploadDurationValidationError(RuntimeError):
+    """Raised when uploaded source duration validation fails."""
+
+
+class UploadDurationLimitExceededError(UploadDurationValidationError):
+    """Raised when uploaded source exceeds configured duration limit."""
+
+
+class UploadDurationProbeUnavailableError(UploadDurationValidationError):
+    """Raised when uploaded source duration cannot be determined."""
 
 
 def _normalize_cors_origin(origin: str) -> str:
@@ -129,12 +144,13 @@ def _allowed_cors_origin_regex() -> str | None:
     return "|".join(patterns)
 
 
-def _max_video_duration_s() -> int:
-    return get_env_int("VIDEO_MAX_DURATION_S", DEFAULT_MAX_VIDEO_DURATION_S)
-
-
 def _max_free_videos() -> int:
     return get_env_int("VIDEO_MAX_FREE_VIDEOS", DEFAULT_MAX_FREE_VIDEOS)
+
+
+def _upload_duration_limit_detail() -> str:
+    max_minutes = max_video_duration_s() // 60
+    return f"Video exceeds {max_minutes}-minute limit"
 
 
 def _validate_video_duration(youtube_url: str) -> None:
@@ -152,13 +168,92 @@ def _validate_video_duration(youtube_url: str) -> None:
     if metadata.duration_s is None:
         raise HTTPException(status_code=400, detail="Unable to determine video duration")
 
-    max_duration_s = _max_video_duration_s()
+    max_duration_s = max_video_duration_s()
     if metadata.duration_s > max_duration_s:
-        max_minutes = max_duration_s // 60
-        raise HTTPException(
-            status_code=400,
-            detail=f"Video exceeds {max_minutes}-minute limit",
+        raise HTTPException(status_code=400, detail=_upload_duration_limit_detail())
+
+
+def _validate_duration_limit_or_raise(duration_s: float) -> None:
+    if duration_s > max_video_duration_s():
+        raise UploadDurationLimitExceededError(_upload_duration_limit_detail())
+
+
+def _rewind_upload_stream(file: UploadFile) -> None:
+    try:
+        file.file.seek(0)
+    except Exception as exc:
+        raise UploadDurationProbeUnavailableError(
+            "Failed to read uploaded video for duration validation"
+        ) from exc
+
+
+def _probe_upload_file_duration_s(file: UploadFile) -> float:
+    suffix = Path(file.filename or "").suffix or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix) as temp_file:
+        _rewind_upload_stream(file)
+        try:
+            shutil.copyfileobj(file.file, temp_file)
+            temp_file.flush()
+        except Exception as exc:
+            raise UploadDurationProbeUnavailableError(
+                "Failed to read uploaded video for duration validation"
+            ) from exc
+        finally:
+            _rewind_upload_stream(file)
+
+        try:
+            return probe_video_duration_s(Path(temp_file.name))
+        except VideoMetadataProbeError as exc:
+            raise UploadDurationProbeUnavailableError(str(exc)) from exc
+
+
+def _probe_uploaded_source_duration_s(store: R2Store, key: str) -> float:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        probe_path = Path(temp_dir) / "upload_probe"
+        try:
+            store.download_source_video(key, probe_path)
+        except R2StorageError as exc:
+            logger.exception("Failed to download uploaded source for duration validation: %s", exc)
+            raise UploadDurationProbeUnavailableError("Failed to verify upload") from exc
+
+        try:
+            return probe_video_duration_s(probe_path)
+        except VideoMetadataProbeError as exc:
+            raise UploadDurationProbeUnavailableError(str(exc)) from exc
+
+
+def _validate_upload_file_duration_or_raise(file: UploadFile) -> None:
+    duration_s = _probe_upload_file_duration_s(file)
+    _validate_duration_limit_or_raise(duration_s)
+
+
+def _validate_uploaded_source_duration_or_raise(store: R2Store, key: str) -> None:
+    duration_s = _probe_uploaded_source_duration_s(store, key)
+    _validate_duration_limit_or_raise(duration_s)
+
+
+def _delete_uploaded_source_best_effort(store: R2Store, key: str, user_id: str) -> None:
+    try:
+        store.delete_source_object(key)
+    except R2StorageError as cleanup_exc:
+        logger.warning(
+            "Failed to cleanup invalid uploaded source for user_id=%s key=%s: %s",
+            user_id,
+            key,
+            cleanup_exc,
         )
+
+
+def _validate_uploaded_source_duration_with_cleanup(
+    store: R2Store,
+    key: str,
+    user_id: str,
+) -> None:
+    try:
+        _validate_uploaded_source_duration_or_raise(store, key)
+    except UploadDurationLimitExceededError:
+        _delete_uploaded_source_best_effort(store, key, user_id)
+        raise
 
 
 def _is_video_processing_free_for_user(user_id: str) -> bool:
@@ -697,6 +792,12 @@ def upload_video(
     if file.content_type and not file.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
     requires_credit = _precheck_video_processing_admission(user_id)
+    try:
+        _validate_upload_file_duration_or_raise(file)
+    except UploadDurationLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadDurationProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
     try:
         r2_config = R2Config.from_env()
@@ -839,6 +940,13 @@ def complete_upload(
             status_code=503,
             detail="Failed to verify upload",
         ) from exc
+
+    try:
+        _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
+    except UploadDurationLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadDurationProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
     if requires_credit:
         _consume_processing_credit_or_raise(user_id)

@@ -17,6 +17,7 @@ from src.storage.r2 import R2Store, R2StorageError
 from src.utils.logging import get_logger
 from src.video.download import download_video
 from src.video.frames import extract_frames
+from src.video.metadata import VideoMetadataProbeError, max_video_duration_s, probe_video_duration_s
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,10 @@ MAX_FRAMES = 1800  # 30 min at 1fps
 
 class VideoProcessingError(RuntimeError):
     """Raised when the processing pipeline fails."""
+
+
+class VideoValidationError(VideoProcessingError):
+    """Raised when input validation fails and retries should not continue."""
 
 
 def process_video(video: VideoRecord) -> ProcessingResult:
@@ -51,6 +56,7 @@ def process_video(video: VideoRecord) -> ProcessingResult:
             thumbnails_dir = temp_path / "thumbnails"
 
             video_path, r2_config = _resolve_video_source(video, video_dir)
+            _validate_video_duration(video, video_path)
 
             logger.info("Extracting frames for video_id=%s", video.id)
             frames = extract_frames(
@@ -100,9 +106,28 @@ def process_video(video: VideoRecord) -> ProcessingResult:
             logger.info("Video processing complete for video_id=%s", video.id)
             return result
 
+    except VideoValidationError:
+        raise
     except Exception as exc:
         logger.exception("Failed to process video_id=%s: %s", video.id, exc)
         raise VideoProcessingError(str(exc)) from exc
+
+
+def _validate_video_duration(video: VideoRecord, video_path: Path) -> None:
+    if video.source_type != "upload":
+        return
+
+    # Defense in depth: upload endpoints validate duration before enqueue, but
+    # worker-side validation prevents retries/processing for bypassed invalid sources.
+    try:
+        duration_s = probe_video_duration_s(video_path)
+    except VideoMetadataProbeError as exc:
+        raise VideoProcessingError(f"Unable to determine uploaded video duration: {exc}") from exc
+
+    max_duration_s = max_video_duration_s()
+    if duration_s > max_duration_s:
+        max_minutes = max_duration_s // 60
+        raise VideoValidationError(f"Uploaded video exceeds {max_minutes}-minute limit")
 
 
 def _resolve_video_source(
