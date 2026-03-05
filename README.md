@@ -1,405 +1,103 @@
 # Video Moment Finder
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+Semantic video moment search for creators and researchers.
+Process a video, run text queries, and jump to matching timestamps.
 
-Semantic video frame search. Paste a YouTube URL or upload a video, process it, and search moments with text queries.
+**Live site:** [videomomentfinder.com](https://videomomentfinder.com)
 
-## Documentation
+## What It Does
 
-- [PROJECT_SPEC.md](./PROJECT_SPEC.md) - Stable product charter (vision, user, scope, constraints, success metrics, risks, high-level architecture)
-- [ROADMAP.md](./ROADMAP.md) - Planned future work only (phases, tasks, gates)
-- [STATUS.md](./STATUS.md) - Execution history only (progress log, blockers, decisions, metrics)
-- [RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md](./RESEARCH_PAYMENTS_COLOMBIA_GLOBAL.md) - Time-bounded payment-provider research snapshot for Colombia-based global launch
-- [CLAUDE.md](./CLAUDE.md) - Contributor/agent workflow guidance and developer commands
+- Accepts a YouTube URL or direct video upload.
+- Processes video frames asynchronously.
+- Embeds frames into a vector index for semantic retrieval.
+- Returns top timestamped matches with thumbnails.
 
-Maintenance rule: update only the document that owns the change type above to avoid duplicate sources of truth.
+## Quick Start (Local)
 
-## Next PR Targets
+### Prerequisites
 
-- **PR 6 — Production hardening (security advisor items)**: complete remaining Supabase Security Advisor checklist (RLS + mutable `search_path` warnings).
+- Python 3.11+
+- Node.js 18+
+- `uv` and `npm`
+- Supabase project and database credentials
 
-## Production Deployment
-
-**Live at [videomomentfinder.com](https://videomomentfinder.com)**
-
-Production environment variables are managed in the **Railway** (API + worker) and **Vercel** (frontend) dashboards — not in the local `.env` file. The local `.env` is for development only.
-
-This repo ships with Railway-ready Dockerfiles for the API + worker and a Vercel config for the Next.js frontend.
-
-### Railway (API)
-
-- Service root: repository root
-- Dockerfile: `Dockerfile`
-- Runtime packages: includes `ffmpeg` for video frame extraction
-- Start command: provided by `CMD`
-- Port: Railway injects `$PORT` (default 8000)
-
-Required environment (API + worker):
-
-- `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY`
-- `SUPABASE_DB_URL`
-- `CLERK_ISSUER`
-- `CLERK_AUDIENCE` (optional)
-- `CLERK_JWKS_URL` (optional override)
-- `CORS_ALLOWED_ORIGINS` (comma-separated; supports exact origins plus `*` wildcards like `https://video-moment-finder-*.vercel.app`)
-- `CORS_ALLOWED_ORIGIN_REGEX` (optional regex for dynamic origins when wildcards are not enough)
-- `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
-- `R2_PUBLIC_URL` (optional, for public thumbnail URLs)
-- `QDRANT_URL`
-- `QDRANT_API_KEY` (if required by your Qdrant deployment)
-- `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
-- `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`
-- `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`
-- `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`
-- `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (optional, default `false`)
-- `LEMON_SQUEEZY_WEBHOOK_SECRET` (for webhook signature verification)
-- `SENTRY_DSN` (optional, enables Sentry error monitoring for API + worker)
-
-Troubleshooting: if processing fails with `Token missing. Could not authenticate client.`,
-one of your Railway services is missing `MODAL_TOKEN_ID` and/or `MODAL_TOKEN_SECRET`.
-Set both vars in both API and worker services.
-
-Optional production tuning:
-
-- `VIDEO_MAX_DURATION_S`
-- `VIDEO_MAX_FREE_VIDEOS`
-- `VIDEO_SOURCE_URL_TTL_S`
-- `VIDEO_UPLOAD_URL_TTL_S`
-- `RATE_LIMIT_WINDOW_S`
-- `RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW`
-- `RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW`
-- `RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW`
-- `SENTRY_ENVIRONMENT`
-- `SENTRY_RELEASE`
-
-### Railway (Worker)
-
-- Service root: repository root
-- Dockerfile: `Dockerfile.worker`
-- Runtime packages: includes `ffmpeg` for video frame extraction
-- Start command: provided by `CMD`
-
-### Vercel (Frontend)
-
-Vercel reads `vercel.json` at repo root and builds from `frontend/`.
-
-Required environment:
-
-- `NEXT_PUBLIC_API_URL`
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-
-### Production/Preview Environment Checklist
-
-Use this checklist before enabling or changing auto-deploy behavior:
-
-- Vercel:
-  - Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in both **Production** and **Preview** env scopes.
-  - Ensure production branch is `main`.
-- Railway (API + worker):
-  - Keep the same backend env contract in both services (`SUPABASE_*`, `CLERK_*`, `R2_*`, `QDRANT_*`, `MODAL_*`, `CORS_ALLOWED_ORIGINS`).
-  - Ensure `CORS_ALLOWED_ORIGINS` includes production plus preview origins (for example `https://videomomentfinder.com,https://video-moment-finder-*.vercel.app`).
-  - Ensure both services track the intended branch (`main`) and have auto-deploy enabled.
-- Clerk:
-  - Keep production deployments wired to the **Production** Clerk instance (`CLERK_ISSUER` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` must match that instance).
-  - Use Clerk **Development** instance keys only for local development.
-- Supabase:
-  - Keep production services on production project credentials.
-  - If/when adding a staging environment, use a separate Supabase project and keys.
-
-### Initial Deployment (Completed)
-
-The first production deploy has been completed. For reference, the steps were:
-
-- Applied Supabase migrations in `supabase/migrations` to production.
-- Configured Railway services (API + worker) with the environment variables listed above.
-- Set `CORS_ALLOWED_ORIGINS` to include the Vercel production domain and preview wildcard (or configure `CORS_ALLOWED_ORIGIN_REGEX`).
-- Configured Clerk production instance with Google OAuth (test mode).
-- Set up Cloudflare DNS (A record + www CNAME for Vercel, CNAMEs for Clerk).
-- Updated R2 CORS for the production frontend origin.
-
-Production env vars live in: **Railway dashboard** (API + worker) and **Vercel dashboard** (frontend).
-
-## Local Setup (One Command)
-
-1. Copy `.env.example` to `.env` and fill backend/infrastructure values (including `SUPABASE_DB_URL`, `CLERK_ISSUER`, and `CORS_ALLOWED_ORIGINS`).
-2. Copy `frontend/.env.example` to `frontend/.env.local` and set frontend values (especially `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`).
-3. Run:
+### 1) Configure environment
 
 ```bash
 cp .env.example .env
 cp frontend/.env.example frontend/.env.local
 ```
 
+Fill required values in both files.
+For service ownership and operations detail, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+
+### 2) One-command setup
+
 ```bash
 set -a && source .env && set +a
 ./scripts/setup_local.sh
 ```
 
-This applies only pending SQL migrations in `supabase/migrations` (tracked in `public.schema_migrations`), installs Python deps with `uv`, and installs frontend deps with `npm ci`.
+### 3) Run services
 
-If your DB was already migrated before tracking was added, run once with:
-
-```bash
-set -a && source .env && set +a
-./scripts/setup_local.sh --baseline-existing-db
-```
-
-Required auth/CORS env for local API + frontend:
-
-Backend (`.env`):
-
-- `CLERK_ISSUER` (JWT issuer verification)
-- `CORS_ALLOWED_ORIGINS` (comma-separated frontend origins; supports `*` wildcard entries; default `http://localhost:3000`)
-- `CORS_ALLOWED_ORIGIN_REGEX` (optional regex to match dynamic preview origins)
-- `VIDEO_MAX_DURATION_S` (reject videos longer than this many seconds; default `1800`)
-- `VIDEO_MAX_FREE_VIDEOS` (max free videos per user before paid-credit enforcement; default `1`)
-- `VIDEO_SOURCE_URL_TTL_S` (signed URL lifetime in seconds for uploaded video playback; default `3600`)
-- `VIDEO_UPLOAD_URL_TTL_S` (signed upload URL lifetime in seconds for direct-to-R2 uploads; default `900`)
-- `RATE_LIMIT_WINDOW_S` (shared rate-limit window in seconds; default `60`)
-- `RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW` (per-user write budget for `POST /videos`, upload routes, and `POST /billing/checkout`; default `12`)
-- `RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW` (per-user budget for `POST /videos/{id}/search`; default `30`)
-- `RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW` (per-source-IP budget for `POST /webhooks/lemonsqueezy`; default `60`)
-- `SENTRY_DSN` (optional; enables Sentry runtime error monitoring for API + worker)
-- `SENTRY_ENVIRONMENT` (optional; Sentry environment tag, default `development`)
-- `SENTRY_RELEASE` (optional; release tag such as deploy commit SHA)
-- `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
-- `R2_*` (required for uploaded video ingest and thumbnails)
-
-Admin free-cap override (optional):
-
-- Add a row to `video_access_overrides` with the Clerk `user_id` (`sub`) and `unlimited_videos=true`.
-- This bypasses `VIDEO_MAX_FREE_VIDEOS` for that user only.
-- Email is not used directly by backend access checks.
-
-```sql
-insert into public.video_access_overrides (user_id, unlimited_videos, note)
-values ('user_abc123', true, 'Admin unlimited access')
-on conflict (user_id)
-do update set unlimited_videos = excluded.unlimited_videos, note = excluded.note;
-```
-
-Frontend (`frontend/.env.local`):
-
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (Clerk initialization)
-- `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`)
-
-If `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is missing in the frontend env, Clerk can run in keyless mode and API calls will fail with `Invalid authentication token`.
-
-## Run Services
-
-Run API:
+Backend API:
 
 ```bash
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
-Protected API routes (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/init`, `POST /videos/upload/complete`, `GET /videos/{id}`, `GET /users/me/videos`, `GET /users/me/billing-summary`, `POST /videos/{id}/search`, `POST /billing/checkout`) require `Authorization: Bearer <Clerk JWT>`.
-
-Video admission policy:
-
-- While under `VIDEO_MAX_FREE_VIDEOS`, submissions are admitted without paid-credit deduction.
-- Once free quota is exhausted, processing admission (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/complete`) consumes one credit atomically.
-- If no credits are available after free quota, these endpoints return `402` with `Insufficient credits. Buy credits to process another video.`
-- Uploaded source videos are duration-checked with `ffprobe` before enqueue (and re-checked in worker defense-in-depth); files over `VIDEO_MAX_DURATION_S` are rejected with `400`, while duration probe failures return `503`.
-- `POST /videos/upload/init` is a non-consuming precheck and only verifies eligibility.
-- When configured per-window budgets are exhausted, the API returns `429` with `Retry-After` headers for protected write/search/webhook endpoints.
-
-Authenticated billing checkout route:
-
-```bash
-POST /billing/checkout
-```
-
-Request contract:
-
-- JSON body: `{"plan":"starter"}` or `{"plan":"pro"}`
-- Requires `Authorization: Bearer <Clerk JWT>`
-
-Response contract:
-
-- `provider`: always `lemonsqueezy`
-- `plan`: selected plan (`starter` or `pro`)
-- `credits`: `5` for starter, `20` for pro
-- `checkout_url`: hosted Lemon Squeezy checkout URL
-- `test_mode`: checkout mode from `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`
-
-Post-checkout UX:
-
-- Configure Lemon Squeezy redirects to include checkout status query params (for example `/dashboard?checkout=success`).
-- Pricing and dashboard pages both render checkout result banners and fetch `GET /users/me/billing-summary` to display refreshed credits.
-
-Authenticated billing summary route:
-
-```bash
-GET /users/me/billing-summary
-```
-
-Response contract:
-
-- `credits_balance`: current paid credit balance.
-- `free_videos_limit`: configured free-trial allowance from `VIDEO_MAX_FREE_VIDEOS`.
-- `free_videos_used`: number of submitted videos for the authenticated user.
-- `free_videos_remaining`: non-negative `limit - used`.
-- `has_unlimited_access`: whether the user has an override in `video_access_overrides`.
-
-Required checkout environment:
-
-- `LEMON_SQUEEZY_API_KEY`
-- `LEMON_SQUEEZY_STORE_ID`
-- `LEMON_SQUEEZY_VARIANT_ID_STARTER`
-- `LEMON_SQUEEZY_VARIANT_ID_PRO`
-- `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`
-- `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (`true`/`false`, optional; default `false`; set `true` while validating checkout in test mode)
-
-Example call:
-
-```bash
-curl -X POST "http://localhost:8000/billing/checkout" \
-  -H "Authorization: Bearer <CLERK_JWT>" \
-  -H "Content-Type: application/json" \
-  -d '{"plan":"starter"}'
-```
-
-Public billing webhook route:
-
-```bash
-POST /webhooks/lemonsqueezy
-```
-
-Webhook contract (current V0):
-
-- Signature header: `X-Signature` (HMAC SHA-256 of raw body, using `LEMON_SQUEEZY_WEBHOOK_SECRET`).
-- Grant events (default): `order_created`, `subscription_payment_success` (`BILLING_GRANT_EVENT_NAMES` override supported).
-- Credit metadata source: `meta.custom_data.user_id` and `meta.custom_data.credits`.
-- Idempotency key: `<event_name>:<data.id>` fallback to raw payload SHA-256 when `data.id` is absent.
-
-Checkout metadata note:
-
-- `POST /billing/checkout` sends `checkout_data.custom` with `user_id`, `credits`, and `plan`.
-- Webhook grant logic is unchanged and still reads `meta.custom_data.user_id` + `meta.custom_data.credits`.
-
-Upload a video via presigned direct-to-R2 flow (requires R2 env configured):
-
-```bash
-curl -X POST "http://localhost:8000/videos/upload/init" \
-  -H "Authorization: Bearer <CLERK_JWT>" \
-  -H "Content-Type: application/json" \
-  -d '{"filename":"video.mp4","content_type":"video/mp4"}'
-
-curl -X PUT "<UPLOAD_URL_FROM_RESPONSE>" \
-  -H "Content-Type: video/mp4" \
-  --data-binary "@/path/to/video.mp4"
-
-curl -X POST "http://localhost:8000/videos/upload/complete" \
-  -H "Authorization: Bearer <CLERK_JWT>" \
-  -H "Content-Type: application/json" \
-  -d '{"video_id":"<VIDEO_ID_FROM_RESPONSE>","filename":"video.mp4"}'
-```
-
-Ensure your R2 bucket CORS allows `PUT` from the frontend origin for direct uploads.
-
-Small files can still use the API upload endpoint:
-
-```bash
-curl -X POST "http://localhost:8000/videos/upload" \
-  -H "Authorization: Bearer <CLERK_JWT>" \
-  -F "file=@/path/to/video.mp4"
-```
-
-List your videos:
-
-```bash
-curl -X GET "http://localhost:8000/users/me/videos" \
-  -H "Authorization: Bearer <CLERK_JWT>"
-```
-
-Run worker (required for processing queue):
+Worker:
 
 ```bash
 uv run python -m src.worker.runner
 ```
 
-YouTube download workaround (for cloud IP bot detection):
-
-1. Download a video locally with `yt-dlp`:
+Frontend:
 
 ```bash
-uv run yt-dlp -f "best[height<=720]" -o "abc123xyz45.mp4" "https://www.youtube.com/watch?v=abc123xyz45"
+cd frontend && npm run dev
 ```
 
-2. Set `VIDEO_LOCAL_VIDEO_DIR` to the folder containing the file.
-3. Ensure the filename matches the YouTube video ID (`abc123xyz45.mp4`).
-
-Optional reliability overrides:
-
-```bash
-uv run python -m src.worker.runner --max-attempts 3 --stale-lock-timeout 600
-```
-
-- Failed jobs are retried up to `VIDEO_JOB_MAX_ATTEMPTS` (default `3`).
-- `processing` jobs with stale locks older than `VIDEO_JOB_STALE_LOCK_TIMEOUT_S` seconds
-  (default `600`) are recovered and requeued.
-- Idle polling backs off exponentially from `--poll-interval` to
-  `VIDEO_JOB_IDLE_BACKOFF_MAX_S` seconds (default `15`) when the queue is empty.
-- Transient Supabase transport failures are retried with client reset using exponential
-  delay from `VIDEO_JOB_DB_RETRY_BASE_DELAY_S` (default `1`) up to
-  `VIDEO_JOB_DB_RETRY_MAX_DELAY_S` (default `30`).
-
-## Quality Checks
-
-Run all checks with one command:
+### 4) Verify quality checks
 
 ```bash
 ./scripts/workflow/check_all.sh
 ```
 
-Equivalent manual commands:
+## High-Level Architecture
 
-Backend tests:
-
-```bash
-.venv/bin/pytest -q
+```text
+Next.js frontend -> FastAPI API -> Supabase-backed queue -> Python worker -> Modal GPU
+                                            |                  |                |
+                                            v                  v                v
+                                         Supabase           Qdrant      Cloudflare R2
 ```
 
-Frontend lint/build:
+Core flow:
 
-```bash
-cd frontend && npm run lint && npm run build
-```
+1. User submits URL or uploads a video.
+2. API enqueues a processing job.
+3. Worker extracts frames and sends embedding work to Modal.
+4. Embeddings are stored in Qdrant and thumbnails in R2.
+5. User searches and receives timestamped matches.
 
-## Search Latency Benchmark
+## Documentation Map
 
-Deploy the current embedding app code before benchmarking:
+- [PROJECT_SPEC.md](./PROJECT_SPEC.md): stable product charter.
+- [ROADMAP.md](./ROADMAP.md): future work only.
+- [STATUS.md](./STATUS.md): execution history only.
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
 
-```bash
-uv run modal deploy src/embedding/modal_app.py
-```
+## Deployment (At a Glance)
 
-After a video reaches `ready`, run:
+- Frontend: Vercel (`frontend/`)
+- API + worker: Railway (`Dockerfile`, `Dockerfile.worker`)
+- Data: Supabase + Qdrant + Cloudflare R2
 
-```bash
-.venv/bin/python scripts/phase3/search_latency_benchmark.py --video-id <VIDEO_ID>
-```
-
-Optional warm-container comparison (benchmark only):
-
-```bash
-MODAL_TEXT_EMBED_MIN_CONTAINERS=1 .venv/bin/python scripts/phase3/search_latency_benchmark.py --video-id <VIDEO_ID>
-```
-
-Leave `MODAL_TEXT_EMBED_MIN_CONTAINERS` unset for normal development and default-cost behavior.
-
-If you test warm containers, redeploy with env set:
-
-```bash
-MODAL_TEXT_EMBED_MIN_CONTAINERS=1 uv run modal deploy src/embedding/modal_app.py
-```
+Detailed operational runbooks are intentionally kept out of README; use `docs/DEPLOYMENT.md` for operations reference.
 
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](./LICENSE).
 
-You are free to use, modify, and distribute this software under the terms of the AGPL-3.0. If you run a modified version as a network service, you must make the complete source code available to its users.
-
-The hosted service at [videomomentfinder.com](https://videomomentfinder.com) is operated by the project author and subject to its own [Terms of Service](https://videomomentfinder.com/terms).
+If you run a modified version as a network service, you must make the complete source code available to its users.

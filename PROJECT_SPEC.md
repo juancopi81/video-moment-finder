@@ -1,139 +1,100 @@
 # Video Moment Finder
 
-> One-line pitch: Paste a YouTube URL, process it, and search moments with semantic queries
+> One-line pitch: Process a video and find moments using semantic search.
 
 ## Document Boundaries
 
-- **`PROJECT_SPEC.md`**: Stable product charter (vision, user, scope, constraints, success metrics, risks, high-level architecture).
-- **`ROADMAP.md`**: Planned future work (phases, tasks, gates).
-- **`STATUS.md`**: Execution history (progress log, blockers, decisions, measurements).
-- **`RESEARCH_*.md`**: Time-bounded research notes with update dates.
-- **`CLAUDE.md`**: Contributor and agent workflow guidance.
+- **`PROJECT_SPEC.md`**: Stable product charter (vision, users, scope, constraints, metrics, risks, high-level architecture).
+- **`ROADMAP.md`**: Future work only.
+- **`STATUS.md`**: Execution history only.
+- **`docs/archive/`**: Historical research and retired planning snapshots.
+- **`AGENTS.md`**: Canonical repository workflow for coding agents.
 
 ## Goals
 
-- [x] **Revenue** — build a paid product from day 1
-- [x] **Learning** — explore multimodal embeddings, RAG, and video processing
+- Build a paid SaaS product for semantic video moment search.
+- Learn and apply multimodal embeddings in a production-style system.
+- Keep the architecture reliable enough for paid-user expectations.
 
-**Specific goals**:
+## Problem
 
-- Ship a working product and see if people pay
-- Learn Qwen3-VL-Embedding for video frame search
-- Build end-to-end: GPU processing, vector search, payments
+Finding specific moments inside long videos is slow and manual.
+Traditional transcript search misses visual-only content.
 
-## Pain / Opportunity
+Opportunity: map frames and queries into a shared embedding space so users can search by meaning, not only exact words.
 
-Content creators and researchers struggle to find specific moments in videos:
+## Users
 
-- Scrubbing through hours of footage is tedious
-- YouTube search only finds videos, not moments within them
-- Transcript search misses visual content ("when did I show the diagram?")
-- No good tool for "find frames that look like this image"
+- **Primary**: creators/editors searching their own footage.
+- **Secondary**: researchers analyzing long-form video.
+- **Tertiary**: anyone trying to locate moments quickly in long videos.
 
-**Opportunity**: Qwen3-VL-Embedding can embed video frames into semantic vectors. Combined with vector search, users can find moments by describing what they SEE, not just what was SAID.
+## Product Inputs
 
-## User
+- Video source: YouTube URL or direct upload.
+- Query source: text (current baseline) and image-query path (planned expansion).
 
-- **Primary**: YouTubers and video editors searching their own footage
-- **Secondary**: Researchers analyzing video content
-- **Tertiary**: Anyone who wants to find a specific moment in a long video
+## Product Outputs
 
-## Inputs
+- Top timestamped matches for a query.
+- Relevance scores.
+- Jump-to-moment playback links.
 
-- **Required**: YouTube video URL or direct video upload
-- **Query options**:
-  - Text: "person holding a phone", "code editor on screen" (implemented)
-  - Image: upload a reference image to find similar frames (planned)
-
-## Outputs
-
-- **Timestamped results**: Top 5 moments with thumbnails and timestamps
-- **Relevance scores**: Confidence indicator for each match
-- **Click to view**: Jump directly to that moment in the video
-
-## MVP Scope (v0)
+## MVP Scope
 
 ### In Scope
 
-- YouTube videos (via yt-dlp fallback)
-- Direct video upload (stored in durable object storage)
-- Max 30-minute videos
-- Text search (implemented)
-- Image search (planned)
-- Top 5 results with thumbnails
-- Credit-based payments (Lemon Squeezy first, Paddle fallback)
-- User accounts (Clerk)
+- Video processing and indexing pipeline for submitted videos.
+- Semantic retrieval over indexed frames.
+- Timestamped results with thumbnails.
+- Authenticated user workflows.
+- Credit-based billing model.
 
-### Out of Scope (for now)
+### Out of Scope (Current)
 
-- Other video sources (Vimeo)
-- Videos longer than 30 minutes
-- Video clip export
-- Team/collaboration features
-- API access
+- Team collaboration/workspaces.
+- Public API productization.
+- Full video editing/export feature set.
 
-## Tech Stack / Learning Goals
+## Constraints
 
-- **Stack**:
-  - Next.js 16 + Clerk + Lemon Squeezy (frontend payments)
-  - FastAPI (backend API)
-  - Durable queue worker (Supabase-backed job table + Python worker)
-  - Modal (serverless GPU for processing)
-  - Qwen3-VL-Embedding-2B (frame embeddings)
-  - Qdrant Cloud (vector database)
-  - Supabase (Postgres for users/videos)
-  - Cloudflare R2 (thumbnail storage)
-  - yt-dlp + ffmpeg (video download/processing)
+- Cost discipline for GPU-heavy processing.
+- Reliable async processing path (queue + worker).
+- Security and ownership boundaries for user data.
+- Launch-phase operational readiness (monitoring, backups, incident response).
 
-- **Skills to learn**:
-  - Multimodal embeddings for video frames
-  - Serverless GPU with Modal
-  - Vector similarity search at scale
-  - Building a paid SaaS product
+## High-Level Architecture
 
-## Architecture
-
-```
-User Flow:
-1. Paste YouTube URL → 2. Wait for processing → 3. Search with text/image → 4. Get timestamped results
-
-Technical Flow:
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Next.js   │────▶│   FastAPI   │────▶│ Queue Worker │────▶│    Modal    │
-│  (Frontend) │     │  (Backend)  │     │  (Python)    │     │    (GPU)    │
-└─────────────┘     └─────────────┘     └──────────────┘     └─────────────┘
-                          │                    │                    │
-                          ▼                    ▼                    ▼
-                   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-                   │  Supabase   │      │   Qdrant    │      │     R2      │
-                   │ (DB + Jobs) │      │  (Vectors)  │      │ (Thumbnails)│
-                   └─────────────┘      └─────────────┘      └─────────────┘
+```text
++-------------------+    +----------------+    +----------------+    +-----------+
+| Next.js Frontend | -> | FastAPI API    | -> | Queue Worker   | -> | Modal GPU |
++-------------------+    +----------------+    +----------------+    +-----------+
+          |                      |                     |
+          v                      v                     v
+     +----------+          +-----------+         +-------------+
+     | Supabase |          | Qdrant    |         | Cloudflare  |
+     | DB/Jobs  |          | Vectors   |         | R2 Storage  |
+     +----------+          +-----------+         +-------------+
 ```
 
 ## Monetization
 
-- **Pricing model**: Credit-based
-- **Free tier**: 1 video (trial)
-- **Starter**: $5 for 5 videos (~$1/video)
-- **Pro**: $15 for 20 videos (~$0.75/video)
-
-**Unit economics**:
-
-- Cost per video: ~$0.13 (Modal GPU time; 30-min extrapolation on A10G)
-- Break-even: Charge $1+ per video
+- Credit-based model with free trial allowance.
+- Paid plans fund GPU processing and storage costs.
+- Unit economics target: keep processing cost materially below per-video revenue.
 
 ## Success Metrics
 
-| Signal          | Target  | Notes                    |
-| --------------- | ------- | ------------------------ |
-| Search quality  | >70%    | Relevant result in top 3 |
-| Processing time | <20 min | For 30-min video         |
-| Conversion      | >5%     | Free trial → paid        |
-| Cost per video  | <$1     | Modal GPU + storage      |
+| Signal          | Target  | Notes |
+| --------------- | ------- | ----- |
+| Search quality  | >70%    | Relevant result near the top for benchmark queries. |
+| Processing time | <20 min | For a 30-minute video under baseline settings. |
+| Conversion      | >5%     | Free trial to paid conversion indicator. |
+| Cost per video  | <$1     | GPU plus storage operating cost envelope. |
 
 ## Risks & Unknowns
 
-- **YouTube ToS**: Downloading videos may violate terms. Mitigation: Users process their own videos; direct upload path is available.
-- **Processing time**: 30-min video = ~1800 frames = ~15-30 min processing. Mitigation: Show progress, email when ready.
-- **Embedding quality**: Will frame embeddings match text queries well? Need to test with real videos.
-- **GPU costs**: Modal A10G is ~$1/hour. A 30-min video might take 15-30 min = $0.25-0.50 GPU cost.
+- Video-source reliability constraints (for example download restrictions).
+- Query quality variance across different content styles.
+- Cost/latency tradeoffs as usage scales.
+- Billing and operational edge cases during launch hardening.
