@@ -12,11 +12,11 @@ from fastapi.testclient import TestClient
 from src.api.app import (
     _allowed_cors_origin_regex,
     _allowed_cors_origins,
-    _reset_rate_limiters_for_tests,
     _video_record_to_response,
     app,
 )
 from src.api.auth import get_current_user_id
+from src.api.rate_limit import SlidingWindowRateLimiter
 from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
 from src.storage.config import StorageConfigError
@@ -68,12 +68,13 @@ def _credit_record(balance: int) -> CreditRecord:
 
 
 @pytest.fixture(autouse=True)
-def _clear_dependency_overrides() -> None:
+def _clear_dependency_overrides(monkeypatch) -> None:
     app.dependency_overrides.clear()
-    _reset_rate_limiters_for_tests()
+    monkeypatch.setattr("src.api.app.USER_WRITE_RATE_LIMITER", SlidingWindowRateLimiter())
+    monkeypatch.setattr("src.api.app.SEARCH_RATE_LIMITER", SlidingWindowRateLimiter())
+    monkeypatch.setattr("src.api.app.WEBHOOK_RATE_LIMITER", SlidingWindowRateLimiter())
     yield
     app.dependency_overrides.clear()
-    _reset_rate_limiters_for_tests()
 
 
 @pytest.fixture(autouse=True)
@@ -327,6 +328,46 @@ def test_create_video_returns_429_when_write_rate_limit_exceeded(monkeypatch) ->
     assert second.status_code == 429
     assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
     assert second.headers.get("retry-after") is not None
+
+
+def test_create_video_rate_limit_is_isolated_per_user(monkeypatch) -> None:
+    client = TestClient(app)
+    current_user = {"id": "user_a"}
+    app.dependency_overrides[get_current_user_id] = lambda: current_user["id"]
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+    monkeypatch.setenv("RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW", "1")
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    create_calls: list[str] = []
+
+    def _fake_create_video(youtube_url: str, user_id=None, status="queued") -> VideoRecord:
+        _ = youtube_url, status
+        create_calls.append(user_id or "")
+        return _video_record(f"video_{user_id or 'unknown'}", status="queued")
+
+    monkeypatch.setattr("src.api.app.db_create_video", _fake_create_video)
+    monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
+
+    first = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+    second = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+    current_user["id"] = "user_b"
+    third = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert third.status_code == 200
+    assert create_calls == ["user_a", "user_b"]
 
 
 def test_create_video_allows_unlimited_user_override(monkeypatch) -> None:
@@ -1281,6 +1322,53 @@ def test_search_video_rejects_blank_query_text(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Provide query_text or query_image_url"
+
+
+def test_search_video_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+    monkeypatch.setenv("RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW", "1")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+    search_calls: list[dict] = []
+
+    def _fake_search_video_service(*, video_id: str, query_text: str, limit: int):
+        search_calls.append(
+            {
+                "video_id": video_id,
+                "query_text": query_text,
+                "limit": limit,
+            }
+        )
+        return [
+            SearchResult(
+                video_id=video_id,
+                frame_index=0,
+                timestamp_s=12.0,
+                thumbnail_url=None,
+                score=0.9,
+            )
+        ]
+
+    monkeypatch.setattr("src.api.app.search_video_service", _fake_search_video_service)
+
+    first = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "an elevator"},
+    )
+    second = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "an elevator"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
+    assert second.headers.get("retry-after") is not None
+    assert len(search_calls) == 1
 
 
 @pytest.mark.parametrize(

@@ -238,24 +238,35 @@ def _raise_rate_limit_exceeded(retry_after_s: float) -> None:
     )
 
 
-def _enforce_user_write_rate_limit(user_id: str) -> None:
-    result = USER_WRITE_RATE_LIMITER.check(
-        key=user_id,
-        limit=_user_write_rate_limit(),
+def _enforce_rate_limit(
+    *,
+    limiter: SlidingWindowRateLimiter,
+    key: str,
+    limit: int,
+) -> None:
+    result = limiter.check(
+        key=key,
+        limit=limit,
         window_s=_rate_limit_window_s(),
     )
     if not result.allowed:
         _raise_rate_limit_exceeded(result.retry_after_s)
+
+
+def _enforce_user_write_rate_limit(user_id: str) -> None:
+    _enforce_rate_limit(
+        limiter=USER_WRITE_RATE_LIMITER,
+        key=user_id,
+        limit=_user_write_rate_limit(),
+    )
 
 
 def _enforce_search_rate_limit(user_id: str) -> None:
-    result = SEARCH_RATE_LIMITER.check(
+    _enforce_rate_limit(
+        limiter=SEARCH_RATE_LIMITER,
         key=user_id,
         limit=_search_rate_limit(),
-        window_s=_rate_limit_window_s(),
     )
-    if not result.allowed:
-        _raise_rate_limit_exceeded(result.retry_after_s)
 
 
 def _request_ip(request: Request) -> str:
@@ -271,13 +282,11 @@ def _request_ip(request: Request) -> str:
 
 def _enforce_webhook_rate_limit(request: Request) -> None:
     ip = _request_ip(request)
-    result = WEBHOOK_RATE_LIMITER.check(
+    _enforce_rate_limit(
+        limiter=WEBHOOK_RATE_LIMITER,
         key=ip,
         limit=_webhook_rate_limit(),
-        window_s=_rate_limit_window_s(),
     )
-    if not result.allowed:
-        _raise_rate_limit_exceeded(result.retry_after_s)
 
 
 def _billing_grant_event_names() -> set[str]:
@@ -565,12 +574,6 @@ def _enqueue_video_or_fail(video_id: str) -> None:
             status_code=500,
             detail="Failed to enqueue processing job",
         ) from exc
-
-
-def _reset_rate_limiters_for_tests() -> None:
-    USER_WRITE_RATE_LIMITER.reset()
-    SEARCH_RATE_LIMITER.reset()
-    WEBHOOK_RATE_LIMITER.reset()
 
 
 app = FastAPI(
