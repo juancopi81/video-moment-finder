@@ -16,7 +16,7 @@ Maintenance rule: update only the document that owns the change type above to av
 
 ## Next PR Targets
 
-- **PR 5 — Production hardening (error monitoring)**: add Sentry for API/worker runtime errors.
+- **PR 6 — Production hardening (security advisor items)**: complete remaining Supabase Security Advisor checklist (RLS + mutable `search_path` warnings).
 
 ## Production Deployment
 
@@ -54,6 +54,7 @@ Required environment (API + worker):
 - `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`
 - `LEMON_SQUEEZY_CHECKOUT_TEST_MODE` (optional, default `false`)
 - `LEMON_SQUEEZY_WEBHOOK_SECRET` (for webhook signature verification)
+- `SENTRY_DSN` (optional, enables Sentry error monitoring for API + worker)
 
 Troubleshooting: if processing fails with `Token missing. Could not authenticate client.`,
 one of your Railway services is missing `MODAL_TOKEN_ID` and/or `MODAL_TOKEN_SECRET`.
@@ -69,6 +70,8 @@ Optional production tuning:
 - `RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW`
 - `RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW`
 - `RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW`
+- `SENTRY_ENVIRONMENT`
+- `SENTRY_RELEASE`
 
 ### Railway (Worker)
 
@@ -157,6 +160,9 @@ Backend (`.env`):
 - `RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW` (per-user write budget for `POST /videos`, upload routes, and `POST /billing/checkout`; default `12`)
 - `RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW` (per-user budget for `POST /videos/{id}/search`; default `30`)
 - `RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW` (per-source-IP budget for `POST /webhooks/lemonsqueezy`; default `60`)
+- `SENTRY_DSN` (optional; enables Sentry runtime error monitoring for API + worker)
+- `SENTRY_ENVIRONMENT` (optional; Sentry environment tag, default `development`)
+- `SENTRY_RELEASE` (optional; release tag such as deploy commit SHA)
 - `VIDEO_LOCAL_VIDEO_DIR` (optional local cache for pre-downloaded videos, named `<youtube_id>.<ext>`)
 - `R2_*` (required for uploaded video ingest and thumbnails)
 
