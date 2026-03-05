@@ -26,43 +26,59 @@
 - Complete release/incident checklist for API, worker, and frontend deployments.
 - Final copy pass on public pages for pricing/support/legal consistency.
 
----
+### 4.5 Production Deployment Guardrail
 
-## Next: Phase 5 - Search Quality and Product UX
-
-**Gate:** users can find moments with stronger precision and richer query options.
-
-### 5.1 Search Quality
-
-- Add image-query search path (reference-image to frame retrieval).
-- Introduce optional reranking step for top-k candidate results.
-- Add query quality benchmark set and periodic regression checks.
-
-### 5.2 Retrieval UX
-
-- Add richer filtering/sorting for results (score and timestamp windows).
-- Improve result explanations (why a moment matched).
-- Add better empty-state guidance for weak/ambiguous queries.
-
-### 5.3 Processing Experience
-
-- Improve user-facing progress visibility for long processing jobs.
-- Add notification path for job completion (email or in-app).
+- Stop automatic deploy-to-production on every merge to `main`.
+- Require explicit production promotion/manual deploy step.
+- Keep feature branches + PR review as the default development flow.
 
 ---
 
-## Later: Phase 6 - Growth and Platform Extensions
+## Next: Phase 5 - Launch and Learn
 
-**Gate:** expansion features are validated against cost and reliability constraints.
+**Gate:** app is publicly shareable, stable for early users, and instrumented to learn from usage.
 
-### 6.1 Product Expansion
+### 5.1 Analytics Baseline (Behavior, Not Just Telemetry)
 
-- Evaluate support for videos beyond current upload/YouTube flow.
-- Evaluate clip export/sharing workflows for selected moments.
-- Evaluate collaboration features for multi-user workspaces.
+- Use existing logs + DB counts immediately to track early signal (`new users`, `videos submitted`, `jobs completed`, `searches run`).
+- Add a minimal product analytics event set in week 1:
+  - `landing_visit`
+  - `signup_complete`
+  - `video_submitted`
+  - `video_ready`
+  - `search_run`
+  - `search_success`
+  - `checkout_started`
+  - `checkout_success`
+- Keep telemetry/monitoring (Sentry) as system health, separate from product behavior analytics.
 
-### 6.2 Platform and Cost
+### 5.2 Discovery Basics (SEO)
 
-- Optimize embedding/storage cost controls for larger usage.
-- Evaluate adaptive frame sampling strategies by content type.
-- Add monthly cost/performance report for capacity planning.
+- Add/verify `robots.txt`.
+- Add/verify `sitemap.xml`.
+- Ensure public pages have clear title/meta/OG metadata and canonical URLs.
+- Keep `llms.txt` optional and lower priority unless running AI-crawler discoverability experiments.
+
+### 5.3 Core Feature Priorities After Launch
+
+- Ship image-search mode (reference-image to frame retrieval) first.
+- Ship transcript-backed text search second (`where was this said?` queries).
+- Keep UI refinements scoped to issues surfaced by early-user feedback.
+
+---
+
+## Later: Phase 6 - Agent Access and Scale
+
+**Gate:** early usage validates demand and justifies broader platform investment.
+
+### 6.1 Agents-First Integration Path
+
+- Provide authenticated REST access for agent use cases (index video, query indexed video).
+- Add per-user API keys, quotas, and key revocation.
+- Add CLI/MCP wrapper after API contracts are stable.
+
+### 6.2 Environment and Cost Maturity
+
+- Keep lightweight infra while validating; avoid full staging complexity too early.
+- Introduce separate dev/staging environments when usage, team size, or release risk justifies it.
+- Continue embedding/storage cost optimization and adaptive frame-sampling evaluation as volume grows.
