@@ -67,6 +67,7 @@
 | 2026-02-25 | Phase 4 | Developer velocity tooling baseline              | Done        | Added safe git alias policy/docs, installed and documented core platform CLIs (Railway/Supabase/Vercel/Wrangler/AWS), and extended `justfile` with Railway status/vars/logs/redeploy plus CORS/R2 debug helpers.                                   |
 | 2026-02-25 | Phase 4 | Developer tooling safety guardrails              | Done        | Hardened mutating Railway `just` recipes with explicit `CONFIRM_PROD` token and added `rw-vars-keys` (secrets-safe variable name listing) for production-linked workflows.                                                                           |
 | 2026-02-25 | Phase 4 | Preview CORS origin matching                     | Done        | Added backend CORS origin normalization plus wildcard/regex support to allow Vercel preview domains (`OPTIONS` preflight for auth headers) without breaking strict production origins.                                                              |
+| 2026-03-04 | Phase 4 | DRY refactor series (§4.6 PR2+PR3)               | Done        | Replaced webhook raw-dict parsing with typed Pydantic models (`LemonSqueezyPayload`, strict mode, per-field salvage). Extracted `useBillingSummary` hook (dashboard + pricing) and `AuthLoadingFallback` component (3 pages). Added 8 edge-case webhook tests. CORS consolidation already done; stale job recovery and memoization dropped after analysis. |
 
 ## Blockers
 

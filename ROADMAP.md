@@ -176,5 +176,4 @@
 ### 4.6 Code Quality: DRY Refactor Series
 
 - [x] **PR1**: Shared utilities — `src/utils/env.py`, `src/utils/datetime.py`, enqueue helper, Qdrant filter helper
-- [ ] **PR2**: CORS & webhook cleanup — CORS origin consolidation, Lemon Squeezy webhook payload dataclass, stale job recovery refactor
-- [ ] **PR3**: Frontend cleanup — custom hooks extraction (loading state), memoization improvements (pricing CTA)
+- [x] **PR2+PR3** (merged): Webhook Pydantic model (`LemonSqueezyPayload`), `useBillingSummary` hook, `AuthLoadingFallback` component. CORS consolidation already done; stale job recovery and memoization dropped (clean enough / unnecessary).
