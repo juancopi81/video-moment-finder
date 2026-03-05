@@ -29,6 +29,7 @@ cp frontend/.env.example frontend/.env.local
 ```
 
 Fill required values in both files.
+For service ownership and operations detail, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
 ### 2) One-command setup
 
@@ -85,6 +86,7 @@ Core flow:
 - [PROJECT_SPEC.md](./PROJECT_SPEC.md): stable product charter.
 - [ROADMAP.md](./ROADMAP.md): future work only.
 - [STATUS.md](./STATUS.md): execution history only.
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
 - [AGENTS.md](./AGENTS.md): canonical repository workflow for coding agents.
 - [CLAUDE.md](./CLAUDE.md): thin Claude shim pointing to `AGENTS.md`.
 - [docs/archive/README.md](./docs/archive/README.md): historical docs policy.
@@ -95,7 +97,7 @@ Core flow:
 - API + worker: Railway (`Dockerfile`, `Dockerfile.worker`)
 - Data: Supabase + Qdrant + Cloudflare R2
 
-Detailed operational runbooks are intentionally kept out of README to keep this file public-facing and concise.
+Detailed operational runbooks are intentionally kept out of README; use `docs/DEPLOYMENT.md` for operations reference.
 
 ## License
 

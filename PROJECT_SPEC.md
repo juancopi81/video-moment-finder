@@ -66,10 +66,15 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 ## High-Level Architecture
 
 ```text
-Next.js frontend -> FastAPI API -> Supabase-backed queue -> Worker -> Modal GPU
-                                            |                  |                |
-                                            v                  v                v
-                                         Supabase           Qdrant      Cloudflare R2
++-------------------+    +----------------+    +----------------+    +-----------+
+| Next.js Frontend | -> | FastAPI API    | -> | Queue Worker   | -> | Modal GPU |
++-------------------+    +----------------+    +----------------+    +-----------+
+          |                      |                     |
+          v                      v                     v
+     +----------+          +-----------+         +-------------+
+     | Supabase |          | Qdrant    |         | Cloudflare  |
+     | DB/Jobs  |          | Vectors   |         | R2 Storage  |
+     +----------+          +-----------+         +-------------+
 ```
 
 ## Monetization

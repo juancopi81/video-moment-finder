@@ -126,6 +126,7 @@ Graded preflight rule:
 ## Documentation Ownership
 
 - `README.md`: public-facing overview and quick-start.
+- `docs/DEPLOYMENT.md`: deployment env ownership and operational contract reference.
 - `PROJECT_SPEC.md`: stable product charter (vision, user, scope, constraints, success metrics, risks, high-level architecture).
 - `ROADMAP.md`: planned future work only (phases, tasks, gates).
 - `STATUS.md`: execution history only (progress log, blockers, decisions, metrics).
