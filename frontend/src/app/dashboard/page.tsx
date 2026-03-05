@@ -9,10 +9,11 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { BillingSummaryCard } from "@/components/billing-summary-card";
 import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
+import { useBillingSummary } from "@/hooks/useBillingSummary";
 import { API_URL, parseApiError } from "@/lib/api";
-import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
 
 type VideoStatus = "queued" | "processing" | "ready" | "failed";
 
@@ -51,25 +52,24 @@ function DashboardPageContent() {
   const { getToken, isLoaded, userId } = useAuth();
   const searchParams = useSearchParams();
   const [videos, setVideos] = useState<VideoListItem[]>([]);
-  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
-  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const checkoutStatus = searchParams.get("checkout");
+  const { billingSummary, billingSummaryError } = useBillingSummary({
+    checkoutStatus,
+  });
 
   useEffect(() => {
     if (!isLoaded) return;
     if (!userId) {
       setIsLoading(false);
       setVideos([]);
-      setBillingSummary(null);
-      setBillingSummaryError(null);
       return;
     }
 
     let cancelled = false;
 
-    async function loadDashboardData() {
+    async function loadVideos() {
       setIsLoading(true);
       setError(null);
 
@@ -90,19 +90,8 @@ function DashboardPageContent() {
         }
 
         const videosData = (await videosResponse.json()) as VideoListItem[];
-        let summary: BillingSummary | null = null;
-        let summaryError: string | null = null;
-        try {
-          summary = await fetchBillingSummary(token);
-        } catch (err) {
-          summary = null;
-          summaryError =
-            err instanceof Error ? err.message : "Failed to load billing summary.";
-        }
         if (!cancelled) {
           setVideos(videosData);
-          setBillingSummary(summary);
-          setBillingSummaryError(summaryError);
         }
       } catch (err) {
         if (!cancelled) {
@@ -119,19 +108,15 @@ function DashboardPageContent() {
       }
     }
 
-    void loadDashboardData();
+    void loadVideos();
 
     return () => {
       cancelled = true;
     };
-  }, [getToken, isLoaded, userId, checkoutStatus]);
+  }, [getToken, isLoaded, userId]);
 
   if (!isLoaded) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-zinc-600 dark:text-zinc-400">Loading authentication...</p>
-      </div>
-    );
+    return <AuthLoadingFallback />;
   }
 
   return (

@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { BillingSummaryCard } from "@/components/billing-summary-card";
 import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { PricingCard } from "@/components/pricing-card";
+import { useBillingSummary } from "@/hooks/useBillingSummary";
 import { API_URL, parseApiError } from "@/lib/api";
-import { BillingSummary, fetchBillingSummary } from "@/lib/billing";
 
 type BillingPlan = "starter" | "pro";
 type TierId = "free" | BillingPlan;
@@ -67,9 +67,6 @@ const tiers: Tier[] = [
   },
 ];
 
-const CHECKOUT_POLL_ATTEMPTS = 4;
-const CHECKOUT_POLL_INTERVAL_MS = 2500;
-
 function ctaLabel({
   isSignedIn,
   paidPlan,
@@ -98,74 +95,10 @@ function PricingPageContent() {
     null,
   );
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
-  const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
-  const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
   const isSignedIn = !!userId;
   const checkoutStatus = searchParams.get("checkout");
-
-  useEffect(() => {
-    if (!isLoaded) {
-      return;
-    }
-    if (!userId) {
-      setBillingSummary(null);
-      setBillingSummaryError(null);
-      setIsRefreshingBalance(false);
-      return;
-    }
-
-    let cancelled = false;
-    const shouldPollForBalance = checkoutStatus === "success";
-    const pollAttempts = shouldPollForBalance ? CHECKOUT_POLL_ATTEMPTS : 1;
-    setIsRefreshingBalance(shouldPollForBalance);
-
-    async function loadSummary(): Promise<void> {
-      try {
-        const token = await getToken();
-        if (!token) {
-          throw new Error("Please sign in to continue.");
-        }
-        const summary = await fetchBillingSummary(token);
-        if (!cancelled) {
-          setBillingSummary(summary);
-          setBillingSummaryError(null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setBillingSummaryError(
-            err instanceof Error ? err.message : "Failed to load billing summary.",
-          );
-        }
-      }
-    }
-
-    void loadSummary();
-
-    if (pollAttempts <= 1) {
-      setIsRefreshingBalance(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    let runs = 1;
-    const intervalId = window.setInterval(() => {
-      runs += 1;
-      void loadSummary();
-      if (runs >= pollAttempts) {
-        window.clearInterval(intervalId);
-        if (!cancelled) {
-          setIsRefreshingBalance(false);
-        }
-      }
-    }, CHECKOUT_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [checkoutStatus, getToken, isLoaded, userId]);
+  const { billingSummary, billingSummaryError, isRefreshingBalance } =
+    useBillingSummary({ checkoutStatus, enableCheckoutPolling: true });
 
   async function startCheckout(plan: BillingPlan): Promise<void> {
     setCheckoutError(null);

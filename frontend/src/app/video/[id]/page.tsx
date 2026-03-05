@@ -9,6 +9,7 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { API_URL, parseApiError } from "@/lib/api";
 
 type VideoPageProps = {
@@ -191,11 +192,7 @@ export default function VideoPage({ params }: VideoPageProps) {
   }
 
   if (!isLoaded) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-zinc-600 dark:text-zinc-400">Loading authentication...</p>
-      </div>
-    );
+    return <AuthLoadingFallback />;
   }
 
   return (

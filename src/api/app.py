@@ -8,12 +8,12 @@ import json
 from math import ceil
 import os
 import re
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.api.auth import get_current_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
@@ -313,22 +313,19 @@ def _verify_lemonsqueezy_signature(raw_body: bytes, signature: str) -> bool:
     return hmac.compare_digest(digest, signature.strip())
 
 
-def _lemonsqueezy_event_name(payload: dict) -> str | None:
-    meta = payload.get("meta")
-    if isinstance(meta, dict):
-        event_name = meta.get("event_name")
-        if isinstance(event_name, str) and event_name.strip():
-            return event_name.strip()
-    event_name = payload.get("event_name")
-    if isinstance(event_name, str) and event_name.strip():
-        return event_name.strip()
+def _lemonsqueezy_event_name(payload: LemonSqueezyPayload) -> str | None:
+    if payload.meta and payload.meta.event_name and payload.meta.event_name.strip():
+        return payload.meta.event_name.strip()
+    if payload.event_name and payload.event_name.strip():
+        return payload.event_name.strip()
     return None
 
 
-def _lemonsqueezy_event_id(payload: dict, raw_body: bytes, event_name: str) -> str:
-    data = payload.get("data")
-    if isinstance(data, dict):
-        value = data.get("id")
+def _lemonsqueezy_event_id(
+    payload: LemonSqueezyPayload, raw_body: bytes, event_name: str
+) -> str:
+    if payload.data and payload.data.id is not None:
+        value = payload.data.id
         if isinstance(value, str) and value.strip():
             return f"{event_name}:{value.strip()}"
         if isinstance(value, int):
@@ -336,25 +333,62 @@ def _lemonsqueezy_event_id(payload: dict, raw_body: bytes, event_name: str) -> s
     return f"{event_name}:sha256:{hashlib.sha256(raw_body).hexdigest()}"
 
 
-def _extract_credit_grant(payload: dict) -> tuple[str, int] | None:
-    meta = payload.get("meta")
-    if not isinstance(meta, dict):
+def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int] | None:
+    if not payload.meta or not payload.meta.custom_data:
         return None
-    custom_data = meta.get("custom_data")
-    if not isinstance(custom_data, dict):
-        return None
-
-    user_id = custom_data.get("user_id")
-    credits_raw = custom_data.get("credits")
-    if not isinstance(user_id, str) or not user_id.strip():
+    cd = payload.meta.custom_data
+    if not isinstance(cd.user_id, str) or not cd.user_id.strip():
         return None
     try:
-        credits = int(str(credits_raw))
+        credits = int(str(cd.credits))
     except (TypeError, ValueError):
         return None
     if credits <= 0:
         return None
-    return user_id.strip(), credits
+    return cd.user_id.strip(), credits
+
+
+def _parse_lemonsqueezy_payload(payload_dict: dict) -> LemonSqueezyPayload:
+    """Parse a raw webhook dict into a typed payload with per-field salvage."""
+    try:
+        return LemonSqueezyPayload.model_validate(payload_dict)
+    except ValidationError:
+        pass
+
+    meta: LemonSqueezyMeta | None = None
+    data: LemonSqueezyData | None = None
+    raw_meta = payload_dict.get("meta")
+    raw_data = payload_dict.get("data")
+
+    if isinstance(raw_meta, dict):
+        try:
+            meta = LemonSqueezyMeta.model_validate(raw_meta)
+        except ValidationError:
+            raw_en = raw_meta.get("event_name")
+            raw_cd = raw_meta.get("custom_data")
+            cd = None
+            if isinstance(raw_cd, dict):
+                try:
+                    cd = LemonSqueezyCustomData.model_validate(raw_cd)
+                except ValidationError:
+                    pass
+            meta = LemonSqueezyMeta(
+                event_name=raw_en if isinstance(raw_en, str) else None,
+                custom_data=cd,
+            )
+
+    if isinstance(raw_data, dict):
+        try:
+            data = LemonSqueezyData.model_validate(raw_data)
+        except ValidationError:
+            pass
+
+    raw_event = payload_dict.get("event_name")
+    return LemonSqueezyPayload(
+        meta=meta,
+        data=data,
+        event_name=raw_event if isinstance(raw_event, str) else None,
+    )
 
 
 def _billing_plan_variant_id(plan: BillingPlanType) -> str:
@@ -500,6 +534,34 @@ class BillingSummaryResponse(BaseModel):
     free_videos_used: int
     free_videos_remaining: int
     has_unlimited_access: bool
+
+
+class LemonSqueezyCustomData(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    user_id: str | None = None
+    credits: Any = None
+
+
+class LemonSqueezyMeta(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    event_name: str | None = None
+    custom_data: LemonSqueezyCustomData | None = None
+
+
+class LemonSqueezyData(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    id: str | int | None = None
+
+
+class LemonSqueezyPayload(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    meta: LemonSqueezyMeta | None = None
+    data: LemonSqueezyData | None = None
+    event_name: str | None = None
 
 
 def _video_record_to_response(record: VideoRecord) -> VideoResponse:
@@ -935,9 +997,14 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     try:
-        payload = json.loads(raw_body.decode("utf-8"))
+        payload_dict = json.loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
+
+    if not isinstance(payload_dict, dict):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
+    payload = _parse_lemonsqueezy_payload(payload_dict)
 
     event_name = _lemonsqueezy_event_name(payload)
     if not event_name:
@@ -968,7 +1035,7 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
         event_type=event_name,
         user_id=user_id,
         credits=credits,
-        payload=payload,
+        payload=payload_dict,
     ).applied
 
     logger.info(
