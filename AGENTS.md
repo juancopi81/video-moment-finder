@@ -136,6 +136,7 @@ Guidelines:
 
 - Update only the owning doc for each change type.
 - Keep `README.md` user-focused; keep agent/developer process in `AGENTS.md`.
+- Treat `docs/archive/` as opt-in historical reference only; do not read it or include it in broad searches unless the task explicitly needs historical context.
 - Temporary runbooks/checklists are allowed during active testing but remove them once done.
 
 ## Path Privacy Rule

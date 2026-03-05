@@ -87,9 +87,6 @@ Core flow:
 - [ROADMAP.md](./ROADMAP.md): future work only.
 - [STATUS.md](./STATUS.md): execution history only.
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
-- [AGENTS.md](./AGENTS.md): canonical repository workflow for coding agents.
-- [CLAUDE.md](./CLAUDE.md): thin Claude shim pointing to `AGENTS.md`.
-- [docs/archive/README.md](./docs/archive/README.md): historical docs policy.
 
 ## Deployment (At a Glance)
 
