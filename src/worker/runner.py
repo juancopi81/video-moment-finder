@@ -11,6 +11,7 @@ import httpx
 
 from src.api.processing import process_video
 from src.config.env import load_env
+from src.monitoring.sentry import capture_exception, init_sentry
 from src.utils.datetime import parse_iso_datetime
 from src.utils.env import get_env_float, get_env_int
 from src.db.supabase import (
@@ -168,6 +169,7 @@ def _process_claimed_job(
     try:
         process_video(video)
     except Exception as exc:
+        capture_exception(exc)
         error_message = str(exc)
         logger.exception("Job failed job_id=%s video_id=%s: %s", job.id, video.id, exc)
         if job.attempt_count < max_attempts:
@@ -350,6 +352,7 @@ def run_forever(
 
 def main() -> None:
     load_env()
+    init_sentry(service="worker")
     default_max_attempts = get_env_int(
         "VIDEO_JOB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS, strict=True
     )

@@ -1,6 +1,7 @@
 """FastAPI app with real Supabase, Modal, and Qdrant integrations."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -24,6 +25,7 @@ from src.billing.lemonsqueezy import (
     create_checkout_session,
 )
 from src.config.env import load_env
+from src.monitoring.sentry import capture_exception, init_sentry
 from src.db.supabase import (
     VideoRecord,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
@@ -50,6 +52,7 @@ from uuid import UUID, uuid4
 
 load_env()
 logger = get_logger(__name__)
+init_sentry(service="api")
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
 BillingPlanType = Literal["starter", "pro"]
@@ -650,6 +653,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def report_unhandled_exceptions(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        await asyncio.to_thread(
+            capture_exception,
+            exc,
+            context={
+                "path": request.url.path,
+                "method": request.method,
+            },
+        )
+        raise
 
 
 @app.post("/videos", response_model=VideoResponse)
