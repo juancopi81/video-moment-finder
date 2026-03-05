@@ -1641,6 +1641,243 @@ def test_lemonsqueezy_webhook_returns_429_when_ip_rate_limit_exceeded(monkeypatc
     assert second.headers.get("retry-after") is not None
 
 
+def _lemonsqueezy_raw_signature(secret: str, raw: bytes) -> str:
+    return hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
+
+
+def test_lemonsqueezy_webhook_rejects_non_object_json(monkeypatch) -> None:
+    """Non-dict top-level JSON (e.g. []) returns 400."""
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    raw = b"[]"
+    signature = _lemonsqueezy_raw_signature("secret_123", raw)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid webhook payload"
+
+
+def test_lemonsqueezy_webhook_malformed_meta_with_top_level_event_name(
+    monkeypatch,
+) -> None:
+    """Malformed meta with top-level event_name degrades to non-grant, not 400."""
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    payload = {
+        "meta": "x",
+        "event_name": "order_created",
+        "data": {"id": "e1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received"] is True
+    assert body["processed"] is False
+    assert body["granted"] is False
+    assert body["reason"] == "No credit grant metadata found in meta.custom_data"
+
+
+def test_lemonsqueezy_webhook_rejects_bool_credits(monkeypatch) -> None:
+    """Bool credits are rejected (int(str(True)) raises ValueError)."""
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    monkeypatch.setattr(
+        "src.api.app.db_apply_billing_credit_grant",
+        lambda **kw: pytest.fail("should not be called"),
+    )
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "u1", "credits": True},
+        },
+        "data": {"id": "e1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received"] is True
+    assert body["processed"] is False
+    assert body["granted"] is False
+    assert body["reason"] == "No credit grant metadata found in meta.custom_data"
+
+
+def test_lemonsqueezy_webhook_rejects_float_string_credits(monkeypatch) -> None:
+    """Float-string credits are rejected (int('5.0') raises ValueError)."""
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    monkeypatch.setattr(
+        "src.api.app.db_apply_billing_credit_grant",
+        lambda **kw: pytest.fail("should not be called"),
+    )
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "u1", "credits": "5.0"},
+        },
+        "data": {"id": "e1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received"] is True
+    assert body["processed"] is False
+    assert body["granted"] is False
+
+
+def test_lemonsqueezy_webhook_valid_custom_data_invalid_data_type(
+    monkeypatch,
+) -> None:
+    """Valid meta.custom_data + invalid data type still grants with SHA event_id."""
+    from unittest.mock import MagicMock
+
+    from src.db.supabase import BillingCreditGrantResult
+
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    mock_grant = MagicMock(return_value=BillingCreditGrantResult(applied=True))
+    monkeypatch.setattr("src.api.app.db_apply_billing_credit_grant", mock_grant)
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "u1", "credits": 5},
+        },
+        "data": [],
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received"] is True
+    assert body["processed"] is True
+    assert body["granted"] is True
+    call_kwargs = mock_grant.call_args.kwargs
+    assert call_kwargs["event_id"].startswith("order_created:sha256:")
+
+
+def test_lemonsqueezy_webhook_rejects_non_string_user_id(monkeypatch) -> None:
+    """Non-string user_id (e.g. int) does not grant."""
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    monkeypatch.setattr(
+        "src.api.app.db_apply_billing_credit_grant",
+        lambda **kw: pytest.fail("should not be called"),
+    )
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": 123, "credits": 5},
+        },
+        "data": {"id": "e1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] is False
+    assert body["granted"] is False
+    assert body["reason"] == "No credit grant metadata found in meta.custom_data"
+
+
+def test_lemonsqueezy_webhook_valid_event_name_malformed_custom_data(
+    monkeypatch,
+) -> None:
+    """Valid meta.event_name + malformed custom_data degrades to non-grant, not 400."""
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": "bad",
+        },
+        "data": {"id": "e1"},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received"] is True
+    assert body["processed"] is False
+    assert body["granted"] is False
+    assert body["reason"] == "No credit grant metadata found in meta.custom_data"
+
+
+def test_lemonsqueezy_webhook_bool_data_id_uses_sha_fallback(monkeypatch) -> None:
+    """Bool data.id falls back to SHA event_id (intentional tightening)."""
+    from unittest.mock import MagicMock
+
+    from src.db.supabase import BillingCreditGrantResult
+
+    client = TestClient(app)
+    monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", "secret_123")
+    mock_grant = MagicMock(return_value=BillingCreditGrantResult(applied=True))
+    monkeypatch.setattr("src.api.app.db_apply_billing_credit_grant", mock_grant)
+    payload = {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"user_id": "u1", "credits": 5},
+        },
+        "data": {"id": True},
+    }
+    raw, signature = _lemonsqueezy_signature("secret_123", payload)
+
+    response = client.post(
+        "/webhooks/lemonsqueezy",
+        content=raw,
+        headers={"x-signature": signature},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] is True
+    assert body["granted"] is True
+    call_kwargs = mock_grant.call_args.kwargs
+    assert call_kwargs["event_id"].startswith("order_created:sha256:")
+
+
 def test_allowed_cors_origins_uses_env(monkeypatch) -> None:
     monkeypatch.setenv(
         "CORS_ALLOWED_ORIGINS",
