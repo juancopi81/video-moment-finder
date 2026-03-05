@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from src.api.processing import process_video
+from src.api.processing import VideoValidationError, process_video
 from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.utils.datetime import parse_iso_datetime
@@ -168,6 +168,26 @@ def _process_claimed_job(
 
     try:
         process_video(video)
+    except VideoValidationError as exc:
+        error_message = str(exc)
+        logger.warning(
+            "Non-retriable validation failure job_id=%s video_id=%s: %s",
+            job.id,
+            video.id,
+            error_message,
+        )
+        update_video_status(video.id, "failed", error_message=error_message)
+        complete_video_job(job.id, "failed", error_message=error_message)
+        _log_worker_metric(
+            "job_terminal_failure",
+            worker_id=worker_id,
+            job_id=job.id,
+            video_id=video.id,
+            attempt=job.attempt_count,
+            max_attempts=max_attempts,
+            reason="validation_failure",
+        )
+        return False
     except Exception as exc:
         capture_exception(exc)
         error_message = str(exc)

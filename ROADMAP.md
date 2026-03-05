@@ -155,7 +155,7 @@
 
 - ~~Error monitoring (Sentry)~~ — **done** (2026-03-05)
 - ~~Rate limiting~~ — **done** (2026-03-04)
-- Input validation (URL format, video length check)
+- ~~Input validation (URL format, video length check)~~ — **done** (2026-03-05)
 - Enable Supabase Row Level Security (RLS) on `public.videos`, `public.credits`, and `public.video_jobs`, with per-user access policies
 - Resolve Supabase "Function Search Path Mutable" warnings by setting explicit `search_path` on custom DB functions (including update timestamp trigger functions)
 

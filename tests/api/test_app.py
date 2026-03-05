@@ -8,6 +8,7 @@ import json
 import re
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
@@ -91,6 +92,14 @@ def _mock_free_video_count(monkeypatch) -> None:
             allowed=False,
             remaining_balance=0,
         ),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _mock_upload_duration_validation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_duration_or_raise",
+        lambda store, key: None,
     )
 
 
@@ -821,6 +830,61 @@ def test_upload_video_cleans_up_source_on_post_upload_credit_denial(monkeypatch)
     assert cleanup_calls == ["source/video_123/upload.mp4"]
 
 
+def test_upload_video_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    consume_calls: list[str] = []
+    create_called = {"value": False}
+    enqueue_calls: list[str] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def upload_source_video(self, *args, **kwargs):
+            class Result:
+                key = "source/video_123/upload.mp4"
+
+            return Result()
+
+        def delete_source_object(self, key: str) -> None:
+            return None
+
+    def _raise_duration(*_args, **_kwargs) -> None:
+        raise HTTPException(status_code=400, detail="Video exceeds 30-minute limit")
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_duration_or_raise",
+        _raise_duration,
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda user_id: consume_calls.append(user_id)
+        or ProcessingCreditConsumeResult(allowed=True, remaining_balance=0),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_uploaded_video",
+        lambda *args, **kwargs: create_called.update(value=True),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id),
+    )
+
+    response = client.post(
+        "/videos/upload",
+        files={"file": ("upload.mp4", b"data", "video/mp4")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Video exceeds 30-minute limit"
+    assert consume_calls == []
+    assert create_called["value"] is False
+    assert enqueue_calls == []
+
+
 def test_complete_upload_requires_authentication() -> None:
     client = TestClient(app)
     response = client.post(
@@ -902,6 +966,59 @@ def test_complete_upload_rejects_when_no_paid_credits_after_free_limit(monkeypat
 
     assert response.status_code == 402
     assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
+
+
+def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    consume_calls: list[str] = []
+    create_called = {"value": False}
+    enqueue_calls: list[str] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
+
+        def delete_source_object(self, key: str) -> None:
+            return None
+
+    def _raise_duration(*_args, **_kwargs) -> None:
+        raise HTTPException(status_code=400, detail="Video exceeds 30-minute limit")
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_duration_or_raise",
+        _raise_duration,
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda user_id: consume_calls.append(user_id)
+        or ProcessingCreditConsumeResult(allowed=True, remaining_balance=0),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_uploaded_video",
+        lambda *args, **kwargs: create_called.update(value=True),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id),
+    )
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Video exceeds 30-minute limit"
+    assert consume_calls == []
+    assert create_called["value"] is False
+    assert enqueue_calls == []
 
 
 def test_complete_upload_enqueues_job(monkeypatch) -> None:

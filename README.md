@@ -201,6 +201,7 @@ Video admission policy:
 - While under `VIDEO_MAX_FREE_VIDEOS`, submissions are admitted without paid-credit deduction.
 - Once free quota is exhausted, processing admission (`POST /videos`, `POST /videos/upload`, `POST /videos/upload/complete`) consumes one credit atomically.
 - If no credits are available after free quota, these endpoints return `402` with `Insufficient credits. Buy credits to process another video.`
+- Uploaded source videos are duration-checked with `ffprobe` before enqueue (and re-checked in worker defense-in-depth); files over `VIDEO_MAX_DURATION_S` are rejected with `400`.
 - `POST /videos/upload/init` is a non-consuming precheck and only verifies eligibility.
 - When configured per-window budgets are exhausted, the API returns `429` with `Retry-After` headers for protected write/search/webhook endpoints.
 

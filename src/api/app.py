@@ -8,7 +8,9 @@ import hmac
 import json
 from math import ceil
 import os
+from pathlib import Path
 import re
+import tempfile
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -47,6 +49,7 @@ from src.utils.datetime import parse_iso_datetime
 from src.utils.env import get_env_int
 from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
+from src.video.metadata import VideoMetadataProbeError, probe_video_duration_s
 from src.video.youtube import normalize_youtube_url
 from uuid import UUID, uuid4
 
@@ -154,6 +157,35 @@ def _validate_video_duration(youtube_url: str) -> None:
 
     max_duration_s = _max_video_duration_s()
     if metadata.duration_s > max_duration_s:
+        max_minutes = max_duration_s // 60
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video exceeds {max_minutes}-minute limit",
+        )
+
+
+def _validate_uploaded_source_duration_or_raise(store: R2Store, key: str) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        probe_path = Path(temp_dir) / "upload_probe"
+        try:
+            store.download_source_video(key, probe_path)
+        except R2StorageError as exc:
+            logger.exception("Failed to download uploaded source for duration validation: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to verify upload",
+            ) from exc
+
+        try:
+            duration_s = probe_video_duration_s(probe_path)
+        except VideoMetadataProbeError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unable to determine uploaded video duration: {exc}",
+            ) from exc
+
+    max_duration_s = _max_video_duration_s()
+    if duration_s > max_duration_s:
         max_minutes = max_duration_s // 60
         raise HTTPException(
             status_code=400,
@@ -725,6 +757,21 @@ def upload_video(
         ) from exc
 
     try:
+        _validate_uploaded_source_duration_or_raise(store, upload_result.key)
+    except HTTPException as exc:
+        if exc.status_code == 400:
+            try:
+                store.delete_source_object(upload_result.key)
+            except R2StorageError as cleanup_exc:
+                logger.warning(
+                    "Failed to cleanup invalid uploaded source for user_id=%s key=%s: %s",
+                    user_id,
+                    upload_result.key,
+                    cleanup_exc,
+                )
+        raise
+
+    try:
         if requires_credit:
             _consume_processing_credit_or_raise(user_id)
     except HTTPException as exc:
@@ -839,6 +886,21 @@ def complete_upload(
             status_code=503,
             detail="Failed to verify upload",
         ) from exc
+
+    try:
+        _validate_uploaded_source_duration_or_raise(store, key)
+    except HTTPException as exc:
+        if exc.status_code == 400:
+            try:
+                store.delete_source_object(key)
+            except R2StorageError as cleanup_exc:
+                logger.warning(
+                    "Failed to cleanup invalid uploaded source for user_id=%s key=%s: %s",
+                    user_id,
+                    key,
+                    cleanup_exc,
+                )
+        raise
 
     if requires_credit:
         _consume_processing_credit_or_raise(user_id)

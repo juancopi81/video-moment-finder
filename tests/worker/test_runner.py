@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
+from src.api.processing import VideoValidationError
 from src.db.supabase import VideoJobRecord, VideoRecord
 from src.worker.runner import run_forever, run_once
 
@@ -207,6 +208,59 @@ def test_run_once_marks_terminal_failure_when_retry_cap_reached(monkeypatch) -> 
         "job_terminal_failure",
     ]
     assert metrics[1]["reason"] == "max_attempts"
+
+
+def test_run_once_does_not_retry_validation_failures(monkeypatch) -> None:
+    status_updates: list[tuple[str, str, str | None]] = []
+    completions: list[tuple[str, str, str | None]] = []
+    requeues: list[tuple[str, str | None]] = []
+    metrics: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        "src.worker.runner.claim_next_video_job",
+        lambda worker_id: _job("video_123", attempt_count=1),
+    )
+    monkeypatch.setattr("src.worker.runner.get_video", lambda video_id: _video(video_id))
+
+    def _raise(video: VideoRecord) -> None:
+        raise VideoValidationError("Uploaded video exceeds 30-minute limit")
+
+    monkeypatch.setattr("src.worker.runner.process_video", _raise)
+    monkeypatch.setattr(
+        "src.worker.runner.requeue_video_job",
+        lambda job_id, error_message=None: requeues.append((job_id, error_message)),
+    )
+    monkeypatch.setattr(
+        "src.worker.runner.update_video_status",
+        lambda video_id, status, error_message=None: status_updates.append(
+            (video_id, status, error_message)
+        )
+        or _video(video_id, status=status),
+    )
+    monkeypatch.setattr(
+        "src.worker.runner.complete_video_job",
+        lambda job_id, status, error_message=None: completions.append(
+            (job_id, status, error_message)
+        )
+        or _job("video_123", job_id=job_id, status="failed", attempt_count=1),
+    )
+    monkeypatch.setattr(
+        "src.worker.runner._log_worker_metric",
+        lambda event, **fields: metrics.append({"event": event, **fields}),
+    )
+
+    assert run_once(worker_id="worker:test", max_attempts=3) is True
+    assert status_updates == [
+        ("video_123", "processing", None),
+        ("video_123", "failed", "Uploaded video exceeds 30-minute limit"),
+    ]
+    assert completions == [("job_123", "failed", "Uploaded video exceeds 30-minute limit")]
+    assert requeues == []
+    assert [metric["event"] for metric in metrics] == [
+        "job_attempt_started",
+        "job_terminal_failure",
+    ]
+    assert metrics[1]["reason"] == "validation_failure"
 
 
 def test_run_once_recovers_stale_lock_and_processes_next_job(monkeypatch) -> None:
