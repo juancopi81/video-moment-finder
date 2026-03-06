@@ -5,6 +5,12 @@ import pytest
 from src.embedding import modal_app
 
 
+def test_modal_uv_sync_command_includes_modal_group() -> None:
+    assert modal_app.MODAL_UV_SYNC_COMMAND == (
+        "uv sync --frozen --group modal --compile-bytecode --python-preference=only-system"
+    )
+
+
 def test_optional_non_negative_int_env_unset(monkeypatch) -> None:
     monkeypatch.delenv("MODAL_TEXT_EMBED_MIN_CONTAINERS", raising=False)
     assert modal_app._optional_non_negative_int_env("MODAL_TEXT_EMBED_MIN_CONTAINERS") is None
