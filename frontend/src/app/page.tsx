@@ -239,10 +239,6 @@ export default function Home() {
 
       {/* Tool section */}
       <section id="tool" className="flex flex-col items-center px-4 pb-16">
-        <p className="mb-4 max-w-md text-center text-xs text-zinc-500 dark:text-zinc-500">
-          A 30-minute video typically processes in about 7–8 minutes. You can
-          leave and come back while it finishes.
-        </p>
         <SignedOut>
           <div className="w-full max-w-xl rounded-lg border border-zinc-300 dark:border-zinc-700 p-6 text-center">
             <p className="mb-4 text-zinc-600 dark:text-zinc-400">
