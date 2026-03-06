@@ -1,0 +1,11 @@
+# Video Moment Finder
+
+> Video Moment Finder is a SaaS tool that lets you process videos and find specific moments using semantic search. Upload a video or paste a YouTube URL, then search by text description or example image to jump straight to matching timestamps.
+
+## Links
+
+- [Homepage](https://videomomentfinder.com/)
+- [Pricing](https://videomomentfinder.com/pricing)
+- [Support](https://videomomentfinder.com/support)
+- [Privacy Policy](https://videomomentfinder.com/privacy)
+- [Terms of Service](https://videomomentfinder.com/terms)
