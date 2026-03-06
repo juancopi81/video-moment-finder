@@ -61,7 +61,8 @@
 
 ### 5.3 Core Feature Priorities After Launch
 
-- Ship transcript-backed text search first (`where was this said?` queries).
+- Treat Phase 5 and Phase 6 as one staged rollout: strengthen core search first, then expose the same capabilities to agents. See [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
+- Ship transcript-backed or hybrid search first (`where was this said?` queries).
 - Keep UI refinements scoped to issues surfaced by early-user feedback.
 
 ---
@@ -70,11 +71,12 @@
 
 **Gate:** early usage validates demand and justifies broader platform investment.
 
-### 6.1 Agents-First Integration Path
+### 6.1 Agent-Enabled Integration Path
 
-- Provide authenticated REST access for agent use cases (index video, query indexed video).
-- Add per-user API keys, quotas, and key revocation.
+- Provide authenticated REST access over the same core product capabilities.
+- Add per-user API keys, usage attribution, quotas, and key revocation.
 - Add CLI/MCP wrapper after API contracts are stable.
+- Deliver Phase 6 as milestone-based PR work with review gates defined in [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
 
 ### 6.2 Environment and Cost Maturity
 
