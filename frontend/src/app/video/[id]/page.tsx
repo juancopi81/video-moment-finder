@@ -289,6 +289,9 @@ export default function VideoPage({ params }: VideoPageProps) {
             <div className="w-64 h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
               <div className="w-1/2 h-full bg-zinc-900 dark:bg-zinc-100 animate-pulse" />
             </div>
+            <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+              A 30-minute video typically takes about 7–8 minutes. You can leave and come back.
+            </p>
           </div>
         )}
 

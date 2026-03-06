@@ -200,25 +200,28 @@ export default function Home() {
       {/* Hero */}
       <section className="flex flex-col items-center px-4 pt-20 pb-16 text-center animate-fade-in-up">
         <h1 className="font-heading text-5xl font-bold leading-tight sm:text-6xl">
-          Find any moment
+          Find the exact moment
           <br />
           in any video
         </h1>
         <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-          Paste a YouTube URL or upload a video. Search with natural language or an
-          example image to find the exact moment you need.
+          Search by description or example image to jump to the exact
+          timestamp — in any YouTube video or upload.
         </p>
-        <div className="mt-8 flex gap-4">
+        <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+          1 free video &middot; up to 30 min
+        </span>
+        <div className="mt-8 flex items-center gap-4">
           <SignedOut>
             <a
               href="#tool"
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
-              Try it free
+              Try 1 free video
             </a>
             <Link
               href="/pricing"
-              className="rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium transition-colors hover:border-accent hover:text-accent dark:border-zinc-700"
+              className="text-sm font-medium text-zinc-600 transition-colors hover:text-accent dark:text-zinc-400"
             >
               See pricing
             </Link>
@@ -231,50 +234,6 @@ export default function Home() {
               Process a video
             </a>
           </SignedIn>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="mx-auto max-w-4xl px-4 pb-16">
-        <h2 className="font-heading text-center text-2xl font-bold">
-          How it works
-        </h2>
-        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
-          {[
-            {
-              step: "1",
-              title: "Paste or upload",
-              description: "Submit a YouTube URL or upload a video file up to 30 minutes long.",
-            },
-            {
-              step: "2",
-              title: "AI processes",
-              description:
-                "Our AI extracts every frame and builds a semantic understanding of the visual content.",
-            },
-            {
-              step: "3",
-              title: "Search moments",
-              description:
-                'Type what you\'re looking for or upload an example image — "person standing at whiteboard" — and find matching frames instantly.',
-            },
-          ].map((item, i) => (
-            <div
-              key={item.step}
-              className="rounded-xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800 animate-fade-in-up"
-              style={{ animationDelay: `${i * 150}ms` }}
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
-                {item.step}
-              </div>
-              <h3 className="mt-3 font-heading font-semibold">
-                {item.title}
-              </h3>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                {item.description}
-              </p>
-            </div>
-          ))}
         </div>
       </section>
 
@@ -366,21 +325,100 @@ export default function Home() {
         </SignedIn>
       </section>
 
+      {/* More than transcript search */}
+      <section className="mx-auto max-w-3xl px-4 pb-16 text-center">
+        <h2 className="font-heading text-2xl font-bold">
+          More than transcript search
+        </h2>
+        <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+          Find moments that are hard to locate with chapters or transcript
+          search:
+        </p>
+        <ul className="mt-4 inline-block space-y-2.5 text-left text-sm text-zinc-600 dark:text-zinc-400">
+          {[
+            "Visual scenes",
+            "Slides and dashboards",
+            "Product shots",
+            "Reactions and gestures",
+            "Moments similar to an example image",
+          ].map((item) => (
+            <li key={item} className="flex items-center gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 dark:bg-accent/20">
+                <svg className="h-3 w-3 text-accent" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2.5 6l2.5 2.5 4.5-4.5" />
+                </svg>
+              </span>
+              {item}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* How it works */}
+      <section className="mx-auto max-w-4xl px-4 pb-16">
+        <h2 className="font-heading text-center text-2xl font-bold">
+          How it works
+        </h2>
+        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              step: "1",
+              title: "Add a video",
+              description: "Paste a YouTube URL or upload a file.",
+            },
+            {
+              step: "2",
+              title: "We index the visuals",
+              description:
+                "We extract frames and make the video searchable.",
+            },
+            {
+              step: "3",
+              title: "Search by text or image",
+              description:
+                "Describe the scene you want, or upload one example image.",
+            },
+            {
+              step: "4",
+              title: "Jump to the moment",
+              description:
+                "Open timestamped matches with thumbnails.",
+            },
+          ].map((item, i) => (
+            <div
+              key={item.step}
+              className="rounded-xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800 animate-fade-in-up"
+              style={{ animationDelay: `${i * 150}ms` }}
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
+                {item.step}
+              </div>
+              <h3 className="mt-3 font-heading font-semibold">
+                {item.title}
+              </h3>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                {item.description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* CTA banner */}
       <SignedOut>
         <section className="border-t border-zinc-200 bg-surface-card px-4 py-16 text-center dark:border-zinc-800">
           <h2 className="font-heading text-2xl font-bold">
-            Ready to find your moments?
+            Stop scrubbing. Start searching.
           </h2>
           <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-            Start searching through your videos today.
+            Try Video Moment Finder on one real video.
           </p>
-          <Link
-            href="/pricing"
+          <a
+            href="#tool"
             className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
           >
-            View pricing
-          </Link>
+            Try 1 free video
+          </a>
         </section>
       </SignedOut>
     </div>
