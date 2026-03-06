@@ -49,3 +49,27 @@ Suggested milestone gates:
 - Inside each PR, milestone commits should land at clear review checkpoints.
 - If a phase grows too large or gets blocked, split at a milestone boundary instead of mixing partial work into one PR.
 - A milestone is done only when its review gate is explicit and repeatable.
+
+## Suggested Commit Sequence
+
+The intent is that a developer can work in order and stop after any milestone commit for review.
+
+### Phase 5 PR
+
+1. Add transcript-backed or hybrid retrieval behind the existing search flow.
+   Review gate: spoken-content queries produce useful timestamped results.
+2. Add regression coverage so current text and image search paths still pass.
+   Review gate: existing search modes still behave correctly after retrieval changes.
+3. Normalize the search response shape needed by later API clients.
+   Review gate: result fields are stable enough to reuse without web-specific assumptions.
+
+### Phase 6 PR
+
+1. Add authenticated REST endpoints over the same core capabilities.
+   Review gate: a happy-path API flow can process a video and run search.
+2. Add API keys with account ownership, scope, revocation, and quota checks.
+   Review gate: ownership and key lifecycle rules are covered by tests.
+3. Add usage attribution rules that avoid double billing on retries.
+   Review gate: usage accounting is correct for normal calls and idempotent retries.
+4. Add MCP or CLI only if the API contract is stable after the earlier milestones.
+   Review gate: wrapper smoke checks pass without adding new product-only logic.
