@@ -209,7 +209,7 @@ export default function Home() {
           timestamp — in any YouTube video or upload.
         </p>
         <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-          1 free credit &middot; videos up to 30 min
+          1 free video &middot; up to 30 min
         </span>
         <div className="mt-8 flex items-center gap-4">
           <SignedOut>
