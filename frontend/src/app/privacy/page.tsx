@@ -30,6 +30,12 @@ export default function PrivacyPage() {
               <strong>Usage data:</strong> Search queries, optional example images submitted for
               search, processing history, and credit usage.
             </li>
+            <li>
+              <strong>Product analytics:</strong> We record first-party behavioral events (e.g.,
+              page visits, video submissions, searches) to understand how the Service is used.
+              These events are stored in our own database and are not shared with third-party
+              analytics providers.
+            </li>
           </ul>
         </section>
 

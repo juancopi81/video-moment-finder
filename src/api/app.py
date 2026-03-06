@@ -19,7 +19,8 @@ from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form, Req
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
-from src.api.auth import get_current_user_id
+from src.analytics.events import track
+from src.api.auth import get_current_user_id, get_optional_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,
@@ -641,6 +642,11 @@ class BillingCheckoutResponse(BaseModel):
     test_mode: bool
 
 
+class AnalyticsEventRequest(BaseModel):
+    event_name: Literal["landing_visit", "signup_complete"]
+    metadata: dict | None = None
+
+
 class BillingSummaryResponse(BaseModel):
     credits_balance: int
     free_videos_limit: int
@@ -832,6 +838,17 @@ async def report_unhandled_exceptions(request: Request, call_next):
         raise
 
 
+@app.post("/analytics/event", status_code=204)
+def analytics_event(
+    request: AnalyticsEventRequest,
+    user_id: str | None = Depends(get_optional_user_id),
+) -> None:
+    """Record a frontend-originating analytics event."""
+    if request.event_name == "signup_complete" and user_id is None:
+        raise HTTPException(status_code=401, detail="Authentication required for signup_complete")
+    track(request.event_name, user_id=user_id, metadata=request.metadata)
+
+
 @app.post("/videos", response_model=VideoResponse)
 def create_video(
     request: VideoCreateRequest,
@@ -843,6 +860,7 @@ def create_video(
     _consume_and_admit_video_processing(user_id)
     record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
     _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "youtube"})
     return _video_record_to_response(record)
 
 
@@ -915,6 +933,7 @@ def upload_video(
         status="queued",
     )
     _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
 
 
@@ -1038,6 +1057,7 @@ def complete_upload(
         raise
 
     _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
 
 
@@ -1097,6 +1117,7 @@ def search_video(
         raise HTTPException(status_code=400, detail="Provide query_text")
 
     record = _get_ready_video_for_search(video_id, user_id)
+    track("search_run", user_id=user_id, metadata={"video_id": video_id, "mode": "text"})
 
     try:
         results = search_video_by_text_service(
@@ -1107,6 +1128,7 @@ def search_video(
     except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
         _raise_search_backend_unavailable(video_id, exc)
 
+    track("search_success", user_id=user_id, metadata={"video_id": video_id, "mode": "text", "result_count": len(results)})
     return _build_video_search_response(record, results)
 
 
@@ -1125,6 +1147,7 @@ def search_video_by_image(
         raise HTTPException(status_code=400, detail="Only image uploads are supported")
 
     image_bytes = _read_query_image_bytes(query_image)
+    track("search_run", user_id=user_id, metadata={"video_id": video_id, "mode": "image"})
 
     try:
         results = search_video_by_image_service(
@@ -1137,6 +1160,7 @@ def search_video_by_image(
     except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
         _raise_search_backend_unavailable(video_id, exc)
 
+    track("search_success", user_id=user_id, metadata={"video_id": video_id, "mode": "image", "result_count": len(results)})
     return _build_video_search_response(record, results)
 
 
@@ -1170,6 +1194,7 @@ def create_billing_checkout(
             detail="Billing checkout is temporarily unavailable",
         ) from exc
 
+    track("checkout_started", user_id=user_id, metadata={"plan": request.plan})
     return BillingCheckoutResponse(
         provider="lemonsqueezy",
         plan=request.plan,
@@ -1233,6 +1258,8 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
         payload=payload_dict,
     ).applied
 
+    if applied:
+        track("checkout_success", user_id=user_id, metadata={"credits": credits})
     logger.info(
         "Lemon webhook processed event=%s event_id=%s user_id=%s credits=%s applied=%s",
         event_name,
