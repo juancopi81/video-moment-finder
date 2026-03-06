@@ -61,8 +61,7 @@
 
 ### 5.3 Core Feature Priorities After Launch
 
-- Ship image-search mode (reference-image to frame retrieval) first.
-- Ship transcript-backed text search second (`where was this said?` queries).
+- Ship transcript-backed text search first (`where was this said?` queries).
 - Keep UI refinements scoped to issues surfaced by early-user feedback.
 
 ---

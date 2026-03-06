@@ -45,6 +45,7 @@ Authoring rules:
 | 2026-03-04 | Phase 4 | Launch baseline hardening                             | Done        | Added rate limiting and completed DRY refactor series milestone. |
 | 2026-03-05 | Phase 4 | Runtime monitoring and upload admission validation   | Done        | Added Sentry integration and ffprobe-based upload duration checks. |
 | 2026-03-06 | Phase 4 | Security advisor closure and launch copy pass         | Done        | Cleared Supabase Security Advisor, verified backups, removed unimplemented feature claims, added AI disclaimer. |
+| 2026-03-06 | Phase 4 | Image query search                                    | Done        | Added uploaded-image query search across API, Modal, frontend, and docs. |
 
 ## Blockers
 

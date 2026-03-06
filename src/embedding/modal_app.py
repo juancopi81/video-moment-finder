@@ -51,52 +51,48 @@ def _optional_non_negative_int_env(name: str) -> int | None:
     return value
 
 
-def _resolve_text_embed_min_containers() -> int | None:
+def _resolve_query_embed_min_containers() -> int | None:
     """
-    Resolve optional warm-container config for text embedding.
+    Resolve optional warm-container config for query embedding.
 
-    `MODAL_TEXT_EMBED_MIN_CONTAINERS` is preferred.
-    `MODAL_TEXT_EMBED_KEEP_WARM` remains as backward-compatible alias.
+    Returns None when unset so Modal uses default scaling behavior.
     """
-    min_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MIN_CONTAINERS")
-    if min_containers is not None:
-        return min_containers
-    return _optional_non_negative_int_env("MODAL_TEXT_EMBED_KEEP_WARM")
+    return _optional_non_negative_int_env("MODAL_QUERY_EMBED_MIN_CONTAINERS")
 
 
-TEXT_EMBED_MIN_CONTAINERS = _resolve_text_embed_min_containers()
+QUERY_EMBED_MIN_CONTAINERS = _resolve_query_embed_min_containers()
 
 
-def _resolve_text_embed_max_containers() -> int:
+def _resolve_query_embed_max_containers() -> int:
     """
-    Resolve max text embed containers.
+    Resolve max query embed containers.
 
     Defaults to 1 so repeated sequential searches hit a reused container/model.
     """
-    max_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MAX_CONTAINERS")
+    max_containers = _optional_non_negative_int_env("MODAL_QUERY_EMBED_MAX_CONTAINERS")
     if max_containers is None:
         return 1
     if max_containers == 0:
-        raise ValueError("MODAL_TEXT_EMBED_MAX_CONTAINERS must be >= 1")
+        raise ValueError("MODAL_QUERY_EMBED_MAX_CONTAINERS must be >= 1")
     return max_containers
 
 
-TEXT_EMBED_MAX_CONTAINERS = _resolve_text_embed_max_containers()
+QUERY_EMBED_MAX_CONTAINERS = _resolve_query_embed_max_containers()
 
 
-def _validate_text_embed_container_bounds(
+def _validate_query_embed_container_bounds(
     min_containers: int | None,
     max_containers: int,
 ) -> None:
     if min_containers is not None and min_containers > max_containers:
         raise ValueError(
-            "MODAL_TEXT_EMBED_MIN_CONTAINERS cannot exceed MODAL_TEXT_EMBED_MAX_CONTAINERS"
+            "MODAL_QUERY_EMBED_MIN_CONTAINERS cannot exceed MODAL_QUERY_EMBED_MAX_CONTAINERS"
         )
 
 
-_validate_text_embed_container_bounds(
-    TEXT_EMBED_MIN_CONTAINERS,
-    TEXT_EMBED_MAX_CONTAINERS,
+_validate_query_embed_container_bounds(
+    QUERY_EMBED_MIN_CONTAINERS,
+    QUERY_EMBED_MAX_CONTAINERS,
 )
 
 
@@ -110,11 +106,11 @@ def _create_qwen_embedder():
     image=image,
     gpu="A10G",
     timeout=300,
-    min_containers=TEXT_EMBED_MIN_CONTAINERS,
-    max_containers=TEXT_EMBED_MAX_CONTAINERS,
+    min_containers=QUERY_EMBED_MIN_CONTAINERS,
+    max_containers=QUERY_EMBED_MAX_CONTAINERS,
 )
-class TextEmbedder:
-    """Container-scoped text embedder with startup model preload."""
+class QueryEmbedder:
+    """Container-scoped query embedder with startup model preload."""
 
     model: Any | None = None
 
@@ -123,7 +119,7 @@ class TextEmbedder:
         self.model = _create_qwen_embedder()
 
     @modal.method()
-    def embed(self, text: str) -> list[float]:
+    def embed_text(self, text: str) -> list[float]:
         if not text or not text.strip():
             raise ValueError("text must be non-empty")
 
@@ -132,6 +128,22 @@ class TextEmbedder:
             self.model = _create_qwen_embedder()
 
         embedding = _normalize_embedding(self.model.process([{"text": text.strip()}]))
+        return embedding[0].tolist()
+
+    @modal.method()
+    def embed_image(self, image_bytes: bytes) -> list[float]:
+        if not image_bytes:
+            raise ValueError("image_bytes must be non-empty")
+
+        if self.model is None:
+            self.model = _create_qwen_embedder()
+
+        from PIL import Image
+
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            pil_image = img.convert("RGB")
+
+        embedding = _normalize_embedding(self.model.process([{"image": pil_image}]))
         return embedding[0].tolist()
 
 

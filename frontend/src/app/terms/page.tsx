@@ -11,7 +11,7 @@ export default function TermsPage() {
       <h1 className="font-heading text-4xl font-bold">
         Terms of Service
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: February 25, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: March 6, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -28,8 +28,8 @@ export default function TermsPage() {
           <p className="mt-2">
             Video Moment Finder is a web-based tool that allows users to search for specific
             moments within videos using AI-powered semantic search. Users can submit YouTube URLs
-            or upload video files, and the Service processes them to enable text-based frame
-            search.
+            or upload video files, and the Service processes them to enable text-based or
+            image-based frame search.
           </p>
         </section>
 
@@ -125,7 +125,8 @@ export default function TermsPage() {
           <p className="mt-2">
             Videos you submit are processed to extract frames and generate embeddings for search.
             Processed data (embeddings and thumbnails) is stored to enable search functionality.
-            See our Privacy Policy for details on data handling.
+            Example images submitted for search are processed transiently and are not retained
+            after the request. See our Privacy Policy for details on data handling.
           </p>
         </section>
 

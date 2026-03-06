@@ -1,7 +1,7 @@
 # Video Moment Finder
 
 Semantic video moment search for creators and researchers.
-Process a video, run text queries, and jump to matching timestamps.
+Process a video, run text or image queries, and jump to matching timestamps.
 
 **Live site:** [videomomentfinder.com](https://videomomentfinder.com)
 
@@ -10,7 +10,7 @@ Process a video, run text queries, and jump to matching timestamps.
 - Accepts a YouTube URL or direct video upload.
 - Processes video frames asynchronously.
 - Embeds frames into a vector index for semantic retrieval.
-- Returns top timestamped matches with thumbnails.
+- Returns top timestamped matches with thumbnails for text or example-image queries.
 
 ## Quick Start (Local)
 
@@ -79,7 +79,7 @@ Core flow:
 2. API enqueues a processing job.
 3. Worker extracts frames and sends embedding work to Modal.
 4. Embeddings are stored in Qdrant and thumbnails in R2.
-5. User searches and receives timestamped matches.
+5. User searches with text or an example image and receives timestamped matches.
 
 ## Documentation Map
 

@@ -30,6 +30,12 @@ from src.video.download import VideoMetadata
 from src.video.youtube import extract_youtube_video_id
 
 UPLOAD_VIDEO_ID = "00000000-0000-4000-8000-000000000123"
+QUERY_IMAGE_BYTES = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDAT\x08\xd7c\xf8\xcf"
+    b"\xc0\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+OVERSIZED_QUERY_IMAGE_BYTES = b"x" * ((10 * 1024 * 1024) + 1)
 
 
 def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
@@ -625,7 +631,7 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
         lambda video_id, user_id=None: _video_record(video_id, status="ready"),
     )
     monkeypatch.setattr(
-        "src.api.app.search_video_service",
+        "src.api.app.search_video_by_text_service",
         lambda video_id, query_text, limit=5: [
             SearchResult(
                 video_id=video_id,
@@ -1501,7 +1507,7 @@ def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
         lambda video_id, user_id=None: _video_record(video_id, status="ready"),
     )
     monkeypatch.setattr(
-        "src.api.app.search_video_service",
+        "src.api.app.search_video_by_text_service",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("qdrant down")),
     )
 
@@ -1528,7 +1534,7 @@ def test_search_video_rejects_blank_query_text(monkeypatch) -> None:
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Provide query_text or query_image_url"
+    assert response.json()["detail"] == "Provide query_text"
 
 
 def test_search_video_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:
@@ -1560,7 +1566,7 @@ def test_search_video_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:
             )
         ]
 
-    monkeypatch.setattr("src.api.app.search_video_service", _fake_search_video_service)
+    monkeypatch.setattr("src.api.app.search_video_by_text_service", _fake_search_video_service)
 
     first = client.post(
         "/videos/video_ready/search",
@@ -1576,6 +1582,229 @@ def test_search_video_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:
     assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
     assert second.headers.get("retry-after") is not None
     assert len(search_calls) == 1
+
+
+def test_search_video_by_image_requires_authentication() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_search_video_by_image_returns_404_when_video_not_owned(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Video not found"
+
+
+def test_search_video_by_image_returns_400_when_video_not_ready(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="processing"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Video not ready for search (status: processing)"
+
+
+def test_search_video_by_image_rejects_non_image_content_type(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.txt", b"abc", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only image uploads are supported"
+
+
+def test_search_video_by_image_rejects_empty_upload(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", b"", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded image is empty"
+
+
+def test_search_video_by_image_rejects_large_upload(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_image_service",
+        lambda **kwargs: pytest.fail("should not be called for oversized upload"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", OVERSIZED_QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded image exceeds 10 MB limit"
+
+
+def test_search_video_by_image_rejects_invalid_image(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", b"not-an-image", "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded file is not a valid image"
+
+
+def test_search_video_by_image_returns_results(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+
+    def _fake_search_video_by_image_service(
+        *,
+        video_id: str,
+        query_image_bytes: bytes,
+        limit: int,
+    ):
+        captured["video_id"] = video_id
+        captured["query_image_bytes"] = query_image_bytes
+        captured["limit"] = limit
+        return [
+            SearchResult(
+                video_id=video_id,
+                frame_index=0,
+                timestamp_s=9.5,
+                thumbnail_url="https://cdn.example.com/thumb.jpg",
+                score=0.88,
+            )
+        ]
+
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_image_service",
+        _fake_search_video_by_image_service,
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        data={"limit": "3"},
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "video_id": "video_ready",
+        "query_image_bytes": QUERY_IMAGE_BYTES,
+        "limit": 3,
+    }
+    payload = response.json()
+    assert payload["results"][0]["timestamp_s"] == 9.5
+    assert payload["results"][0]["thumbnail_url"] == "https://cdn.example.com/thumb.jpg"
+
+
+def test_search_video_by_image_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+    monkeypatch.setenv("RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW", "1")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_image_service",
+        lambda **kwargs: [
+            SearchResult(
+                video_id=kwargs["video_id"],
+                frame_index=0,
+                timestamp_s=12.0,
+                thumbnail_url=None,
+                score=0.9,
+            )
+        ],
+    )
+
+    first = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+    second = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
+
+
+def test_search_video_by_image_returns_503_when_backend_fails(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_image_service",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("qdrant down")),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Search is temporarily unavailable. Please try again."
 
 
 @pytest.mark.parametrize(
