@@ -30,7 +30,7 @@ const tiers: Tier[] = [
     features: [
       "1 video credit",
       "Up to 30-minute videos",
-      "Text-based moment search",
+      "Text & image moment search",
       "Thumbnail previews",
     ],
     ctaHref: "/",
@@ -43,7 +43,7 @@ const tiers: Tier[] = [
     features: [
       "5 video credits",
       "Up to 30-minute videos",
-      "Text-based moment search",
+      "Text & image moment search",
       "Thumbnail previews",
       "YouTube URL & direct upload",
     ],
@@ -58,7 +58,7 @@ const tiers: Tier[] = [
     features: [
       "20 video credits",
       "Up to 30-minute videos",
-      "Text-based moment search",
+      "Text & image moment search",
       "Thumbnail previews",
       "YouTube URL & direct upload",
     ],
