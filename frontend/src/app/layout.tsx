@@ -27,15 +27,10 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "Video Moment Finder",
-    title: "Video Moment Finder",
-    description: "Semantic video frame search. Find moments using text or images.",
   },
   twitter: {
     card: "summary",
-    title: "Video Moment Finder",
-    description: "Semantic video frame search. Find moments using text or images.",
   },
-  alternates: { canonical: "/" },
 };
 
 const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
