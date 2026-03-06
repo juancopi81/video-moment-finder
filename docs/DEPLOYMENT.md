@@ -58,6 +58,20 @@ Expected behavior:
 - Event outside configured grant set -> ignored response (`processed=false`)
 - Duplicate event -> idempotent no-op (`granted=false`)
 
+## Analytics Event Contract
+
+- Endpoint: `POST /analytics/event`
+- Body: `{"event_name": "...", "metadata": {...}}`
+- Allowed frontend events: `landing_visit`, `signup_complete`
+- Auth: optional for `landing_visit`, required for `signup_complete`
+- Table: `analytics_events` in Supabase (service_role only RLS)
+- Backend events (`video_submitted`, `video_ready`, `search_run`, `search_success`, `checkout_started`, `checkout_success`) are inserted directly by API and worker handlers.
+
+Example verification query:
+```sql
+SELECT event_name, count(*), count(distinct user_id) FROM analytics_events GROUP BY 1;
+```
+
 ## Upload Flow Contract
 
 Preferred large-file flow (direct-to-R2):

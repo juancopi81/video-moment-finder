@@ -106,3 +106,27 @@ def get_current_user_id(
         raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
     except TokenVerificationError as exc:
         raise _unauthorized(str(exc)) from exc
+
+
+def get_optional_user_id(
+    authorization: Annotated[str | None, Header()] = None,
+) -> str | None:
+    """FastAPI dependency: returns user id when token present, None when header absent.
+
+    Raises 401 if the header is present but the token is invalid (prevents
+    broken tokens from being silently treated as anonymous).
+    """
+    if authorization is None:
+        return None
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise _unauthorized("Invalid Authorization header")
+
+    try:
+        return verify_bearer_token(token.strip())
+    except AuthConfigError as exc:
+        logger.error("Auth configuration error: %s", exc)
+        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
+    except TokenVerificationError as exc:
+        raise _unauthorized(str(exc)) from exc

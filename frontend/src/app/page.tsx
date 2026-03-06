@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@clerk/nextjs";
 import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { API_URL, parseApiError } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 
 function modeButtonClass(isActive: boolean): string {
   const base = "flex-1 rounded-lg px-4 py-2 text-sm font-medium";
@@ -21,7 +22,7 @@ function modeButtonClass(isActive: boolean): string {
 
 export default function Home() {
   const router = useRouter();
-  const { getToken, isLoaded } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const [mode, setMode] = useState<"youtube" | "upload">("youtube");
   const [url, setUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -29,6 +30,17 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackEvent("landing_visit");
+  }, []);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    getToken().then((token) => {
+      trackEvent("signup_complete", undefined, token);
+    });
+  }, [isSignedIn, getToken]);
 
   function handleModeChange(nextMode: "youtube" | "upload") {
     setMode(nextMode);

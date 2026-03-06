@@ -56,6 +56,7 @@ def _default_no_stale_jobs(monkeypatch) -> None:
         "src.worker.runner.list_stale_processing_video_jobs",
         lambda stale_before_iso, limit=25: [],
     )
+    monkeypatch.setattr("src.worker.runner.track", lambda *args, **kwargs: None)
 
 
 def test_run_once_returns_false_when_queue_empty(monkeypatch) -> None:

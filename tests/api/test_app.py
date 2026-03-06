@@ -20,7 +20,7 @@ from src.api.app import (
     app,
     report_unhandled_exceptions,
 )
-from src.api.auth import get_current_user_id
+from src.api.auth import get_current_user_id, get_optional_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
@@ -84,6 +84,7 @@ def _clear_dependency_overrides(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.USER_WRITE_RATE_LIMITER", SlidingWindowRateLimiter())
     monkeypatch.setattr("src.api.app.SEARCH_RATE_LIMITER", SlidingWindowRateLimiter())
     monkeypatch.setattr("src.api.app.WEBHOOK_RATE_LIMITER", SlidingWindowRateLimiter())
+    monkeypatch.setattr("src.api.app.track", lambda *args, **kwargs: None)
     yield
     app.dependency_overrides.clear()
 
@@ -2430,3 +2431,74 @@ def test_report_unhandled_exceptions_uses_to_thread(monkeypatch) -> None:
     assert len(to_thread_calls) == 1
     assert len(capture_calls) == 1
     assert capture_calls[0][1] == {"path": "/videos", "method": "POST"}
+
+
+# ---------------------------------------------------------------------------
+# Analytics endpoint tests
+# ---------------------------------------------------------------------------
+
+
+def _authenticate_optional(user_id: str = "user_123") -> None:
+    app.dependency_overrides[get_optional_user_id] = lambda: user_id
+
+
+def _authenticate_optional_anonymous() -> None:
+    app.dependency_overrides[get_optional_user_id] = lambda: None
+
+
+def test_analytics_event_landing_visit_anonymous(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate_optional_anonymous()
+    track_calls: list[dict] = []
+    monkeypatch.setattr(
+        "src.api.app.track",
+        lambda event_name, **kwargs: track_calls.append({"event_name": event_name, **kwargs}),
+    )
+
+    response = client.post("/analytics/event", json={"event_name": "landing_visit"})
+
+    assert response.status_code == 204
+    assert track_calls == [{"event_name": "landing_visit", "user_id": None, "metadata": None}]
+
+
+def test_analytics_event_signup_complete_requires_auth() -> None:
+    client = TestClient(app)
+    _authenticate_optional_anonymous()
+
+    response = client.post("/analytics/event", json={"event_name": "signup_complete"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required for signup_complete"
+
+
+def test_analytics_event_signup_complete_with_auth(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate_optional("user_123")
+    track_calls: list[dict] = []
+    monkeypatch.setattr(
+        "src.api.app.track",
+        lambda event_name, **kwargs: track_calls.append({"event_name": event_name, **kwargs}),
+    )
+
+    response = client.post("/analytics/event", json={"event_name": "signup_complete"})
+
+    assert response.status_code == 204
+    assert track_calls == [{"event_name": "signup_complete", "user_id": "user_123", "metadata": None}]
+
+
+def test_analytics_event_rejects_disallowed_event_name() -> None:
+    client = TestClient(app)
+    _authenticate_optional_anonymous()
+
+    response = client.post("/analytics/event", json={"event_name": "video_submitted"})
+
+    assert response.status_code == 422
+
+
+def test_analytics_event_rejects_unknown_event_name() -> None:
+    client = TestClient(app)
+    _authenticate_optional_anonymous()
+
+    response = client.post("/analytics/event", json={"event_name": "unknown"})
+
+    assert response.status_code == 422

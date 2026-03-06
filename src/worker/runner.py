@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
+from src.analytics.events import track
 from src.api.processing import VideoValidationError, process_video
 from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
@@ -235,6 +236,7 @@ def _process_claimed_job(
 
     update_video_status(video.id, "ready")
     complete_video_job(job.id, "completed")
+    track("video_ready", user_id=video.user_id, metadata={"video_id": video.id})
     logger.info(
         "Job complete job_id=%s video_id=%s attempts=%d",
         job.id,
