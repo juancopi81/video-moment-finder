@@ -35,6 +35,7 @@ Suggested milestone gates:
 - Add account-scoped API keys, usage attribution, quotas, and revocation.
 - Keep room for separate API pricing and usage accounting if later usage patterns justify a different billing model.
 - Add MCP or CLI only after the API surface is stable enough to wrap cleanly.
+- Add agent-facing docs and discovery only after the interface is stable enough to describe clearly.
 
 Suggested milestone gates:
 
@@ -42,6 +43,7 @@ Suggested milestone gates:
 2. Usage is attributed correctly and retries do not create double billing.
 3. The API can process a video and run search end-to-end in a reviewable happy path.
 4. MCP or CLI smoke checks are added only after the API milestone is stable.
+5. An agent can discover the supported interface and complete a documented happy path without reading implementation code.
 
 ## Delivery Shape
 
@@ -73,3 +75,5 @@ The intent is that a developer can work in order and stop after any milestone co
    Review gate: usage accounting is correct for normal calls and idempotent retries.
 4. Add MCP or CLI only if the API contract is stable after the earlier milestones.
    Review gate: wrapper smoke checks pass without adding new product-only logic.
+5. Add agent-facing docs and discovery updates only after the earlier milestones are stable.
+   Review gate: `llms.txt` and a short usage doc match the real interface; add a repo-local `SKILL.md` only if there is a concrete internal-agent workflow to support.
