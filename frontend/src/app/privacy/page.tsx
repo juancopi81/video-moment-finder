@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - Video Moment Finder",
+  title: "Privacy Policy",
   description: "Privacy Policy for Video Moment Finder.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

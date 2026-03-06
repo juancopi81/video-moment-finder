@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Support - Video Moment Finder",
+  title: "Support",
   description: "Get help with Video Moment Finder. FAQ and contact information.",
+  alternates: { canonical: "/support" },
 };
 
 const faqs = [

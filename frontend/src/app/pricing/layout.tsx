@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Pricing - Video Moment Finder",
+  title: "Pricing",
   description: "Simple credit-based pricing. Start free, upgrade as you need.",
+  alternates: { canonical: "/pricing" },
 };
 
 export default function PricingLayout({

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - Video Moment Finder",
+  title: "Terms of Service",
   description: "Terms of Service for Video Moment Finder.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

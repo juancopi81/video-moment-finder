@@ -38,26 +38,26 @@
 
 **Gate:** app is publicly shareable, stable for early users, and instrumented to learn from usage.
 
-### 5.1 Analytics Baseline (Behavior, Not Just Telemetry)
+### ~~5.1 Analytics Baseline (Behavior, Not Just Telemetry)~~ ✅
 
-- Use existing logs + DB counts immediately to track early signal (`new users`, `videos submitted`, `jobs completed`, `searches run`).
-- Add a minimal product analytics event set in week 1:
-  - `landing_visit`
-  - `signup_complete`
-  - `video_submitted`
-  - `video_ready`
-  - `search_run`
-  - `search_success`
-  - `checkout_started`
-  - `checkout_success`
-- Keep telemetry/monitoring (Sentry) as system health, separate from product behavior analytics.
+- ~~Use existing logs + DB counts immediately to track early signal (`new users`, `videos submitted`, `jobs completed`, `searches run`).~~
+- ~~Add a minimal product analytics event set in week 1:~~
+  - ~~`landing_visit`~~
+  - ~~`signup_complete`~~
+  - ~~`video_submitted`~~
+  - ~~`video_ready`~~
+  - ~~`search_run`~~
+  - ~~`search_success`~~
+  - ~~`checkout_started`~~
+  - ~~`checkout_success`~~
+- ~~Keep telemetry/monitoring (Sentry) as system health, separate from product behavior analytics.~~
 
-### 5.2 Discovery Basics (SEO)
+### ~~5.2 Discovery Basics (SEO)~~ ✅
 
-- Add/verify `robots.txt`.
-- Add/verify `sitemap.xml`.
-- Ensure public pages have clear title/meta/OG metadata and canonical URLs.
-- Keep `llms.txt` optional and lower priority unless running AI-crawler discoverability experiments.
+- ~~Add/verify `robots.txt`.~~
+- ~~Add/verify `sitemap.xml`.~~
+- ~~Ensure public pages have clear title/meta/OG metadata and canonical URLs.~~
+- ~~Add `llms.txt` for AI-crawler discoverability.~~
 
 ### 5.3 Core Feature Priorities After Launch
 
