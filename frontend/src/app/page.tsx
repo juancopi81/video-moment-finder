@@ -202,17 +202,15 @@ export default function Home() {
         <h1 className="font-heading text-5xl font-bold leading-tight sm:text-6xl">
           Find the exact moment
           <br />
-          in any video — by text or image
+          in any video
         </h1>
         <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-          Paste a YouTube link or upload a video, then search by description or
-          example image to jump to matching timestamps.
+          Search by description or example image to jump to the exact
+          timestamp — in any YouTube video or upload.
         </p>
-        <ul className="mt-4 max-w-md space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
-          <li>Search scenes, screens, products, slides, and reactions</li>
-          <li>Works with YouTube links and direct uploads</li>
-          <li>1 free credit &middot; videos up to 30 min</li>
-        </ul>
+        <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+          1 free credit &middot; videos up to 30 min
+        </span>
         <div className="mt-8 flex items-center gap-4">
           <SignedOut>
             <a
@@ -237,14 +235,14 @@ export default function Home() {
             </a>
           </SignedIn>
         </div>
-        <p className="mt-4 max-w-md text-xs text-zinc-500 dark:text-zinc-500">
-          A 30-minute video typically processes in about 7–8 minutes. You can
-          leave and come back while it finishes.
-        </p>
       </section>
 
       {/* Tool section */}
       <section id="tool" className="flex flex-col items-center px-4 pb-16">
+        <p className="mb-4 max-w-md text-center text-xs text-zinc-500 dark:text-zinc-500">
+          A 30-minute video typically processes in about 7–8 minutes. You can
+          leave and come back while it finishes.
+        </p>
         <SignedOut>
           <div className="w-full max-w-xl rounded-lg border border-zinc-300 dark:border-zinc-700 p-6 text-center">
             <p className="mb-4 text-zinc-600 dark:text-zinc-400">
@@ -340,12 +338,23 @@ export default function Home() {
           Find moments that are hard to locate with chapters or transcript
           search:
         </p>
-        <ul className="mt-4 inline-block space-y-2 text-left text-sm text-zinc-600 dark:text-zinc-400">
-          <li>Visual scenes</li>
-          <li>Slides and dashboards</li>
-          <li>Product shots</li>
-          <li>Reactions and gestures</li>
-          <li>Moments similar to an example image</li>
+        <ul className="mt-4 inline-block space-y-2.5 text-left text-sm text-zinc-600 dark:text-zinc-400">
+          {[
+            "Visual scenes",
+            "Slides and dashboards",
+            "Product shots",
+            "Reactions and gestures",
+            "Moments similar to an example image",
+          ].map((item) => (
+            <li key={item} className="flex items-center gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 dark:bg-accent/20">
+                <svg className="h-3 w-3 text-accent" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2.5 6l2.5 2.5 4.5-4.5" />
+                </svg>
+              </span>
+              {item}
+            </li>
+          ))}
         </ul>
       </section>
 
