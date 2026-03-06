@@ -584,6 +584,39 @@ def test_get_video_includes_source_url_for_uploaded_video(monkeypatch) -> None:
     assert payload["source_url"] == "https://example.com/source.mp4?token=abc"
 
 
+def test_get_video_returns_null_source_url_when_source_expired(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+
+    presign_called = False
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, _key: str) -> bool:
+            return False
+
+        def generate_presigned_url(self, *_args, **_kwargs) -> str:
+            nonlocal presign_called
+            presign_called = True
+            return "https://example.com/should-not-be-used"
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+    response = client.get("/videos/video_upload")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source_url"] is None
+    assert not presign_called, "generate_presigned_url should not be called for expired source"
+
+
 def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")

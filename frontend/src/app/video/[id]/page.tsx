@@ -126,9 +126,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         if (data.source_type) {
           setSourceType(data.source_type);
         }
-        if (data.source_url) {
-          setSourceUrl(data.source_url);
-        }
+        setSourceUrl(data.source_url ?? null);
       } catch (err) {
         console.error("Polling error:", err);
       }
@@ -177,9 +175,7 @@ export default function VideoPage({ params }: VideoPageProps) {
       if (data.youtube_url) {
         setVideoUrl(data.youtube_url);
       }
-      if (data.source_url) {
-        setSourceUrl(data.source_url);
-      }
+      setSourceUrl(data.source_url ?? null);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -261,7 +257,7 @@ export default function VideoPage({ params }: VideoPageProps) {
 
             {sourceType === "upload" && !sourceUrl && (
               <p className="mb-6 text-sm text-amber-600 dark:text-amber-400">
-                Uploaded video playback is unavailable right now.
+                The original video file has expired and is no longer available for playback. Your search results and thumbnails are not affected.
               </p>
             )}
 

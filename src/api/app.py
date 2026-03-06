@@ -517,6 +517,17 @@ def _source_url_for_record(record: VideoRecord) -> str | None:
 
     store = R2Store(r2_config)
     try:
+        if not store.source_exists(record.source_r2_key):
+            return None
+    except R2StorageError as exc:
+        logger.warning(
+            "Failed to check source existence for video_id=%s: %s",
+            record.id,
+            exc,
+        )
+        return None
+
+    try:
         return store.generate_presigned_url(
             record.source_r2_key,
             expires_in=_source_url_ttl_s(),
