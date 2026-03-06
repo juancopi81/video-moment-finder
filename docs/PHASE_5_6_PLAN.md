@@ -76,4 +76,4 @@ The intent is that a developer can work in order and stop after any milestone co
 4. Add MCP or CLI only if the API contract is stable after the earlier milestones.
    Review gate: wrapper smoke checks pass without adding new product-only logic.
 5. Add agent-facing docs and discovery updates only after the earlier milestones are stable.
-   Review gate: `llms.txt` and a short usage doc match the real interface; add a repo-local `SKILL.md` only if there is a concrete internal-agent workflow to support.
+   Review gate: `llms.txt` and a public `/skill.md` or equivalent agent-onboarding doc match the real interface and support a documented happy path.
