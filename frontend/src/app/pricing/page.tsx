@@ -61,7 +61,6 @@ const tiers: Tier[] = [
       "Text-based moment search",
       "Thumbnail previews",
       "YouTube URL & direct upload",
-      "Priority processing",
     ],
     ctaHref: "/",
   },

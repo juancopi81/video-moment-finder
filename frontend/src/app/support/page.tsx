@@ -32,6 +32,11 @@ const faqs = [
       "Each credit allows you to process one video (up to 30 minutes). Free accounts include 1 credit to try the service. Paid credit packs are available on the pricing page for signed-in users. Credits do not expire.",
   },
   {
+    question: "How accurate are the search results?",
+    answer:
+      "Search results are AI-generated and may not always be perfectly accurate. The quality depends on video content and query phrasing. Try different wording if the first search doesn't find what you need.",
+  },
+  {
     question: "Can I get a refund?",
     answer:
       "Credits that have been used for processing are non-refundable. If you experience a technical issue that consumes a credit without delivering results, contact us and we will review your case.",

@@ -284,7 +284,11 @@ export default function VideoPage({ params }: VideoPageProps) {
             </form>
 
             {results.length > 0 && (
-              <div className="mt-8 grid grid-cols-3 gap-4">
+              <div>
+                <p className="mt-6 text-xs text-center text-zinc-500 dark:text-zinc-400">
+                  Results are AI-generated and may not always be accurate.
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-4">
                 {results.map((result, index) => {
                   const timestampUrl = videoUrl
                     ? buildTimestampUrl(videoUrl, result.timestamp_s)
@@ -342,6 +346,7 @@ export default function VideoPage({ params }: VideoPageProps) {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>

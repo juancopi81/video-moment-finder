@@ -13,18 +13,18 @@
 
 **Launch Gate:** ready for paid users with security, reliability, and ops readiness.
 
-### 4.3 Security Advisor Closure
+### ~~4.3 Security Advisor Closure~~ ✅
 
-- Verify Supabase Security Advisor is clean in all deployed environments.
-- Confirm RLS coverage is enabled and policies are least-privilege for user-owned data paths.
-- Confirm all custom DB functions use explicit `search_path` and no mutable warnings remain.
+- ~~Verify Supabase Security Advisor is clean in all deployed environments.~~
+- ~~Confirm RLS coverage is enabled and policies are least-privilege for user-owned data paths.~~
+- ~~Confirm all custom DB functions use explicit `search_path` and no mutable warnings remain.~~
 
-### 4.4 Launch Ops Readiness
+### ~~4.4 Launch Ops Readiness~~ ✅
 
-- Confirm automated database backups and restore drill documentation.
-- Finalize monitoring dashboards and production alert routing.
-- Complete release/incident checklist for API, worker, and frontend deployments.
-- Final copy pass on public pages for pricing/support/legal consistency.
+- ~~Confirm automated database backups and restore drill documentation.~~
+- ~~Finalize monitoring dashboards and production alert routing.~~
+- ~~Complete release/incident checklist for API, worker, and frontend deployments.~~
+- ~~Final copy pass on public pages for pricing/support/legal consistency.~~
 
 ### 4.5 Production Deployment Guardrail
 
