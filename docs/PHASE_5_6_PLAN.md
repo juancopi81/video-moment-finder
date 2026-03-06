@@ -21,7 +21,7 @@ The web app remains the primary product. Agent access is an additional interface
 
 - Ship transcript-backed or hybrid retrieval for the core product.
 - Keep existing text and image search behavior working while search expands.
-- Stabilize the search result contract that future API clients will consume.
+- Stabilize the search result contract that later API clients will consume.
 
 Suggested milestone gates:
 
@@ -33,6 +33,7 @@ Suggested milestone gates:
 
 - Expose authenticated REST access for the same core capabilities.
 - Add account-scoped API keys, usage attribution, quotas, and revocation.
+- Keep room for separate API pricing and usage accounting if later usage patterns justify a different billing model.
 - Add MCP or CLI only after the API surface is stable enough to wrap cleanly.
 
 Suggested milestone gates:
