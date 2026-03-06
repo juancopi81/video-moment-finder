@@ -9,6 +9,7 @@ import modal
 
 APP_NAME = "video-moment-finder-embed"
 APP_PATH = Path("/root/app")
+MODAL_UV_SYNC_COMMAND = "uv sync --frozen --group modal --compile-bytecode --python-preference=only-system"
 
 app = modal.App(APP_NAME)
 
@@ -22,7 +23,7 @@ image = (
     .add_local_dir("src", str(APP_PATH / "src"), copy=True)
     .env({"UV_PROJECT_ENVIRONMENT": "/usr/local"})
     .run_commands(
-        "uv sync --frozen --compile-bytecode --python-preference=only-system",
+        MODAL_UV_SYNC_COMMAND,
         "git clone --depth 1 https://github.com/QwenLM/Qwen3-VL-Embedding.git /root/qwen3-vl-embedding",
     )
     .env({"PYTHONPATH": "/root/qwen3-vl-embedding/src"})
