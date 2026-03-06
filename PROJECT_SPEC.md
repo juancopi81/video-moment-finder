@@ -32,7 +32,7 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 ## Product Inputs
 
 - Video source: YouTube URL or direct upload.
-- Query source: text (current baseline) and image-query path (planned expansion).
+- Query source: text and uploaded example images.
 
 ## Product Outputs
 

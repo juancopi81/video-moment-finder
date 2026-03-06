@@ -15,13 +15,17 @@ import tempfile
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.api.auth import get_current_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
-from src.api.search import search_video as search_video_service
+from src.api.search import (
+    QueryImageValidationError,
+    search_video_by_image as search_video_by_image_service,
+    search_video_by_text as search_video_by_text_service,
+)
 from src.billing.lemonsqueezy import (
     LemonSqueezyConfigError,
     LemonSqueezyProviderError,
@@ -592,7 +596,6 @@ class UploadCompleteRequest(BaseModel):
 
 class VideoSearchRequest(BaseModel):
     query_text: str | None = Field(default=None, max_length=500)
-    query_image_url: HttpUrl | None = None
     limit: int = Field(default=5, ge=1, le=20)
 
     @field_validator("query_text")
@@ -745,6 +748,39 @@ def _enqueue_video_or_fail(video_id: str) -> None:
             status_code=500,
             detail="Failed to enqueue processing job",
         ) from exc
+
+
+def _get_ready_video_for_search(video_id: str, user_id: str) -> VideoRecord:
+    """Return a video record only when it exists, belongs to the user, and is searchable."""
+    record = db_get_video(video_id, user_id=user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if record.status != "ready":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video not ready for search (status: {record.status})",
+        )
+    return record
+
+
+def _build_video_search_response(
+    record: VideoRecord,
+    results: list[Any],
+) -> "VideoSearchResponse":
+    return VideoSearchResponse(
+        video_id=record.id,
+        youtube_url=record.youtube_url,
+        source_url=_source_url_for_record(record),
+        status=record.status,
+        results=[
+            SearchResult(
+                timestamp_s=r.timestamp_s,
+                thumbnail_url=r.thumbnail_url,
+                score=r.score,
+            )
+            for r in results
+        ],
+    )
 
 
 app = FastAPI(
@@ -1038,24 +1074,13 @@ def search_video(
 ) -> VideoSearchResponse:
     """Search for moments in a processed video."""
     _enforce_search_rate_limit(user_id)
-    record = db_get_video(video_id, user_id=user_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Video not found")
-
-    if request.query_image_url:
-        raise HTTPException(status_code=501, detail="Image queries not yet supported")
-
     if not request.query_text:
-        raise HTTPException(status_code=400, detail="Provide query_text or query_image_url")
+        raise HTTPException(status_code=400, detail="Provide query_text")
 
-    if record.status != "ready":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Video not ready for search (status: {record.status})",
-        )
+    record = _get_ready_video_for_search(video_id, user_id)
 
     try:
-        results = search_video_service(
+        results = search_video_by_text_service(
             video_id=video_id,
             query_text=request.query_text,
             limit=request.limit,
@@ -1067,20 +1092,43 @@ def search_video(
             detail="Search is temporarily unavailable. Please try again.",
         ) from exc
 
-    return VideoSearchResponse(
-        video_id=video_id,
-        youtube_url=record.youtube_url,
-        source_url=_source_url_for_record(record),
-        status=record.status,
-        results=[
-            SearchResult(
-                timestamp_s=r.timestamp_s,
-                thumbnail_url=r.thumbnail_url,
-                score=r.score,
-            )
-            for r in results
-        ],
-    )
+    return _build_video_search_response(record, results)
+
+
+@app.post("/videos/{video_id}/search/image", response_model=VideoSearchResponse)
+def search_video_by_image(
+    video_id: str,
+    query_image: UploadFile = File(...),
+    limit: int = Form(default=5, ge=1, le=20),
+    user_id: str = Depends(get_current_user_id),
+) -> VideoSearchResponse:
+    """Search for moments in a processed video using an uploaded image."""
+    _enforce_search_rate_limit(user_id)
+    record = _get_ready_video_for_search(video_id, user_id)
+
+    if not query_image.content_type or not query_image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported")
+
+    image_bytes = query_image.file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty")
+
+    try:
+        results = search_video_by_image_service(
+            video_id=video_id,
+            query_image_bytes=image_bytes,
+            limit=limit,
+        )
+    except QueryImageValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        logger.exception("Search backend failure for video_id=%s: %s", video_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Search is temporarily unavailable. Please try again.",
+        ) from exc
+
+    return _build_video_search_response(record, results)
 
 
 @app.post("/billing/checkout", response_model=BillingCheckoutResponse)

@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: February 23, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: March 6, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -27,7 +27,8 @@ export default function PrivacyPage() {
               processing.
             </li>
             <li>
-              <strong>Usage data:</strong> Search queries, processing history, and credit usage.
+              <strong>Usage data:</strong> Search queries, optional example images submitted for
+              search, processing history, and credit usage.
             </li>
           </ul>
         </section>
@@ -57,6 +58,10 @@ export default function PrivacyPage() {
           <p className="mt-2">
             Original uploaded video files are stored temporarily for processing and are subject to
             automatic cleanup via storage lifecycle rules.
+          </p>
+          <p className="mt-2">
+            Example images uploaded for search are processed transiently to generate a query
+            embedding and are not retained after the request completes.
           </p>
         </section>
 

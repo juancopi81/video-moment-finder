@@ -8,7 +8,7 @@ import modal
 
 EMBEDDING_MODAL_APP_NAME = "video-moment-finder-embed"
 EMBED_IMAGES_FUNCTION_NAME = "embed_images_in_batches"
-EMBED_TEXT_CLASS_NAME = "TextEmbedder"
+EMBED_QUERY_CLASS_NAME = "QueryEmbedder"
 _MODAL_AUTH_ERROR_SNIPPETS = (
     "token missing",
     "could not authenticate client",
@@ -62,14 +62,14 @@ def get_embedding_modal_function(function_name: str) -> modal.Function:
 
 
 @lru_cache(maxsize=1)
-def get_text_embedder_class() -> modal.Cls:
-    """Return the Modal class handle used for text embeddings."""
+def get_query_embedder_class() -> modal.Cls:
+    """Return the Modal class handle used for query embeddings."""
     _validate_modal_token_pair()
     try:
-        return modal.Cls.from_name(EMBEDDING_MODAL_APP_NAME, EMBED_TEXT_CLASS_NAME)
+        return modal.Cls.from_name(EMBEDDING_MODAL_APP_NAME, EMBED_QUERY_CLASS_NAME)
     except Exception as exc:
         raise_modal_auth_error(
             exc,
-            context=f"looking up Modal class '{EMBED_TEXT_CLASS_NAME}'",
+            context=f"looking up Modal class '{EMBED_QUERY_CLASS_NAME}'",
         )
         raise

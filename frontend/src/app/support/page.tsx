@@ -14,7 +14,7 @@ const faqs = [
   {
     question: "How does the search work?",
     answer:
-      "We use AI-powered semantic search. When you process a video, we extract frames and create embeddings using a multimodal AI model (Qwen3-VL). When you search, your text query is compared against these embeddings to find the most visually relevant moments.",
+      "We use AI-powered semantic search. When you process a video, we extract frames and create embeddings using a multimodal AI model (Qwen3-VL). When you search, your text query or uploaded example image is embedded into the same space to find the most visually relevant moments.",
   },
   {
     question: "How long does processing take?",
@@ -34,7 +34,7 @@ const faqs = [
   {
     question: "How accurate are the search results?",
     answer:
-      "Search results are AI-generated and may not always be perfectly accurate. The quality depends on video content and query phrasing. Try different wording if the first search doesn't find what you need.",
+      "Search results are AI-generated and may not always be perfectly accurate. The quality depends on video content, query phrasing, and how closely an example image matches the scene you want. Try different wording or a different image if the first search doesn't find what you need.",
   },
   {
     question: "Can I get a refund?",

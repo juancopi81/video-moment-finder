@@ -32,7 +32,8 @@ Use those files as the canonical variable list and defaults. This document expla
 - Railway API service: API-required groups + shared API/worker groups.
 - Railway worker service: worker-required groups + shared API/worker groups.
 - Vercel frontend: `NEXT_PUBLIC_*` variables only.
-- Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the Modal image installs the additional `modal` dependency group. After merging dependency-group changes, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
+- Query embedding scaling note: prefer `MODAL_QUERY_EMBED_MIN_CONTAINERS` and `MODAL_QUERY_EMBED_MAX_CONTAINERS`; the legacy `MODAL_TEXT_EMBED_*` names remain supported as fallback.
+- Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the Modal image installs the additional `modal` dependency group. After merging dependency-group changes or renaming Modal objects, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
 
 ## Billing Webhook Contract (Lemon Squeezy)
 

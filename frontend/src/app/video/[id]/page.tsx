@@ -17,6 +17,7 @@ type VideoPageProps = {
 };
 
 type VideoStatus = "queued" | "processing" | "ready" | "failed";
+type SearchMode = "text" | "image";
 
 type SearchResult = {
   timestamp_s: number;
@@ -70,10 +71,14 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<"youtube" | "upload" | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [searchMode, setSearchMode] = useState<SearchMode>("text");
   const [searchQuery, setSearchQuery] = useState("");
+  const [queryImageFile, setQueryImageFile] = useState<File | null>(null);
+  const [queryImagePreviewUrl, setQueryImagePreviewUrl] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const queryImageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Poll for video status
   useEffect(() => {
@@ -143,9 +148,23 @@ export default function VideoPage({ params }: VideoPageProps) {
     };
   }, [getToken, id, isLoaded, status, userId]);
 
+  useEffect(() => {
+    if (!queryImageFile) {
+      setQueryImagePreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(queryImageFile);
+    setQueryImagePreviewUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [queryImageFile]);
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    if (searchMode === "text" && !searchQuery.trim()) return;
+    if (searchMode === "image" && !queryImageFile) return;
 
     setIsSearching(true);
     setError(null);
@@ -157,14 +176,28 @@ export default function VideoPage({ params }: VideoPageProps) {
         throw new Error("Please sign in to search this video.");
       }
 
-      const res = await fetch(`${API_URL}/videos/${id}/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ query_text: searchQuery }),
-      });
+      let res: Response;
+      if (searchMode === "text") {
+        res = await fetch(`${API_URL}/videos/${id}/search`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ query_text: searchQuery }),
+        });
+      } else {
+        if (!queryImageFile) return;
+        const formData = new FormData();
+        formData.append("query_image", queryImageFile);
+        res = await fetch(`${API_URL}/videos/${id}/search/image`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+      }
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, "Search failed"));
@@ -262,18 +295,99 @@ export default function VideoPage({ params }: VideoPageProps) {
             )}
 
             <form onSubmit={handleSearch}>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for a moment..."
-                className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
-                disabled={isSearching}
-              />
+              <div className="grid grid-cols-2 gap-2 rounded-lg border border-zinc-300 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-900">
+                <button
+                  type="button"
+                  onClick={() => setSearchMode("text")}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    searchMode === "text"
+                      ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+                      : "text-zinc-600 dark:text-zinc-400"
+                  }`}
+                  disabled={isSearching}
+                >
+                  Text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchMode("image")}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    searchMode === "image"
+                      ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+                      : "text-zinc-600 dark:text-zinc-400"
+                  }`}
+                  disabled={isSearching}
+                >
+                  Image
+                </button>
+              </div>
+
+              {searchMode === "text" ? (
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for a moment..."
+                  className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900"
+                  disabled={isSearching}
+                />
+              ) : (
+                <div className="mt-4 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+                  <input
+                    ref={queryImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      setQueryImageFile(e.target.files?.[0] ?? null);
+                    }}
+                    className="w-full text-sm text-zinc-600 file:mr-4 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white dark:text-zinc-400 dark:file:bg-zinc-100 dark:file:text-zinc-900"
+                    disabled={isSearching}
+                  />
+                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    Upload one example image to find visually similar moments in this video.
+                  </p>
+                  {queryImageFile && (
+                    <div className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+                      {queryImagePreviewUrl && (
+                        <div className="relative aspect-video overflow-hidden rounded-md bg-zinc-200 dark:bg-zinc-800">
+                          <Image
+                            src={queryImagePreviewUrl}
+                            alt={queryImageFile.name}
+                            fill
+                            unoptimized
+                            className="object-contain"
+                          />
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <p className="truncate text-sm text-zinc-600 dark:text-zinc-400">
+                          {queryImageFile.name}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQueryImageFile(null);
+                            if (queryImageInputRef.current) {
+                              queryImageInputRef.current.value = "";
+                            }
+                          }}
+                          className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                          disabled={isSearching}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <button
                 type="submit"
                 className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
-                disabled={isSearching || !searchQuery.trim()}
+                disabled={
+                  isSearching ||
+                  (searchMode === "text" ? !searchQuery.trim() : !queryImageFile)
+                }
               >
                 {isSearching ? "Searching..." : "Search"}
               </button>

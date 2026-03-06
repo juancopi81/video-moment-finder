@@ -193,8 +193,8 @@ export default function Home() {
           in any video
         </h1>
         <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-          Paste a YouTube URL or upload a video. Search for any scene using natural language.
-          AI-powered semantic search finds the exact frame you need.
+          Paste a YouTube URL or upload a video. Search with natural language or an
+          example image to find the exact moment you need.
         </p>
         <div className="mt-8 flex gap-4">
           <SignedOut>
@@ -244,7 +244,7 @@ export default function Home() {
               step: "3",
               title: "Search moments",
               description:
-                'Type what you\'re looking for — "person standing at whiteboard" — and find it instantly.',
+                'Type what you\'re looking for or upload an example image — "person standing at whiteboard" — and find matching frames instantly.',
             },
           ].map((item, i) => (
             <div
