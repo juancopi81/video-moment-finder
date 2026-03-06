@@ -55,17 +55,9 @@ def _resolve_query_embed_min_containers() -> int | None:
     """
     Resolve optional warm-container config for query embedding.
 
-    `MODAL_QUERY_EMBED_MIN_CONTAINERS` is preferred.
-    `MODAL_TEXT_EMBED_MIN_CONTAINERS` and `MODAL_TEXT_EMBED_KEEP_WARM` remain
-    as backward-compatible aliases.
+    Returns None when unset so Modal uses default scaling behavior.
     """
-    min_containers = _optional_non_negative_int_env("MODAL_QUERY_EMBED_MIN_CONTAINERS")
-    if min_containers is not None:
-        return min_containers
-    min_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MIN_CONTAINERS")
-    if min_containers is not None:
-        return min_containers
-    return _optional_non_negative_int_env("MODAL_TEXT_EMBED_KEEP_WARM")
+    return _optional_non_negative_int_env("MODAL_QUERY_EMBED_MIN_CONTAINERS")
 
 
 QUERY_EMBED_MIN_CONTAINERS = _resolve_query_embed_min_containers()
@@ -78,15 +70,10 @@ def _resolve_query_embed_max_containers() -> int:
     Defaults to 1 so repeated sequential searches hit a reused container/model.
     """
     max_containers = _optional_non_negative_int_env("MODAL_QUERY_EMBED_MAX_CONTAINERS")
-    if max_containers is not None:
-        if max_containers == 0:
-            raise ValueError("MODAL_QUERY_EMBED_MAX_CONTAINERS must be >= 1")
-        return max_containers
-    max_containers = _optional_non_negative_int_env("MODAL_TEXT_EMBED_MAX_CONTAINERS")
     if max_containers is None:
         return 1
     if max_containers == 0:
-        raise ValueError("MODAL_TEXT_EMBED_MAX_CONTAINERS must be >= 1")
+        raise ValueError("MODAL_QUERY_EMBED_MAX_CONTAINERS must be >= 1")
     return max_containers
 
 

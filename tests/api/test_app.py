@@ -35,6 +35,7 @@ QUERY_IMAGE_BYTES = (
     b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDAT\x08\xd7c\xf8\xcf"
     b"\xc0\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+OVERSIZED_QUERY_IMAGE_BYTES = b"x" * ((10 * 1024 * 1024) + 1)
 
 
 def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
@@ -1658,6 +1659,27 @@ def test_search_video_by_image_rejects_empty_upload(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Uploaded image is empty"
+
+
+def test_search_video_by_image_rejects_large_upload(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_image_service",
+        lambda **kwargs: pytest.fail("should not be called for oversized upload"),
+    )
+
+    response = client.post(
+        "/videos/video_ready/search/image",
+        files={"query_image": ("query.png", OVERSIZED_QUERY_IMAGE_BYTES, "image/png")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded image exceeds 10 MB limit"
 
 
 def test_search_video_by_image_rejects_invalid_image(monkeypatch) -> None:

@@ -35,30 +35,19 @@ def test_optional_non_negative_int_env_negative(monkeypatch) -> None:
 
 def test_resolve_query_embed_min_containers_prefers_new_name(monkeypatch) -> None:
     monkeypatch.setenv("MODAL_QUERY_EMBED_MIN_CONTAINERS", "3")
-    monkeypatch.setenv("MODAL_TEXT_EMBED_MIN_CONTAINERS", "2")
-    monkeypatch.setenv("MODAL_TEXT_EMBED_KEEP_WARM", "1")
 
     assert modal_app._resolve_query_embed_min_containers() == 3
 
 
-def test_resolve_query_embed_min_containers_falls_back_to_legacy_name(monkeypatch) -> None:
+def test_resolve_query_embed_min_containers_default(monkeypatch) -> None:
     monkeypatch.delenv("MODAL_QUERY_EMBED_MIN_CONTAINERS", raising=False)
-    monkeypatch.setenv("MODAL_TEXT_EMBED_MIN_CONTAINERS", "2")
-    monkeypatch.setenv("MODAL_TEXT_EMBED_KEEP_WARM", "1")
 
-    assert modal_app._resolve_query_embed_min_containers() == 2
+    assert modal_app._resolve_query_embed_min_containers() is None
 
 
 def test_resolve_query_embed_max_containers_default(monkeypatch) -> None:
     monkeypatch.delenv("MODAL_QUERY_EMBED_MAX_CONTAINERS", raising=False)
-    monkeypatch.delenv("MODAL_TEXT_EMBED_MAX_CONTAINERS", raising=False)
     assert modal_app._resolve_query_embed_max_containers() == 1
-
-
-def test_resolve_query_embed_max_containers_falls_back_to_legacy_name(monkeypatch) -> None:
-    monkeypatch.delenv("MODAL_QUERY_EMBED_MAX_CONTAINERS", raising=False)
-    monkeypatch.setenv("MODAL_TEXT_EMBED_MAX_CONTAINERS", "2")
-    assert modal_app._resolve_query_embed_max_containers() == 2
 
 
 def test_resolve_query_embed_max_containers_rejects_zero(monkeypatch) -> None:

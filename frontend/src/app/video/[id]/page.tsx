@@ -44,6 +44,8 @@ type VideoSearchResponse = {
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 300; // 10 minutes at 2s interval
+const MAX_QUERY_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_QUERY_IMAGE_SIZE_LABEL = "10 MB";
 
 function formatTimestamp(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -79,6 +81,38 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const queryImageInputRef = useRef<HTMLInputElement | null>(null);
+
+  function resetQueryImageSelection() {
+    setQueryImageFile(null);
+    if (queryImageInputRef.current) {
+      queryImageInputRef.current.value = "";
+    }
+  }
+
+  function handleSearchModeChange(nextMode: SearchMode) {
+    setSearchMode(nextMode);
+    setResults([]);
+    setError(null);
+    if (nextMode !== "image") {
+      resetQueryImageSelection();
+    }
+  }
+
+  function handleQueryImageChange(file: File | null) {
+    setResults([]);
+    if (!file) {
+      setError(null);
+      resetQueryImageSelection();
+      return;
+    }
+    if (file.size > MAX_QUERY_IMAGE_SIZE_BYTES) {
+      setError(`Image must be ${MAX_QUERY_IMAGE_SIZE_LABEL} or smaller.`);
+      resetQueryImageSelection();
+      return;
+    }
+    setError(null);
+    setQueryImageFile(file);
+  }
 
   // Poll for video status
   useEffect(() => {
@@ -295,10 +329,19 @@ export default function VideoPage({ params }: VideoPageProps) {
             )}
 
             <form onSubmit={handleSearch}>
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-zinc-300 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-900">
+              <div
+                role="tablist"
+                aria-label="Search mode"
+                className="grid grid-cols-2 gap-2 rounded-lg border border-zinc-300 bg-zinc-100 p-1 dark:border-zinc-700 dark:bg-zinc-900"
+              >
                 <button
                   type="button"
-                  onClick={() => setSearchMode("text")}
+                  onClick={() => handleSearchModeChange("text")}
+                  role="tab"
+                  aria-selected={searchMode === "text"}
+                  aria-controls="search-panel-text"
+                  id="search-tab-text"
+                  tabIndex={searchMode === "text" ? 0 : -1}
                   className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                     searchMode === "text"
                       ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
@@ -310,7 +353,12 @@ export default function VideoPage({ params }: VideoPageProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSearchMode("image")}
+                  onClick={() => handleSearchModeChange("image")}
+                  role="tab"
+                  aria-selected={searchMode === "image"}
+                  aria-controls="search-panel-image"
+                  id="search-tab-image"
+                  tabIndex={searchMode === "image" ? 0 : -1}
                   className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                     searchMode === "image"
                       ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
@@ -323,28 +371,40 @@ export default function VideoPage({ params }: VideoPageProps) {
               </div>
 
               {searchMode === "text" ? (
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for a moment..."
-                  className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900"
-                  disabled={isSearching}
-                />
+                <div
+                  role="tabpanel"
+                  id="search-panel-text"
+                  aria-labelledby="search-tab-text"
+                >
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search for a moment..."
+                    className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900"
+                    disabled={isSearching}
+                  />
+                </div>
               ) : (
-                <div className="mt-4 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+                <div
+                  role="tabpanel"
+                  id="search-panel-image"
+                  aria-labelledby="search-tab-image"
+                  className="mt-4 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700"
+                >
                   <input
                     ref={queryImageInputRef}
                     type="file"
                     accept="image/*"
+                    aria-label="Upload an example image to search this video"
                     onChange={(e) => {
-                      setQueryImageFile(e.target.files?.[0] ?? null);
+                      handleQueryImageChange(e.target.files?.[0] ?? null);
                     }}
                     className="w-full text-sm text-zinc-600 file:mr-4 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white dark:text-zinc-400 dark:file:bg-zinc-100 dark:file:text-zinc-900"
                     disabled={isSearching}
                   />
                   <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    Upload one example image to find visually similar moments in this video.
+                    Upload one example image to find visually similar moments in this video. Max {MAX_QUERY_IMAGE_SIZE_LABEL}.
                   </p>
                   {queryImageFile && (
                     <div className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
@@ -365,12 +425,7 @@ export default function VideoPage({ params }: VideoPageProps) {
                         </p>
                         <button
                           type="button"
-                          onClick={() => {
-                            setQueryImageFile(null);
-                            if (queryImageInputRef.current) {
-                              queryImageInputRef.current.value = "";
-                            }
-                          }}
+                          onClick={resetQueryImageSelection}
                           className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                           disabled={isSearching}
                         >

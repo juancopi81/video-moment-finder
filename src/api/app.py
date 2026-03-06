@@ -79,6 +79,7 @@ DEFAULT_RATE_LIMIT_WINDOW_S = 60
 DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW = 12
 DEFAULT_RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW = 30
 DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW = 60
+MAX_QUERY_IMAGE_BYTES = 10 * 1024 * 1024
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
     "pro": "LEMON_SQUEEZY_VARIANT_ID_PRO",
@@ -783,6 +784,24 @@ def _build_video_search_response(
     )
 
 
+def _read_query_image_bytes(upload: UploadFile) -> bytes:
+    """Read one uploaded query image with a hard size cap."""
+    image_bytes = upload.file.read(MAX_QUERY_IMAGE_BYTES + 1)
+    if len(image_bytes) > MAX_QUERY_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Uploaded image exceeds 10 MB limit")
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty")
+    return image_bytes
+
+
+def _raise_search_backend_unavailable(video_id: str, exc: Exception) -> None:
+    logger.exception("Search backend failure for video_id=%s: %s", video_id, exc)
+    raise HTTPException(
+        status_code=503,
+        detail="Search is temporarily unavailable. Please try again.",
+    ) from exc
+
+
 app = FastAPI(
     title="Video Moment Finder API",
     version="0.2.0",
@@ -1086,11 +1105,7 @@ def search_video(
             limit=request.limit,
         )
     except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
-        logger.exception("Search backend failure for video_id=%s: %s", video_id, exc)
-        raise HTTPException(
-            status_code=503,
-            detail="Search is temporarily unavailable. Please try again.",
-        ) from exc
+        _raise_search_backend_unavailable(video_id, exc)
 
     return _build_video_search_response(record, results)
 
@@ -1109,9 +1124,7 @@ def search_video_by_image(
     if not query_image.content_type or not query_image.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image uploads are supported")
 
-    image_bytes = query_image.file.read()
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded image is empty")
+    image_bytes = _read_query_image_bytes(query_image)
 
     try:
         results = search_video_by_image_service(
@@ -1122,11 +1135,7 @@ def search_video_by_image(
     except QueryImageValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
-        logger.exception("Search backend failure for video_id=%s: %s", video_id, exc)
-        raise HTTPException(
-            status_code=503,
-            detail="Search is temporarily unavailable. Please try again.",
-        ) from exc
+        _raise_search_backend_unavailable(video_id, exc)
 
     return _build_video_search_response(record, results)
 
