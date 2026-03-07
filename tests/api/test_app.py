@@ -736,6 +736,50 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     assert payload["source_url"] is None
     assert payload["results"][0]["thumbnail_url"] is None
     assert payload["results"][0]["timestamp_s"] == 12.5
+    assert payload["results"][0]["source"] == "visual"
+    assert payload["results"][0]["transcript_text"] is None
+
+
+def test_search_video_includes_transcript_result_metadata(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_text_service",
+        lambda video_id, query_text, limit=5: [
+            SearchResult(
+                video_id=video_id,
+                frame_index=-1,
+                timestamp_s=21.0,
+                thumbnail_url=None,
+                score=0.81,
+                source="transcript",
+                transcript_text="The host explains the launch plan.",
+            ),
+            SearchResult(
+                video_id=video_id,
+                frame_index=4,
+                timestamp_s=25.0,
+                thumbnail_url="https://cdn.example.com/thumb.jpg",
+                score=0.7,
+            ),
+        ],
+    )
+
+    response = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "where does he explain the launch plan"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["results"][0]["source"] == "transcript"
+    assert payload["results"][0]["transcript_text"] == "The host explains the launch plan."
+    assert payload["results"][1]["source"] == "visual"
+    assert payload["results"][1]["transcript_text"] is None
 
 
 def test_upload_video_requires_authentication(monkeypatch) -> None:
@@ -1828,6 +1872,7 @@ def test_search_video_by_image_returns_results(monkeypatch) -> None:
     payload = response.json()
     assert payload["results"][0]["timestamp_s"] == 9.5
     assert payload["results"][0]["thumbnail_url"] == "https://cdn.example.com/thumb.jpg"
+    assert payload["results"][0]["source"] == "visual"
 
 
 def test_search_video_by_image_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:

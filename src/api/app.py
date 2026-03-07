@@ -640,6 +640,8 @@ class SearchResult(BaseModel):
     timestamp_s: float
     thumbnail_url: HttpUrl | None = None
     score: float
+    source: Literal["visual", "transcript"]
+    transcript_text: str | None = None
 
 
 class VideoSearchResponse(BaseModel):
@@ -811,6 +813,8 @@ def _build_video_search_response(
                 timestamp_s=r.timestamp_s,
                 thumbnail_url=r.thumbnail_url,
                 score=r.score,
+                source=r.source,
+                transcript_text=r.transcript_text,
             )
             for r in results
         ],

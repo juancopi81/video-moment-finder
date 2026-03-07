@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
@@ -38,6 +39,8 @@ class SearchResult:
     timestamp_s: float
     score: float
     thumbnail_url: str | None = None
+    source: Literal["visual", "transcript"] = "visual"
+    transcript_text: str | None = None
 
 
 def generate_point_id(video_id: str, frame_index: int) -> str:

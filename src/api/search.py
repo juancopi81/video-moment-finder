@@ -67,6 +67,34 @@ _TRANSCRIPT_STOP_WORDS = {
     "why",
     "you",
 }
+_TRANSCRIPT_INTENT_TOKENS = {
+    "explain",
+    "explains",
+    "explained",
+    "explanation",
+    "mention",
+    "mentions",
+    "mentioned",
+    "say",
+    "says",
+    "said",
+    "talk",
+    "talks",
+    "talked",
+    "talking",
+    "discuss",
+    "discusses",
+    "discussed",
+    "describe",
+    "describes",
+    "described",
+    "tell",
+    "tells",
+    "told",
+    "speech",
+    "speaks",
+    "speaking",
+}
 
 
 class QueryImageValidationError(ValueError):
@@ -78,7 +106,7 @@ def search_video_by_text(
     query_text: str,
     limit: int = 5,
 ) -> list[SearchResult]:
-    """Search transcript segments first, then fall back to visual embeddings."""
+    """Search text queries across transcript and visual retrieval paths."""
     logger.info(
         "Searching video_id=%s query_type=text query=%r limit=%d",
         video_id,
@@ -88,80 +116,100 @@ def search_video_by_text(
 
     transcript_results: list[SearchResult] = []
     transcript_timer: Timer | None = None
+    transcript_error: Exception | None = None
     embed_timer: Timer | None = None
-    results: list[SearchResult] = []
+    visual_results: list[SearchResult] = []
     qdrant_setup_timer: Timer | None = None
     qdrant_search_timer: Timer | None = None
 
     with Timer("Search total", logger, level="debug") as total_timer:
         transcript_query = _normalize_transcript_query(query_text)
         if transcript_query is not None:
-            with Timer(
-                "Search transcript query",
-                logger,
-                level="debug",
-            ) as transcript_timer:
-                transcript_results = _search_transcript_results(
-                    video_id=video_id,
-                    query_text=transcript_query,
-                    limit=limit,
-                )
-            if not transcript_results:
+            try:
+                with Timer(
+                    "Search transcript query",
+                    logger,
+                    level="debug",
+                ) as transcript_timer:
+                    transcript_results = _search_transcript_results(
+                        video_id=video_id,
+                        query_text=transcript_query,
+                        limit=limit,
+                    )
+                if not transcript_results:
+                    transcript_timer = None
+            except Exception as exc:
+                transcript_error = exc
                 transcript_timer = None
+                logger.warning(
+                    "Transcript search unavailable for video_id=%s: %s",
+                    video_id,
+                    exc,
+                )
 
-        if not transcript_results:
+        try:
             with Timer("Search embed query", logger, level="debug") as embed_timer:
                 query_embedder = get_query_embedder_class()
-                try:
-                    query_vector = query_embedder().embed_text.remote(query_text)
-                except Exception as exc:
-                    raise_modal_auth_error(exc, context="embedding a text search query")
-                    raise
+                query_vector = query_embedder().embed_text.remote(query_text)
+        except Exception as exc:
+            if not transcript_results:
+                raise_modal_auth_error(exc, context="embedding a text search query")
+                raise
+            logger.warning(
+                "Visual text embedding unavailable for video_id=%s: %s",
+                video_id,
+                exc,
+            )
+        else:
             logger.debug(
                 "Got text query embedding with %d dimensions",
                 len(query_vector),
             )
 
-            (
-                results,
-                qdrant_setup_timer,
-                qdrant_search_timer,
-            ) = _search_with_query_vector(
-                video_id=video_id,
-                query_vector=query_vector,
-                limit=limit,
-            )
+            try:
+                (
+                    visual_results,
+                    qdrant_setup_timer,
+                    qdrant_search_timer,
+                ) = _search_with_query_vector(
+                    video_id=video_id,
+                    query_vector=query_vector,
+                    limit=limit,
+                )
+            except Exception as exc:
+                if not transcript_results:
+                    raise
+                logger.warning(
+                    "Visual text search unavailable for video_id=%s: %s",
+                    video_id,
+                    exc,
+                )
 
-    if transcript_results:
-        logger.info(
-            (
-                "Search timing video_id=%s query_type=text retrieval=transcript "
-                "transcript_ms=%.1f total_ms=%.1f limit=%d results=%d"
-            ),
-            video_id,
-            (
-                (transcript_timer.elapsed or 0.0) * 1000
-                if transcript_timer is not None
-                else 0.0
-            ),
-            (total_timer.elapsed or 0.0) * 1000,
-            limit,
-            len(transcript_results),
-        )
-        return transcript_results
+    results = _merge_text_search_results(
+        query_text=query_text,
+        transcript_results=transcript_results,
+        visual_results=visual_results,
+    )
+    if not results and transcript_error is not None:
+        raise transcript_error
 
-    if embed_timer is None or qdrant_setup_timer is None or qdrant_search_timer is None:
-        return []
-
-    _log_search_timing(
-        video_id=video_id,
-        query_type="text",
-        embed_timer=embed_timer,
-        qdrant_setup_timer=qdrant_setup_timer,
-        qdrant_search_timer=qdrant_search_timer,
-        total_timer=total_timer,
-        limit=limit,
-        results_count=len(results),
+    logger.info(
+        (
+            "Search timing video_id=%s query_type=text transcript_ms=%.1f "
+            "embed_ms=%.1f qdrant_setup_ms=%.1f qdrant_search_ms=%.1f "
+            "total_ms=%.1f limit=%d transcript_results=%d visual_results=%d "
+            "results=%d"
+        ),
+        video_id,
+        _elapsed_ms(transcript_timer),
+        _elapsed_ms(embed_timer),
+        _elapsed_ms(qdrant_setup_timer),
+        _elapsed_ms(qdrant_search_timer),
+        (total_timer.elapsed or 0.0) * 1000,
+        limit,
+        len(transcript_results),
+        len(visual_results),
+        len(results),
     )
 
     return results
@@ -235,6 +283,8 @@ def _search_transcript_results(
             timestamp_s=segment.start_s,
             thumbnail_url=None,
             score=segment.score or 0.0,
+            source="transcript",
+            transcript_text=segment.text,
         )
         for segment in segments
     ]
@@ -286,6 +336,28 @@ def _log_search_timing(
         limit,
         results_count,
     )
+
+
+def _elapsed_ms(timer: Timer | None) -> float:
+    return (timer.elapsed or 0.0) * 1000 if timer is not None else 0.0
+
+
+def _merge_text_search_results(
+    *,
+    query_text: str,
+    transcript_results: list[SearchResult],
+    visual_results: list[SearchResult],
+) -> list[SearchResult]:
+    if _prefers_transcript_first(query_text):
+        ordered_groups = (transcript_results, visual_results)
+    else:
+        ordered_groups = (visual_results, transcript_results)
+    return [result for group in ordered_groups for result in group]
+
+
+def _prefers_transcript_first(query_text: str) -> bool:
+    normalized = query_text.lower()
+    return any(token in normalized for token in _TRANSCRIPT_INTENT_TOKENS)
 
 
 def _normalize_transcript_query(query_text: str) -> str | None:

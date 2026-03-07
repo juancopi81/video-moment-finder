@@ -12,7 +12,13 @@ Process a video, run text or image queries, and jump to matching timestamps.
 - Processes video frames asynchronously.
 - Stores YouTube transcript segments when captions are available.
 - Embeds frames into a vector index for semantic retrieval.
+- Runs text queries across visual retrieval and subtitle-backed spoken retrieval.
 - Returns top timestamped matches for text or example-image queries, with thumbnails when visual matches are available.
+
+Current transcript scope:
+
+- YouTube videos use existing subtitle tracks when available.
+- Direct uploads remain visual-only for text queries until ASR support is added.
 
 ## Quick Start (Local)
 
