@@ -106,7 +106,11 @@ def search_video_by_text(
     query_text: str,
     limit: int = 5,
 ) -> list[SearchResult]:
-    """Search text queries across transcript and visual retrieval paths."""
+    """Search text queries across transcript and visual retrieval paths.
+
+    ``limit`` is a per-source cap: text search can return up to ``limit``
+    transcript matches plus up to ``limit`` visual matches.
+    """
     logger.info(
         "Searching video_id=%s query_type=text query=%r limit=%d",
         video_id,
@@ -356,17 +360,16 @@ def _merge_text_search_results(
 
 
 def _prefers_transcript_first(query_text: str) -> bool:
-    normalized = query_text.lower()
-    return any(token in normalized for token in _TRANSCRIPT_INTENT_TOKENS)
+    query_tokens = _query_tokens(query_text)
+    return any(token in _TRANSCRIPT_INTENT_TOKENS for token in query_tokens)
 
 
 def _normalize_transcript_query(query_text: str) -> str | None:
     tokens = []
     seen: set[str] = set()
 
-    for raw_token in _TRANSCRIPT_QUERY_TOKEN_RE.findall(query_text.lower()):
-        token = raw_token.strip("'")
-        if len(token) < 2 or token in _TRANSCRIPT_STOP_WORDS or token in seen:
+    for token in _query_tokens(query_text):
+        if token in _TRANSCRIPT_STOP_WORDS or token in seen:
             continue
         seen.add(token)
         tokens.append(token)
@@ -374,3 +377,13 @@ def _normalize_transcript_query(query_text: str) -> str | None:
     if not tokens:
         return None
     return " ".join(tokens)
+
+
+def _query_tokens(query_text: str) -> list[str]:
+    tokens = []
+    for raw_token in _TRANSCRIPT_QUERY_TOKEN_RE.findall(query_text.lower()):
+        token = raw_token.strip("'")
+        if len(token) < 2:
+            continue
+        tokens.append(token)
+    return tokens

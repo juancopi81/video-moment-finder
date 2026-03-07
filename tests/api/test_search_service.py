@@ -96,6 +96,105 @@ def test_search_video_by_text_logs_timing_and_returns_results(monkeypatch) -> No
     assert any("Search timing" in message for message, _ in info_calls)
 
 
+def test_search_video_by_text_limit_applies_per_result_source(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_transcript_search(video_id: str, query_text: str, limit: int = 5):
+        captured["transcript_limit"] = limit
+        return [
+            TranscriptSegmentRecord(
+                video_id=video_id,
+                segment_index=0,
+                start_s=2.0,
+                end_s=4.0,
+                text="one transcript hit",
+                language_code="en",
+                score=0.8,
+            ),
+            TranscriptSegmentRecord(
+                video_id=video_id,
+                segment_index=1,
+                start_s=6.0,
+                end_s=8.0,
+                text="two transcript hit",
+                language_code="en",
+                score=0.7,
+            ),
+        ]
+
+    class FakeEmbedTextMethod:
+        def remote(self, query_text: str) -> list[float]:
+            return [0.1, 0.2, 0.3]
+
+    class FakeEmbedderInstance:
+        embed_text = FakeEmbedTextMethod()
+
+    class FakeEmbedderClass:
+        def __call__(self) -> FakeEmbedderInstance:
+            return FakeEmbedderInstance()
+
+    class FakeQdrantStore:
+        def __init__(self, config: object) -> None:
+            self._config = config
+
+        def search(
+            self,
+            *,
+            query_vector: list[float],
+            video_id: str,
+            limit: int,
+        ) -> list[SearchResult]:
+            captured["visual_limit"] = limit
+            return [
+                SearchResult(
+                    video_id=video_id,
+                    frame_index=0,
+                    timestamp_s=10.0,
+                    thumbnail_url="https://cdn.example.com/one.jpg",
+                    score=0.9,
+                ),
+                SearchResult(
+                    video_id=video_id,
+                    frame_index=1,
+                    timestamp_s=11.0,
+                    thumbnail_url="https://cdn.example.com/two.jpg",
+                    score=0.85,
+                ),
+            ]
+
+    monkeypatch.setattr(
+        search_module,
+        "search_video_transcript_segments",
+        _fake_transcript_search,
+    )
+    monkeypatch.setattr(
+        search_module,
+        "get_query_embedder_class",
+        lambda: FakeEmbedderClass(),
+    )
+    monkeypatch.setattr(
+        search_module.QdrantConfig,
+        "from_env",
+        lambda: object(),
+    )
+    monkeypatch.setattr(search_module, "QdrantStore", FakeQdrantStore)
+
+    results = search_module.search_video_by_text(
+        video_id="video_123",
+        query_text="where is the cat",
+        limit=2,
+    )
+
+    assert captured == {"transcript_limit": 2, "visual_limit": 2}
+    assert len(results) == 4
+    assert [result.source for result in results] == [
+        "visual",
+        "visual",
+        "transcript",
+        "transcript",
+    ]
+
+
 def test_search_video_by_text_orders_spoken_queries_with_transcript_first(
     monkeypatch,
 ) -> None:
@@ -449,6 +548,75 @@ def test_search_video_by_text_returns_transcript_results_when_visual_search_fail
             transcript_text="Here the host explains the benchmark.",
         )
     ]
+
+
+def test_search_video_by_text_intent_ordering_uses_token_matches(monkeypatch) -> None:
+    class FakeEmbedTextMethod:
+        def remote(self, query_text: str) -> list[float]:
+            return [0.1, 0.2, 0.3]
+
+    class FakeEmbedderInstance:
+        embed_text = FakeEmbedTextMethod()
+
+    class FakeEmbedderClass:
+        def __call__(self) -> FakeEmbedderInstance:
+            return FakeEmbedderInstance()
+
+    class FakeQdrantStore:
+        def __init__(self, config: object) -> None:
+            self._config = config
+
+        def search(
+            self,
+            *,
+            query_vector: list[float],
+            video_id: str,
+            limit: int,
+        ) -> list[SearchResult]:
+            return [
+                SearchResult(
+                    video_id=video_id,
+                    frame_index=0,
+                    timestamp_s=10.0,
+                    thumbnail_url="https://cdn.example.com/one.jpg",
+                    score=0.9,
+                )
+            ]
+
+    monkeypatch.setattr(
+        search_module,
+        "search_video_transcript_segments",
+        lambda video_id, query_text, limit=5: [
+            TranscriptSegmentRecord(
+                video_id=video_id,
+                segment_index=0,
+                start_s=3.0,
+                end_s=4.0,
+                text="spoken hit",
+                language_code="en",
+                score=0.8,
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        search_module,
+        "get_query_embedder_class",
+        lambda: FakeEmbedderClass(),
+    )
+    monkeypatch.setattr(
+        search_module.QdrantConfig,
+        "from_env",
+        lambda: object(),
+    )
+    monkeypatch.setattr(search_module, "QdrantStore", FakeQdrantStore)
+
+    results = search_module.search_video_by_text(
+        video_id="video_123",
+        query_text="intelligence overview",
+        limit=2,
+    )
+
+    assert [result.source for result in results] == ["visual", "transcript"]
 
 
 def test_search_video_by_text_raises_modal_auth_error_when_token_missing(

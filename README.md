@@ -14,6 +14,7 @@ Process a video, run text or image queries, and jump to matching timestamps.
 - Embeds frames into a vector index for semantic retrieval.
 - Runs text queries across visual retrieval and subtitle-backed spoken retrieval.
 - Returns top timestamped matches for text or example-image queries, with thumbnails when visual matches are available.
+- For text queries, the `limit` applies per result group: up to `limit` visual matches and up to `limit` spoken matches.
 
 Current transcript scope:
 

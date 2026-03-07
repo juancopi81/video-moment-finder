@@ -389,24 +389,13 @@ def replace_video_transcript_segments(
     video_id: str,
     segments: list[TranscriptSegmentRecord],
 ) -> int:
-    """Replace all transcript segments for one video."""
+    """Replace all transcript segments for one video atomically."""
     if not video_id.strip():
         raise ValueError("video_id must be non-empty")
 
     client = get_client()
-    (
-        client.table("video_transcript_segments")
-        .delete()
-        .eq("video_id", video_id)
-        .execute()
-    )
-
-    if not segments:
-        return 0
-
     rows = [
         {
-            "video_id": segment.video_id,
             "segment_index": segment.segment_index,
             "start_s": segment.start_s,
             "end_s": segment.end_s,
@@ -416,14 +405,18 @@ def replace_video_transcript_segments(
         for segment in segments
     ]
 
-    inserted = 0
-    batch_size = 500
-    for batch_start in range(0, len(rows), batch_size):
-        batch = rows[batch_start : batch_start + batch_size]
-        result = client.table("video_transcript_segments").insert(batch).execute()
-        inserted += len(result.data or [])
+    result = client.rpc(
+        "replace_video_transcript_segments",
+        {
+            "p_video_id": video_id,
+            "p_segments": rows,
+        },
+    ).execute()
 
-    return inserted
+    inserted_raw = _rpc_first_item(result.data)
+    if inserted_raw is None:
+        return 0
+    return int(inserted_raw)
 
 
 def search_video_transcript_segments(

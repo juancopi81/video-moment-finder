@@ -782,6 +782,74 @@ def test_search_video_includes_transcript_result_metadata(monkeypatch) -> None:
     assert payload["results"][1]["transcript_text"] is None
 
 
+def test_search_video_limit_is_per_result_source(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+
+    def _fake_search_video_service(*, video_id: str, query_text: str, limit: int):
+        captured["limit"] = limit
+        return [
+            SearchResult(
+                video_id=video_id,
+                frame_index=2,
+                timestamp_s=8.0,
+                thumbnail_url="https://cdn.example.com/visual-1.jpg",
+                score=0.93,
+            ),
+            SearchResult(
+                video_id=video_id,
+                frame_index=3,
+                timestamp_s=9.0,
+                thumbnail_url="https://cdn.example.com/visual-2.jpg",
+                score=0.91,
+            ),
+            SearchResult(
+                video_id=video_id,
+                frame_index=-1,
+                timestamp_s=14.0,
+                thumbnail_url=None,
+                score=0.87,
+                source="transcript",
+                transcript_text="spoken match one",
+            ),
+            SearchResult(
+                video_id=video_id,
+                frame_index=-1,
+                timestamp_s=18.0,
+                thumbnail_url=None,
+                score=0.8,
+                source="transcript",
+                transcript_text="spoken match two",
+            ),
+        ]
+
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_text_service",
+        _fake_search_video_service,
+    )
+
+    response = client.post(
+        "/videos/video_ready/search",
+        json={"query_text": "where is the cat", "limit": 2},
+    )
+
+    assert response.status_code == 200
+    assert captured["limit"] == 2
+    payload = response.json()
+    assert len(payload["results"]) == 4
+    assert [item["source"] for item in payload["results"]] == [
+        "visual",
+        "visual",
+        "transcript",
+        "transcript",
+    ]
+
+
 def test_upload_video_requires_authentication(monkeypatch) -> None:
     client = TestClient(app)
     called = False

@@ -205,10 +205,7 @@ def test_replace_video_transcript_segments_replaces_rows(
 ) -> None:
     mock_client = MagicMock()
     mock_get_client.return_value = mock_client
-    table = mock_client.table.return_value
-    delete_query = table.delete.return_value
-    delete_query.eq.return_value.execute.return_value.data = []
-    table.insert.return_value.execute.return_value.data = [{}]
+    mock_client.rpc.return_value.execute.return_value.data = 1
 
     inserted = replace_video_transcript_segments(
         "video_123",
@@ -225,19 +222,20 @@ def test_replace_video_transcript_segments_replaces_rows(
     )
 
     assert inserted == 1
-    mock_client.table.assert_called_with("video_transcript_segments")
-    delete_query.eq.assert_called_once_with("video_id", "video_123")
-    table.insert.assert_called_once_with(
-        [
-            {
-                "video_id": "video_123",
-                "segment_index": 0,
-                "start_s": 1.0,
-                "end_s": 2.0,
-                "text": "hello world",
-                "language_code": "en",
-            }
-        ]
+    mock_client.rpc.assert_called_once_with(
+        "replace_video_transcript_segments",
+        {
+            "p_video_id": "video_123",
+            "p_segments": [
+                {
+                    "segment_index": 0,
+                    "start_s": 1.0,
+                    "end_s": 2.0,
+                    "text": "hello world",
+                    "language_code": "en",
+                }
+            ],
+        },
     )
 
 
