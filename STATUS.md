@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 4: Product Launch Hardening** - In Progress
+**Phase 5: Launch and Learn** - In Progress
 
 ## Progress Log
 
@@ -47,6 +47,7 @@ Authoring rules:
 | 2026-03-06 | Phase 4 | Security advisor closure and launch copy pass         | Done        | Cleared Supabase Security Advisor, verified backups, removed unimplemented feature claims, added AI disclaimer. |
 | 2026-03-06 | Phase 4 | Image query search                                    | Done        | Added uploaded-image query search across API, Modal, frontend, and docs. |
 | 2026-03-06 | Phase 5 | Analytics baseline (product events)                   | Done        | First-party event tracking via analytics_events table. |
+| 2026-03-06 | Phase 5 | Transcript-backed text search                         | Done        | Added YouTube subtitle extraction plus grouped spoken and visual text results; upload ASR remains future work. |
 | 2026-03-10 | Phase 5 | Upload-first ingest positioning                       | Done        | Made direct upload the primary product story, simplified YouTube fallback UX, and updated owning docs. |
 
 ## Blockers

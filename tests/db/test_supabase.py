@@ -10,15 +10,19 @@ import src.db.supabase as supabase_module
 from src.db.supabase import (
     VideoRecord,
     CreditRecord,
+    TranscriptSegmentRecord,
     _row_to_video,
     _row_to_credit,
+    _row_to_transcript_segment,
     apply_billing_credit_grant,
     consume_processing_credit,
     count_videos_for_user,
     create_video,
     get_video,
     has_unlimited_video_access,
+    replace_video_transcript_segments,
     reset_client,
+    search_video_transcript_segments,
     update_credits,
 )
 
@@ -60,6 +64,28 @@ def test_row_to_credit_converts_correctly() -> None:
     assert credit.id == "credit-123"
     assert credit.user_id == "user_456"
     assert credit.balance == 100
+
+
+def test_row_to_transcript_segment_converts_correctly() -> None:
+    row = {
+        "video_id": "video-123",
+        "segment_index": 4,
+        "start_s": 12.5,
+        "end_s": 15.0,
+        "text": "Discussing the benchmark results.",
+        "language_code": "en",
+        "score": 0.77,
+    }
+
+    segment = _row_to_transcript_segment(row)
+
+    assert segment.video_id == "video-123"
+    assert segment.segment_index == 4
+    assert segment.start_s == 12.5
+    assert segment.end_s == 15.0
+    assert segment.text == "Discussing the benchmark results."
+    assert segment.language_code == "en"
+    assert segment.score == 0.77
 
 
 @patch("src.db.supabase.get_client")
@@ -140,7 +166,9 @@ def test_count_videos_for_user_excludes_failed(mock_get_client: MagicMock) -> No
 
 
 @patch("src.db.supabase.get_client")
-def test_has_unlimited_video_access_returns_true_for_override(mock_get_client: MagicMock) -> None:
+def test_has_unlimited_video_access_returns_true_for_override(
+    mock_get_client: MagicMock,
+) -> None:
     mock_query = MagicMock()
     mock_query.eq.return_value = mock_query
     mock_query.limit.return_value = mock_query
@@ -169,6 +197,91 @@ def test_has_unlimited_video_access_returns_false_without_override(
     mock_get_client.return_value = mock_client
 
     assert has_unlimited_video_access("user_456") is False
+
+
+@patch("src.db.supabase.get_client")
+def test_replace_video_transcript_segments_replaces_rows(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    table = mock_client.table.return_value
+    delete_query = table.delete.return_value
+    delete_query.eq.return_value.execute.return_value.data = []
+    table.insert.return_value.execute.return_value.data = [{}]
+
+    inserted = replace_video_transcript_segments(
+        "video_123",
+        [
+            TranscriptSegmentRecord(
+                video_id="video_123",
+                segment_index=0,
+                start_s=1.0,
+                end_s=2.0,
+                text="hello world",
+                language_code="en",
+            )
+        ],
+    )
+
+    assert inserted == 1
+    mock_client.table.assert_called_with("video_transcript_segments")
+    delete_query.eq.assert_called_once_with("video_id", "video_123")
+    table.insert.assert_called_once_with(
+        [
+            {
+                "video_id": "video_123",
+                "segment_index": 0,
+                "start_s": 1.0,
+                "end_s": 2.0,
+                "text": "hello world",
+                "language_code": "en",
+            }
+        ]
+    )
+
+
+@patch("src.db.supabase.get_client")
+def test_search_video_transcript_segments_calls_rpc(mock_get_client: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = [
+        {
+            "video_id": "video_123",
+            "segment_index": 2,
+            "start_s": 8.0,
+            "end_s": 10.0,
+            "text": "we discuss onboarding here",
+            "language_code": "en",
+            "score": 0.61,
+        }
+    ]
+
+    segments = search_video_transcript_segments(
+        "video_123",
+        "onboarding",
+        limit=3,
+    )
+
+    assert segments == [
+        TranscriptSegmentRecord(
+            video_id="video_123",
+            segment_index=2,
+            start_s=8.0,
+            end_s=10.0,
+            text="we discuss onboarding here",
+            language_code="en",
+            score=0.61,
+        )
+    ]
+    mock_client.rpc.assert_called_once_with(
+        "search_video_transcript_segments",
+        {
+            "p_video_id": "video_123",
+            "p_query": "onboarding",
+            "p_limit": 3,
+        },
+    )
 
 
 def test_update_credits_rejects_negative_balance() -> None:
@@ -201,7 +314,9 @@ def test_consume_processing_credit_calls_rpc(mock_get_client: MagicMock) -> None
 
 
 @patch("src.db.supabase.get_client")
-def test_consume_processing_credit_parses_denied_response(mock_get_client: MagicMock) -> None:
+def test_consume_processing_credit_parses_denied_response(
+    mock_get_client: MagicMock,
+) -> None:
     mock_client = MagicMock()
     mock_get_client.return_value = mock_client
     mock_client.rpc.return_value.execute.return_value.data = [
@@ -230,7 +345,10 @@ def test_consume_processing_credit_warns_on_unexpected_response_shape(
         supabase_module.logger.warning = original_warning
 
     warning.assert_called_once()
-    assert "Unexpected consume_processing_credit RPC response shape" in warning.call_args.args[0]
+    assert (
+        "Unexpected consume_processing_credit RPC response shape"
+        in warning.call_args.args[0]
+    )
     assert result.allowed is False
     assert result.remaining_balance == 0
 

@@ -9,9 +9,9 @@
 
 ---
 
-## Current Phase: Phase 4 - Product Launch Hardening
+## Current Phase: Phase 5 - Launch and Learn
 
-**Launch Gate:** ready for paid users with security, reliability, and ops readiness.
+**Gate:** app is publicly shareable, stable for early users, and instrumented to learn from usage.
 
 ### ~~4.3 Security Advisor Closure~~ ✅
 
@@ -62,7 +62,7 @@
 ### 5.3 Core Feature Priorities After Launch
 
 - Treat Phase 5 and Phase 6 as one staged rollout: strengthen core search first, then expose the same capabilities to agents. See [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
-- Ship transcript-backed or hybrid search first (`where was this said?` queries).
+- ~~Ship transcript-backed or hybrid search first (`where was this said?` queries).~~
 - Keep UI refinements scoped to issues surfaced by early-user feedback.
 
 ---

@@ -10,14 +10,23 @@ from src.config.modal import (
     get_embedding_modal_function,
     raise_modal_auth_error,
 )
+from src.db.supabase import (
+    TranscriptSegmentRecord,
+    VideoRecord,
+    replace_video_transcript_segments,
+)
 from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
-from src.db.supabase import VideoRecord
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
 from src.storage.r2 import R2Store, R2StorageError
 from src.utils.logging import get_logger
 from src.video.download import download_video
 from src.video.frames import extract_frames
-from src.video.metadata import VideoMetadataProbeError, max_video_duration_s, probe_video_duration_s
+from src.video.metadata import (
+    VideoMetadataProbeError,
+    max_video_duration_s,
+    probe_video_duration_s,
+)
+from src.video.transcripts import TranscriptError, extract_transcript_segments
 
 logger = get_logger(__name__)
 
@@ -57,6 +66,7 @@ def process_video(video: VideoRecord) -> ProcessingResult:
 
             video_path, r2_config = _resolve_video_source(video, video_dir)
             _validate_video_duration(video, video_path)
+            _sync_video_transcript_segments(video, temp_path / "transcript")
 
             logger.info("Extracting frames for video_id=%s", video.id)
             frames = extract_frames(
@@ -122,7 +132,9 @@ def _validate_video_duration(video: VideoRecord, video_path: Path) -> None:
     try:
         duration_s = probe_video_duration_s(video_path)
     except VideoMetadataProbeError as exc:
-        raise VideoProcessingError(f"Unable to determine uploaded video duration: {exc}") from exc
+        raise VideoProcessingError(
+            f"Unable to determine uploaded video duration: {exc}"
+        ) from exc
 
     max_duration_s = max_video_duration_s()
     if duration_s > max_duration_s:
@@ -140,7 +152,9 @@ def _resolve_video_source(
         try:
             r2_config = R2Config.from_env()
         except StorageConfigError as exc:
-            raise VideoProcessingError("R2 config is required for uploaded videos") from exc
+            raise VideoProcessingError(
+                "R2 config is required for uploaded videos"
+            ) from exc
 
         filename = video.source_filename or "upload.mp4"
         destination = video_dir / filename
@@ -180,6 +194,56 @@ def _resolve_video_source(
         logger.info("Using local video file %s", video_path)
     logger.info("Downloaded video to %s", video_path)
     return video_path, None
+
+
+def _sync_video_transcript_segments(video: VideoRecord, output_dir: Path) -> None:
+    if video.source_type != "youtube" or not video.youtube_url:
+        return
+
+    try:
+        segments = extract_transcript_segments(video.youtube_url, output_dir)
+    except TranscriptError as exc:
+        logger.warning(
+            "Transcript extraction skipped for video_id=%s: %s",
+            video.id,
+            exc,
+        )
+        return
+    except Exception as exc:
+        logger.warning(
+            "Unexpected transcript extraction failure for video_id=%s: %s",
+            video.id,
+            exc,
+        )
+        return
+
+    segment_records = [
+        TranscriptSegmentRecord(
+            video_id=video.id,
+            segment_index=segment.segment_index,
+            start_s=segment.start_s,
+            end_s=segment.end_s,
+            text=segment.text,
+            language_code=segment.language_code,
+        )
+        for segment in segments
+    ]
+
+    try:
+        stored = replace_video_transcript_segments(video.id, segment_records)
+    except Exception as exc:
+        logger.warning(
+            "Transcript storage skipped for video_id=%s: %s",
+            video.id,
+            exc,
+        )
+        return
+
+    logger.info(
+        "Stored %d transcript segments for video_id=%s",
+        stored,
+        video.id,
+    )
 
 
 def _local_video_dir() -> Path | None:
