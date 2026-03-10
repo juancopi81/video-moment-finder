@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg nodejs \
+    && ln -sf /usr/bin/nodejs /usr/local/bin/node \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 
