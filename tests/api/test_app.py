@@ -287,6 +287,7 @@ def test_create_video_returns_actionable_503_for_youtube_bot_challenge(monkeypat
         "YouTube is blocking server-side access to this video right now. "
         "Retry in a few minutes or upload the video file directly."
     )
+    assert response.headers["retry-after"] == "120"
 
 
 def test_create_video_keeps_generic_metadata_fetch_failures_as_400(monkeypatch) -> None:

@@ -167,9 +167,10 @@ def _is_youtube_bot_challenge_error(message: str) -> bool:
     normalized = message.casefold()
     return (
         ("sign in" in normalized and "not a bot" in normalized)
-        or "cookies-from-browser or --cookies" in normalized
-        or "http error 429" in normalized
-        or "too many requests" in normalized
+        or ("--cookies-from-browser" in normalized)
+        or ("--cookies" in normalized)
+        or ("http error 429" in normalized)
+        or ("too many requests" in normalized)
     )
 
 
@@ -182,6 +183,7 @@ def _validate_video_duration(youtube_url: str) -> None:
             raise HTTPException(
                 status_code=503,
                 detail=YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL,
+                headers={"Retry-After": "120"},
             ) from exc
         raise HTTPException(
             status_code=400,
