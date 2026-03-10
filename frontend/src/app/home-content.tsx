@@ -10,8 +10,10 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
-import { API_URL, parseApiError } from "@/lib/api";
+import { API_URL, parseApiError, parseApiErrorPayload } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics";
+
+type SubmitMode = "youtube" | "upload";
 
 function modeButtonClass(isActive: boolean): string {
   const base = "flex-1 rounded-lg px-4 py-2 text-sm font-medium";
@@ -23,13 +25,16 @@ function modeButtonClass(isActive: boolean): string {
 export default function HomeContent() {
   const router = useRouter();
   const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [mode, setMode] = useState<"youtube" | "upload">("youtube");
+  const [mode, setMode] = useState<SubmitMode>("upload");
   const [url, setUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [youtubeFallbackDetail, setYoutubeFallbackDetail] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     trackEvent("landing_visit");
@@ -42,14 +47,16 @@ export default function HomeContent() {
     });
   }, [isSignedIn, getToken]);
 
-  function handleModeChange(nextMode: "youtube" | "upload") {
+  function handleModeChange(nextMode: SubmitMode) {
     setMode(nextMode);
     setError(null);
+    setYoutubeFallbackDetail(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setYoutubeFallbackDetail(null);
 
     if (!url.trim()) {
       setError("Please enter a YouTube URL");
@@ -76,7 +83,17 @@ export default function HomeContent() {
       });
 
       if (!response.ok) {
-        throw new Error(await parseApiError(response, "Failed to process video"));
+        const apiError = await parseApiErrorPayload(
+          response,
+          "Failed to import YouTube video"
+        );
+
+        if (apiError.code === "youtube_server_blocked") {
+          setYoutubeFallbackDetail(apiError.detail);
+          return;
+        }
+
+        throw new Error(apiError.detail);
       }
 
       const data = await response.json();
@@ -89,6 +106,7 @@ export default function HomeContent() {
       } else {
         setError("An unexpected error occurred");
       }
+    } finally {
       setIsLoading(false);
     }
   }
@@ -96,6 +114,7 @@ export default function HomeContent() {
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setYoutubeFallbackDetail(null);
 
     if (!uploadFile) {
       setError("Please choose a video file to upload.");
@@ -202,14 +221,15 @@ export default function HomeContent() {
         <h1 className="font-heading text-5xl font-bold leading-tight sm:text-6xl">
           Find the exact moment
           <br />
-          in any video
+          in your video
         </h1>
         <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-          Search by description or example image to jump to the exact
-          timestamp — in any YouTube video or upload.
+          Upload a video file, then search by description or example image to
+          jump to the exact timestamp. YouTube URL import remains available as a
+          best-effort option for videos you own.
         </p>
         <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-          1 free video &middot; up to 30 min
+          1 free video &middot; up to 30 min &middot; upload-first
         </span>
         <div className="mt-8 flex items-center gap-4">
           <SignedOut>
@@ -217,7 +237,7 @@ export default function HomeContent() {
               href="#tool"
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
-              Try 1 free video
+              Try 1 free upload
             </a>
             <Link
               href="/pricing"
@@ -231,7 +251,7 @@ export default function HomeContent() {
               href="#tool"
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
-              Process a video
+              Upload a video
             </a>
           </SignedIn>
         </div>
@@ -242,7 +262,7 @@ export default function HomeContent() {
         <SignedOut>
           <div className="w-full max-w-xl rounded-lg border border-zinc-300 dark:border-zinc-700 p-6 text-center">
             <p className="mb-4 text-zinc-600 dark:text-zinc-400">
-              Sign in to start processing your videos.
+              Sign in to upload a video and start searching it.
             </p>
             <SignInButton mode="modal">
               <button className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white">
@@ -254,15 +274,12 @@ export default function HomeContent() {
 
         <SignedIn>
           <div className="w-full max-w-xl">
+            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+              Direct upload is the reliable path. YouTube URL import is a
+              secondary convenience for videos you own and can still be blocked
+              server-side.
+            </p>
             <div className="mb-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => handleModeChange("youtube")}
-                className={modeButtonClass(mode === "youtube")}
-                disabled={isLoading || isUploading}
-              >
-                YouTube URL
-              </button>
               <button
                 type="button"
                 onClick={() => handleModeChange("upload")}
@@ -271,27 +288,17 @@ export default function HomeContent() {
               >
                 Upload Video
               </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("youtube")}
+                className={modeButtonClass(mode === "youtube")}
+                disabled={isLoading || isUploading}
+              >
+                YouTube URL
+              </button>
             </div>
 
-            {mode === "youtube" ? (
-              <form key="youtube-form" onSubmit={handleSubmit}>
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
-                  disabled={isLoading}
-                />
-                <button
-                  type="submit"
-                  className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Processing..." : "Process Video"}
-                </button>
-              </form>
-            ) : (
+            {mode === "upload" ? (
               <form key="upload-form" onSubmit={handleUpload}>
                 <input
                   type="file"
@@ -302,17 +309,67 @@ export default function HomeContent() {
                   className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                   disabled={isUploading}
                 />
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Recommended for the most reliable processing. Upload a video
+                  file you own or have permission to use.
+                </p>
                 <button
                   type="submit"
                   className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
                   disabled={isUploading}
                 >
-                  {isUploading ? "Uploading..." : "Upload Video"}
+                  {isUploading ? "Uploading..." : "Upload and process"}
                 </button>
                 {uploadProgress !== null && (
                   <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 text-center">
-                    Uploading: {uploadProgress}%
+                    Uploading to secure storage: {uploadProgress}%
                   </p>
+                )}
+              </form>
+            ) : (
+              <form key="youtube-form" onSubmit={handleSubmit}>
+                <input
+                  type="text"
+                  value={url}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    setYoutubeFallbackDetail(null);
+                  }}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
+                  disabled={isLoading}
+                />
+                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  Best effort for videos you own or are authorized to use. If
+                  import is blocked, upload the video file instead.
+                </p>
+                <button
+                  type="submit"
+                  className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Trying import..." : "Try YouTube import"}
+                </button>
+                {youtubeFallbackDetail && (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                    <p className="font-medium">Upload is the reliable path.</p>
+                    <p className="mt-1">{youtubeFallbackDetail}</p>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => handleModeChange("upload")}
+                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+                      >
+                        Use upload instead
+                      </button>
+                      <Link
+                        href="/support#youtube-import"
+                        className="inline-flex items-center justify-center rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-400/40 dark:text-amber-100 dark:hover:bg-amber-400/10"
+                      >
+                        See YouTube import guidance
+                      </Link>
+                    </div>
+                  </div>
                 )}
               </form>
             )}
@@ -363,8 +420,9 @@ export default function HomeContent() {
           {[
             {
               step: "1",
-              title: "Add a video",
-              description: "Paste a YouTube URL or upload a file.",
+              title: "Upload a video",
+              description:
+                "Upload a file you own or can use. YouTube import is a secondary best-effort option.",
             },
             {
               step: "2",
@@ -411,13 +469,13 @@ export default function HomeContent() {
             Stop scrubbing. Start searching.
           </h2>
           <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-            Try Video Moment Finder on one real video.
+            Try Video Moment Finder on one video file you already have.
           </p>
           <a
             href="#tool"
             className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
           >
-            Try 1 free video
+            Try 1 free upload
           </a>
         </section>
       </SignedOut>

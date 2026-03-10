@@ -8,9 +8,15 @@ export const metadata: Metadata = {
 
 const faqs = [
   {
-    question: "What types of videos are supported?",
+    question: "What video sources work best?",
     answer:
-      "Currently, you can process YouTube videos (via URL) or upload video files directly. Videos must be 30 minutes or shorter.",
+      "Direct upload is the reliable path. You can upload video files you own or are authorized to use, and videos must be 30 minutes or shorter. Best-effort YouTube URL import is also available for owned videos, but server-side restrictions can block it.",
+  },
+  {
+    id: "youtube-import",
+    question: "What should I do if YouTube import fails?",
+    answer:
+      "Upload the video file directly instead. If this is your own YouTube video, use official download paths such as YouTube Studio or Google Takeout, then upload the file here. We do not recommend relying on third-party downloader sites.",
   },
   {
     question: "How does the search work?",
@@ -25,7 +31,7 @@ const faqs = [
   {
     question: "What happens to my video data?",
     answer:
-      "We extract frames and generate AI embeddings for search. Thumbnail images and search vectors are stored to enable search. Uploaded source files are automatically cleaned up after processing. We do not share your video data with third parties.",
+      "We extract frames and generate AI embeddings for search. Thumbnail images and search vectors are stored to enable search. Uploaded source files are automatically cleaned up after processing, and submitted YouTube URLs are only used to attempt import and processing. We do not share your video data with third parties.",
   },
   {
     question: "How do credits work?",
@@ -79,7 +85,7 @@ export default function SupportPage() {
         </h2>
         <div className="mt-6 space-y-6">
           {faqs.map((faq) => (
-            <div key={faq.question}>
+            <div key={faq.question} id={faq.id}>
               <h3 className="font-semibold">{faq.question}</h3>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{faq.answer}</p>
             </div>

@@ -88,9 +88,10 @@ BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
 WEBHOOK_RATE_LIMITER = SlidingWindowRateLimiter()
+YOUTUBE_SERVER_BLOCKED_ERROR_CODE = "youtube_server_blocked"
 YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL = (
-    "YouTube is blocking server-side access to this video right now. "
-    "Retry in a few minutes or upload the video file directly."
+    "Upload a video file instead. If this is your own YouTube video, "
+    "download it from YouTube Studio or Google Takeout, then upload it here."
 )
 
 
@@ -174,6 +175,13 @@ def _is_youtube_bot_challenge_error(message: str) -> bool:
     )
 
 
+def _youtube_server_blocked_error() -> dict[str, str]:
+    return {
+        "code": YOUTUBE_SERVER_BLOCKED_ERROR_CODE,
+        "detail": YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL,
+    }
+
+
 def _validate_video_duration(youtube_url: str) -> None:
     try:
         metadata = fetch_video_metadata(youtube_url)
@@ -182,8 +190,7 @@ def _validate_video_duration(youtube_url: str) -> None:
         if _is_youtube_bot_challenge_error(str(exc)):
             raise HTTPException(
                 status_code=503,
-                detail=YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL,
-                headers={"Retry-After": "120"},
+                detail=_youtube_server_blocked_error(),
             ) from exc
         raise HTTPException(
             status_code=400,

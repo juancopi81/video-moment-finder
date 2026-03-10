@@ -31,7 +31,7 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 
 ## Product Inputs
 
-- Video source: YouTube URL or direct upload.
+- Video source: primary direct upload; secondary best-effort YouTube URL import.
 - Query source: text and uploaded example images.
 
 ## Product Outputs
@@ -94,7 +94,7 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 
 ## Risks & Unknowns
 
-- Video-source reliability constraints (for example download restrictions).
+- Best-effort YouTube import can be blocked by video-source reliability constraints.
 - Query quality variance across different content styles.
 - Cost/latency tradeoffs as usage scales.
 - Billing and operational edge cases during launch hardening.
