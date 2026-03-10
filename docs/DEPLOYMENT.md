@@ -32,7 +32,7 @@ Use those files as the canonical variable list and defaults. This document expla
 - Railway API service: API-required groups + shared API/worker groups.
 - Railway worker service: worker-required groups + shared API/worker groups.
 - Vercel frontend: `NEXT_PUBLIC_*` variables only.
-- Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the service image must also include `ffmpeg` plus a JavaScript runtime for `yt-dlp` YouTube extraction. The Modal image installs the additional `modal` dependency group. After merging dependency-group changes or renaming Modal objects, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
+- Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the service image must also include `ffmpeg` plus a JavaScript runtime for best-effort `yt-dlp` YouTube import. The Modal image installs the additional `modal` dependency group. After merging dependency-group changes or renaming Modal objects, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
 
 ## Modal Deploy-Time Variables
 
@@ -74,7 +74,7 @@ SELECT event_name, count(*), count(distinct user_id) FROM analytics_events GROUP
 
 ## Upload Flow Contract
 
-Preferred large-file flow (direct-to-R2):
+Preferred large-file flow (direct-to-R2, reliable production ingest path):
 
 1. `POST /videos/upload/init` with auth + filename/content type.
 2. `PUT` binary payload to returned presigned `upload_url`.
@@ -95,4 +95,4 @@ Notes:
 - `Billing webhook is not configured` -> set `LEMON_SQUEEZY_WEBHOOK_SECRET` in API service.
 - `Upload storage is not configured` -> set R2 variables in API and worker services.
 - Modal auth failures -> set both `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` in both services.
-- YouTube metadata fetches fail with bot/sign-in challenges -> redeploy the current `yt-dlp` build with the JS runtime in the service image, then retry; if YouTube still blocks the cloud request, use the direct upload flow.
+- YouTube metadata or import fails with bot/sign-in challenges -> direct upload is the supported reliable path. Use the `yt-dlp` deploy/runtime notes only when explicitly debugging the best-effort YouTube import path.

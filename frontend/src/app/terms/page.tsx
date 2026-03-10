@@ -12,7 +12,7 @@ export default function TermsPage() {
       <h1 className="font-heading text-4xl font-bold">
         Terms of Service
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: March 6, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: March 10, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -28,9 +28,10 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold text-foreground">2. Description of Service</h2>
           <p className="mt-2">
             Video Moment Finder is a web-based tool that allows users to search for specific
-            moments within videos using AI-powered semantic search. Users can submit YouTube URLs
-            or upload video files, and the Service processes them to enable text-based or
-            image-based frame search.
+            moments within videos using AI-powered semantic search. Users primarily upload video
+            files and may also submit YouTube URLs as a convenience for content they own or are
+            authorized to use. That YouTube import path may not always work. The Service processes
+            submitted videos to enable text-based or image-based frame search.
           </p>
         </section>
 
@@ -48,6 +49,7 @@ export default function TermsPage() {
           <p className="mt-2">You agree not to:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Upload or process content that you do not have the right to use</li>
+            <li>Submit YouTube URLs for content you do not own or are not authorized to use</li>
             <li>Use the Service to infringe on intellectual property rights</li>
             <li>Attempt to reverse-engineer, exploit, or abuse the Service</li>
             <li>Upload content that is illegal, harmful, or violates third-party rights</li>

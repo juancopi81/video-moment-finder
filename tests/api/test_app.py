@@ -14,6 +14,7 @@ from starlette.requests import Request
 from src.api.app import (
     UploadDurationLimitExceededError,
     UploadDurationProbeUnavailableError,
+    _is_youtube_bot_challenge_error,
     _allowed_cors_origin_regex,
     _allowed_cors_origins,
     _video_record_to_response,
@@ -283,11 +284,47 @@ def test_create_video_returns_actionable_503_for_youtube_bot_challenge(monkeypat
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"] == (
-        "YouTube is blocking server-side access to this video right now. "
-        "Retry in a few minutes or upload the video file directly."
-    )
-    assert response.headers["retry-after"] == "120"
+    assert response.json()["detail"] == {
+        "code": "youtube_server_blocked",
+        "message": (
+            "Upload a video file instead. If this is your own YouTube video, "
+            "download it from YouTube Studio or Google Takeout, then upload it here."
+        ),
+    }
+    assert "retry-after" not in response.headers
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (
+            "ERROR: [youtube] abc123xyz45: Sign in to confirm you're not a bot.",
+            True,
+        ),
+        (
+            "Use --cookies-from-browser for the authentication.",
+            True,
+        ),
+        (
+            "ERROR: [youtube] abc123xyz45: HTTP Error 429: Too Many Requests",
+            True,
+        ),
+        (
+            "Too many requests. Please try again later.",
+            True,
+        ),
+        (
+            "Use --cookies for the authentication.",
+            False,
+        ),
+        (
+            "yt-dlp returned invalid JSON metadata",
+            False,
+        ),
+    ],
+)
+def test_is_youtube_bot_challenge_error(message: str, expected: bool) -> None:
+    assert _is_youtube_bot_challenge_error(message) is expected
 
 
 def test_create_video_keeps_generic_metadata_fetch_failures_as_400(monkeypatch) -> None:

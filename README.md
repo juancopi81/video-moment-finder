@@ -7,7 +7,8 @@ Process a video, run text or image queries, and jump to matching timestamps.
 
 ## What It Does
 
-- Accepts a YouTube URL or direct video upload.
+- Accepts direct video uploads as the reliable ingest path.
+- Supports best-effort YouTube URL import for videos you own or are authorized to use.
 - Processes video frames asynchronously.
 - Embeds frames into a vector index for semantic retrieval.
 - Returns top timestamped matches with thumbnails for text or example-image queries.
@@ -75,11 +76,14 @@ Next.js frontend -> FastAPI API -> Supabase-backed queue -> Python worker -> Mod
 
 Core flow:
 
-1. User submits URL or uploads a video.
+1. User uploads a video or optionally submits an owned YouTube URL.
 2. API enqueues a processing job.
 3. Worker extracts frames and sends embedding work to Modal.
 4. Embeddings are stored in Qdrant and thumbnails in R2.
 5. User searches with text or an example image and receives timestamped matches.
+
+Reliable production ingest path: browser upload -> direct-to-R2 storage -> worker processing.
+YouTube URL import remains best effort and may be blocked by server-side restrictions.
 
 ## Documentation Map
 

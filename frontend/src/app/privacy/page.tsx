@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: March 6, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: March 10, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -24,8 +24,8 @@ export default function PrivacyPage() {
               through our identity provider (Clerk).
             </li>
             <li>
-              <strong>Video data:</strong> YouTube URLs you submit and video files you upload for
-              processing.
+              <strong>Video data:</strong> Video files you upload for processing and optional
+              YouTube URLs you submit for import.
             </li>
             <li>
               <strong>Usage data:</strong> Search queries, optional example images submitted for
@@ -65,6 +65,10 @@ export default function PrivacyPage() {
           <p className="mt-2">
             Original uploaded video files are stored temporarily for processing and are subject to
             automatic cleanup via storage lifecycle rules.
+          </p>
+          <p className="mt-2">
+            If you submit a YouTube URL, we use that URL to attempt a server-side import for the
+            corresponding video. Direct upload remains the primary supported ingest path.
           </p>
           <p className="mt-2">
             Example images uploaded for search are processed transiently to generate a query

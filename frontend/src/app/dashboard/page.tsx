@@ -35,6 +35,10 @@ function formatCreatedAt(value: string): string {
   return parsed.toLocaleString();
 }
 
+function formatSourceType(sourceType: VideoListItem["source_type"]): string {
+  return sourceType === "upload" ? "Uploaded file" : "YouTube import";
+}
+
 function statusBadgeClass(status: VideoStatus): string {
   switch (status) {
     case "ready":
@@ -144,7 +148,7 @@ function DashboardPageContent() {
         <div className="mt-8 rounded-2xl border border-zinc-200 bg-surface-card p-8 text-center dark:border-zinc-800">
           <h2 className="font-heading text-xl font-semibold">Sign in to view your videos</h2>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Your uploads and processing history live here once you sign in.
+            Your processed videos and upload history live here once you sign in.
           </p>
           <div className="mt-6">
             <SignInButton mode="modal">
@@ -178,7 +182,7 @@ function DashboardPageContent() {
                 href="/"
                 className="mt-3 inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
               >
-                Process your first video
+                Upload your first video
               </Link>
             </div>
           ) : (
@@ -192,10 +196,10 @@ function DashboardPageContent() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
                       <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {video.youtube_url ?? video.source_filename ?? "Uploaded video"}
+                        {video.youtube_url ?? video.source_filename ?? "Uploaded file"}
                       </div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatCreatedAt(video.created_at)} · {video.source_type}
+                        {formatCreatedAt(video.created_at)} · {formatSourceType(video.source_type)}
                       </div>
                       {video.status === "failed" && video.error_message && (
                         <div className="text-xs text-red-600 dark:text-red-400">

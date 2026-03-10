@@ -47,10 +47,11 @@ Authoring rules:
 | 2026-03-06 | Phase 4 | Security advisor closure and launch copy pass         | Done        | Cleared Supabase Security Advisor, verified backups, removed unimplemented feature claims, added AI disclaimer. |
 | 2026-03-06 | Phase 4 | Image query search                                    | Done        | Added uploaded-image query search across API, Modal, frontend, and docs. |
 | 2026-03-06 | Phase 5 | Analytics baseline (product events)                   | Done        | First-party event tracking via analytics_events table. |
+| 2026-03-10 | Phase 5 | Upload-first ingest positioning                       | Done        | Made direct upload the primary product story, simplified YouTube fallback UX, and updated owning docs. |
 
 ## Blockers
 
-- YouTube bot detection can block yt-dlp from cloud IP ranges; upload ingest remains the fallback path.
+- Best-effort YouTube URL import can be blocked from cloud IP ranges; direct upload is the supported reliable path.
 - ~~Final launch hardening depends on clearing remaining Supabase Security Advisor findings in every deployed environment.~~ Resolved 2026-03-06.
 - ~~Ops readiness checklist (backup verification and monitoring alert routing) remains open for launch gate completion.~~ Resolved 2026-03-06 (manual backup path verified; Sentry active for monitoring).
 
@@ -61,6 +62,7 @@ Authoring rules:
 - **Lemon Squeezy first** is the provider path, with Paddle retained as fallback.
 - **Durable queue before expansion** was prioritized to stabilize processing reliability.
 - **Warm containers remain opt-in** to control default development and production cost.
+- **Direct upload is the primary ingest path**; YouTube URL import remains best effort.
 
 ## Metrics / Measurements
 
