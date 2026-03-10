@@ -5,11 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.storage.config import QdrantConfig, R2Config
-from src.storage.qdrant import FrameVector, QdrantStore
+from src.storage.qdrant import FrameVector, QdrantStore, TranscriptVector
 from src.storage.r2 import R2Store
 from src.utils.cleanup import cleanup_paths
 from src.utils.logging import Timer, get_logger
 from src.video.frames import FrameInfo
+from src.video.transcripts import TranscriptSegment
 
 
 class PipelineError(RuntimeError):
@@ -174,3 +175,39 @@ class StoragePipeline:
             )
 
         return embeddings_deleted, thumbnails_deleted
+
+    def store_transcripts(
+        self,
+        video_id: str,
+        segments: list[TranscriptSegment],
+        embeddings: list[list[float]],
+    ) -> int:
+        """Store transcript embeddings for one video."""
+        if len(segments) != len(embeddings):
+            raise PipelineError(
+                f"Transcript count ({len(segments)}) != embedding count ({len(embeddings)})"
+            )
+        if not segments:
+            return 0
+
+        transcript_vectors = [
+            TranscriptVector(
+                video_id=video_id,
+                segment_index=segment.segment_index,
+                timestamp_s=segment.start_s,
+                end_s=segment.end_s,
+                vector=embedding,
+                text=segment.text,
+                language_code=segment.language_code,
+            )
+            for segment, embedding in zip(segments, embeddings)
+        ]
+
+        with Timer("Upsert transcript embeddings", logger, level="debug") as upsert_timer:
+            stored = self._qdrant.upsert_transcripts(transcript_vectors)
+        logger.info(
+            "Stored %d transcript embeddings in %.2fs",
+            stored,
+            upsert_timer.elapsed or 0.0,
+        )
+        return stored

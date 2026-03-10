@@ -135,3 +135,96 @@ def test_sync_video_transcript_segments_swallows_transcript_errors(
     processing_module._sync_video_transcript_segments(_video("video_123"), tmp_path)
 
     assert any("Transcript extraction skipped" in message for message, _ in warnings)
+
+
+def test_index_transcript_segments_embeds_and_stores(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    segments = [
+        TranscriptSegment(
+            segment_index=0,
+            start_s=1.0,
+            end_s=2.0,
+            text="hello world",
+            language_code="en",
+        ),
+        TranscriptSegment(
+            segment_index=1,
+            start_s=3.0,
+            end_s=4.0,
+            text="second segment",
+            language_code="en",
+        ),
+    ]
+
+    class FakeEmbedFunction:
+        def remote(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+            captured["texts"] = texts
+            captured["batch_size"] = batch_size
+            return [[0.1, 0.2], [0.3, 0.4]]
+
+    class FakePipeline:
+        def store_transcripts(self, video_id: str, passed_segments, embeddings):
+            captured["video_id"] = video_id
+            captured["segments"] = passed_segments
+            captured["embeddings"] = embeddings
+            return len(passed_segments)
+
+    monkeypatch.setattr(
+        processing_module,
+        "get_embedding_modal_function",
+        lambda function_name: FakeEmbedFunction(),
+    )
+
+    processing_module._index_transcript_segments(
+        video_id="video_123",
+        transcript_segments=segments,
+        pipeline=FakePipeline(),  # type: ignore[arg-type]
+    )
+
+    assert captured == {
+        "texts": ["hello world", "second segment"],
+        "batch_size": 32,
+        "video_id": "video_123",
+        "segments": segments,
+        "embeddings": [[0.1, 0.2], [0.3, 0.4]],
+    }
+
+
+def test_index_transcript_segments_skips_storage_errors(monkeypatch) -> None:
+    warnings: list[tuple[str, tuple[object, ...]]] = []
+    segments = [
+        TranscriptSegment(
+            segment_index=0,
+            start_s=1.0,
+            end_s=2.0,
+            text="hello world",
+            language_code="en",
+        )
+    ]
+
+    class FakeEmbedFunction:
+        def remote(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+            return [[0.1, 0.2]]
+
+    class FakePipeline:
+        def store_transcripts(self, video_id: str, passed_segments, embeddings):
+            raise RuntimeError("qdrant unavailable")
+
+    monkeypatch.setattr(
+        processing_module,
+        "get_embedding_modal_function",
+        lambda function_name: FakeEmbedFunction(),
+    )
+    monkeypatch.setattr(
+        processing_module.logger,
+        "warning",
+        lambda message, *args: warnings.append((message, args)),
+    )
+
+    processing_module._index_transcript_segments(
+        video_id="video_123",
+        transcript_segments=segments,
+        pipeline=FakePipeline(),  # type: ignore[arg-type]
+    )
+
+    assert any("Transcript vector storage skipped" in message for message, _ in warnings)

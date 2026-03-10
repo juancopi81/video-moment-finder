@@ -6,6 +6,8 @@ from src.storage.qdrant import (
     FrameVector,
     QdrantStore,
     generate_point_id,
+    generate_transcript_point_id,
+    TranscriptVector,
 )
 
 
@@ -17,6 +19,14 @@ def test_generate_point_id_deterministic() -> None:
     first = generate_point_id("video_a", 1)
     second = generate_point_id("video_a", 1)
     different = generate_point_id("video_a", 2)
+    assert first == second
+    assert first != different
+
+
+def test_generate_transcript_point_id_deterministic() -> None:
+    first = generate_transcript_point_id("video_a", 1)
+    second = generate_transcript_point_id("video_a", 1)
+    different = generate_transcript_point_id("video_a", 2)
     assert first == second
     assert first != different
 
@@ -64,6 +74,47 @@ def test_upsert_search_delete_in_memory() -> None:
     assert results_after_delete == []
 
 
+def test_upsert_transcripts_search_in_memory() -> None:
+    config = QdrantConfig.in_memory(collection_name="test_transcripts")
+    store = QdrantStore(config)
+    store.ensure_collection()
+
+    transcripts = [
+        TranscriptVector(
+            video_id="video_a",
+            segment_index=0,
+            timestamp_s=5.0,
+            end_s=7.0,
+            vector=_vector(0.1),
+            text="first transcript hit",
+            language_code="en",
+        ),
+        TranscriptVector(
+            video_id="video_a",
+            segment_index=1,
+            timestamp_s=9.0,
+            end_s=12.0,
+            vector=_vector(0.2),
+            text="second transcript hit",
+            language_code="en",
+        ),
+    ]
+
+    upserted = store.upsert_transcripts(transcripts)
+    assert upserted == 2
+
+    results = store.search(
+        _vector(0.1),
+        video_id="video_a",
+        limit=5,
+        source="transcript",
+    )
+    assert len(results) == 2
+    assert all(result.source == "transcript" for result in results)
+    assert results[0].frame_index == -1
+    assert results[0].transcript_text is not None
+
+
 def test_upsert_empty_returns_zero() -> None:
     config = QdrantConfig.in_memory(collection_name="empty_frames")
     store = QdrantStore(config)
@@ -88,4 +139,5 @@ def test_ensure_collection_creates_video_id_payload_index(monkeypatch) -> None:
     store.ensure_collection()
 
     assert calls
-    assert calls[-1] == ("index_frames", "video_id")
+    assert ("index_frames", "video_id") in calls
+    assert ("index_frames", "source") in calls

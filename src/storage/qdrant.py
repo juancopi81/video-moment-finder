@@ -31,6 +31,19 @@ class FrameVector:
 
 
 @dataclass(frozen=True)
+class TranscriptVector:
+    """Transcript embedding data for storage."""
+
+    video_id: str
+    segment_index: int
+    timestamp_s: float
+    end_s: float
+    vector: list[float]
+    text: str
+    language_code: str | None = None
+
+
+@dataclass(frozen=True)
 class SearchResult:
     """Search result from Qdrant."""
 
@@ -43,22 +56,42 @@ class SearchResult:
     transcript_text: str | None = None
 
 
+def _point_name(video_id: str, *, source: Literal["visual", "transcript"], index: int) -> str:
+    return f"{video_id}_{source}_{index}"
+
+
 def generate_point_id(video_id: str, frame_index: int) -> str:
-    """Generate deterministic UUID5 point ID from video_id and frame_index."""
-    name = f"{video_id}_{frame_index}"
+    """Generate deterministic UUID5 point ID for one visual frame."""
+    name = _point_name(video_id, source="visual", index=frame_index)
     return str(uuid.uuid5(NAMESPACE_UUID, name))
 
 
-def _video_id_filter(video_id: str) -> models.Filter:
-    """Build a Qdrant filter matching a single video_id."""
-    return models.Filter(
-        must=[
+def generate_transcript_point_id(video_id: str, segment_index: int) -> str:
+    """Generate deterministic UUID5 point ID for one transcript segment."""
+    name = _point_name(video_id, source="transcript", index=segment_index)
+    return str(uuid.uuid5(NAMESPACE_UUID, name))
+
+
+def _video_filter(
+    video_id: str,
+    *,
+    source: Literal["visual", "transcript"] | None = None,
+) -> models.Filter:
+    """Build a Qdrant filter matching a single video_id and optional source."""
+    must: list[models.FieldCondition] = [
+        models.FieldCondition(
+            key="video_id",
+            match=models.MatchValue(value=video_id),
+        )
+    ]
+    if source is not None:
+        must.append(
             models.FieldCondition(
-                key="video_id",
-                match=models.MatchValue(value=video_id),
+                key="source",
+                match=models.MatchValue(value=source),
             )
-        ]
-    )
+        )
+    return models.Filter(must=must)
 
 
 class QdrantStore:
@@ -101,6 +134,15 @@ class QdrantStore:
         except Exception as exc:
             raise QdrantStorageError(f"Failed to ensure payload index for video_id: {exc}") from exc
 
+        try:
+            self._client.create_payload_index(
+                collection_name=self._config.collection_name,
+                field_name="source",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+        except Exception as exc:
+            raise QdrantStorageError(f"Failed to ensure payload index for source: {exc}") from exc
+
     def upsert_frames(self, frames: list[FrameVector]) -> int:
         """Upsert frame vectors to Qdrant. Returns count of upserted points."""
         if not frames:
@@ -115,6 +157,7 @@ class QdrantStore:
                     "frame_index": frame.frame_index,
                     "timestamp_s": frame.timestamp_s,
                     "thumbnail_url": frame.thumbnail_url,
+                    "source": "visual",
                 },
             )
             for frame in frames
@@ -130,14 +173,49 @@ class QdrantStore:
 
         return len(points)
 
+    def upsert_transcripts(self, transcripts: list[TranscriptVector]) -> int:
+        """Upsert transcript vectors to Qdrant. Returns count of upserted points."""
+        if not transcripts:
+            return 0
+
+        points = [
+            models.PointStruct(
+                id=generate_transcript_point_id(transcript.video_id, transcript.segment_index),
+                vector=transcript.vector,
+                payload={
+                    "video_id": transcript.video_id,
+                    "frame_index": -1,
+                    "segment_index": transcript.segment_index,
+                    "timestamp_s": transcript.timestamp_s,
+                    "end_s": transcript.end_s,
+                    "thumbnail_url": None,
+                    "source": "transcript",
+                    "transcript_text": transcript.text,
+                    "language_code": transcript.language_code,
+                },
+            )
+            for transcript in transcripts
+        ]
+
+        try:
+            self._client.upsert(
+                collection_name=self._config.collection_name,
+                points=points,
+            )
+        except Exception as exc:
+            raise QdrantStorageError(f"Failed to upsert transcripts: {exc}") from exc
+
+        return len(points)
+
     def search(
         self,
         query_vector: list[float],
         video_id: str,
         limit: int = 5,
+        source: Literal["visual", "transcript"] | None = None,
     ) -> list[SearchResult]:
-        """Search for similar frames within a video."""
-        query_filter = _video_id_filter(video_id)
+        """Search for similar vectors within a video."""
+        query_filter = _video_filter(video_id, source=source)
 
         try:
             if hasattr(self._client, "query_points"):
@@ -163,10 +241,12 @@ class QdrantStore:
         return [
             SearchResult(
                 video_id=point.payload["video_id"],  # type: ignore[index]
-                frame_index=point.payload["frame_index"],  # type: ignore[index]
+                frame_index=point.payload.get("frame_index", -1),  # type: ignore[union-attr]
                 timestamp_s=point.payload["timestamp_s"],  # type: ignore[index]
                 thumbnail_url=point.payload.get("thumbnail_url"),  # type: ignore[union-attr]
                 score=point.score,
+                source=point.payload.get("source", "visual"),  # type: ignore[union-attr]
+                transcript_text=point.payload.get("transcript_text"),  # type: ignore[union-attr]
             )
             for point in points
         ]
@@ -177,7 +257,7 @@ class QdrantStore:
             # First count existing points for this video
             count_result = self._client.count(
                 collection_name=self._config.collection_name,
-                count_filter=_video_id_filter(video_id),
+                count_filter=_video_filter(video_id),
             )
             count = count_result.count
 
@@ -185,7 +265,7 @@ class QdrantStore:
                 self._client.delete(
                     collection_name=self._config.collection_name,
                     points_selector=models.FilterSelector(
-                        filter=_video_id_filter(video_id)
+                        filter=_video_filter(video_id)
                     ),
                 )
 

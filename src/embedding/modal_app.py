@@ -195,6 +195,44 @@ def _normalize_embedding(embedding):
 
 
 @app.function(image=image, gpu="A10G", timeout=1800)
+def embed_texts_in_batches(
+    texts: list[str], *, batch_size: int = 32
+) -> list[list[float]]:
+    """Embed texts in fixed-size batches and return normalized vectors."""
+    if not texts:
+        raise ValueError("texts must be a non-empty list")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be > 0")
+
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+
+    model = Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
+
+    embeddings: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        cleaned_batch = []
+        for text in batch:
+            cleaned = text.strip()
+            if not cleaned:
+                raise ValueError("text items must be non-empty")
+            cleaned_batch.append({"text": cleaned})
+
+        batch_embeddings = _normalize_embedding(model.process(cleaned_batch))
+        if batch_embeddings.shape[0] != len(batch):
+            raise RuntimeError(
+                f"Embedding count mismatch: {batch_embeddings.shape[0]} != {len(batch)}"
+            )
+
+        embeddings.extend([emb.tolist() for emb in batch_embeddings])
+
+    if len(embeddings) != len(texts):
+        raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} != {len(texts)}")
+
+    return embeddings
+
+
+@app.function(image=image, gpu="A10G", timeout=1800)
 def embed_images_in_batches(
     images: list[bytes], *, batch_size: int = 8
 ) -> list[list[float]]:

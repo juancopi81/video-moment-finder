@@ -7,6 +7,7 @@ from pathlib import Path
 
 from src.config.modal import (
     EMBED_IMAGES_FUNCTION_NAME,
+    EMBED_TEXTS_FUNCTION_NAME,
     get_embedding_modal_function,
     raise_modal_auth_error,
 )
@@ -27,6 +28,7 @@ from src.video.metadata import (
     probe_video_duration_s,
 )
 from src.video.transcripts import TranscriptError, extract_transcript_segments
+from src.video.transcripts import TranscriptSegment
 
 logger = get_logger(__name__)
 
@@ -66,7 +68,10 @@ def process_video(video: VideoRecord) -> ProcessingResult:
 
             video_path, r2_config = _resolve_video_source(video, video_dir)
             _validate_video_duration(video, video_path)
-            _sync_video_transcript_segments(video, temp_path / "transcript")
+            transcript_segments = _sync_video_transcript_segments(
+                video,
+                temp_path / "transcript",
+            )
 
             logger.info("Extracting frames for video_id=%s", video.id)
             frames = extract_frames(
@@ -107,6 +112,11 @@ def process_video(video: VideoRecord) -> ProcessingResult:
             pipeline = StoragePipeline(qdrant_config, r2_config)
             pipeline.ensure_ready()
             result = pipeline.process_video(video.id, frames, embeddings)
+            _index_transcript_segments(
+                video_id=video.id,
+                transcript_segments=transcript_segments,
+                pipeline=pipeline,
+            )
             logger.info(
                 "Stored %d embeddings, %d thumbnails for video_id=%s",
                 result.embeddings_stored,
@@ -196,9 +206,12 @@ def _resolve_video_source(
     return video_path, None
 
 
-def _sync_video_transcript_segments(video: VideoRecord, output_dir: Path) -> None:
+def _sync_video_transcript_segments(
+    video: VideoRecord,
+    output_dir: Path,
+) -> list[TranscriptSegment]:
     if video.source_type != "youtube" or not video.youtube_url:
-        return
+        return []
 
     try:
         segments = extract_transcript_segments(video.youtube_url, output_dir)
@@ -208,14 +221,14 @@ def _sync_video_transcript_segments(video: VideoRecord, output_dir: Path) -> Non
             video.id,
             exc,
         )
-        return
+        return []
     except Exception as exc:
         logger.warning(
             "Unexpected transcript extraction failure for video_id=%s: %s",
             video.id,
             exc,
         )
-        return
+        return []
 
     segment_records = [
         TranscriptSegmentRecord(
@@ -237,12 +250,57 @@ def _sync_video_transcript_segments(video: VideoRecord, output_dir: Path) -> Non
             video.id,
             exc,
         )
-        return
+        return []
 
     logger.info(
         "Stored %d transcript segments for video_id=%s",
         stored,
         video.id,
+    )
+    return segments
+
+
+def _index_transcript_segments(
+    *,
+    video_id: str,
+    transcript_segments: list[TranscriptSegment],
+    pipeline: StoragePipeline,
+) -> None:
+    if not transcript_segments:
+        return
+
+    logger.info(
+        "Embedding %d transcript segments via Modal for video_id=%s",
+        len(transcript_segments),
+        video_id,
+    )
+    texts = [segment.text for segment in transcript_segments]
+    embed_fn = get_embedding_modal_function(EMBED_TEXTS_FUNCTION_NAME)
+    try:
+        embeddings = embed_fn.remote(texts, batch_size=32)
+    except Exception as exc:
+        raise_modal_auth_error(exc, context="embedding transcript segments")
+        logger.warning(
+            "Transcript vector indexing skipped for video_id=%s: %s",
+            video_id,
+            exc,
+        )
+        return
+
+    try:
+        stored = pipeline.store_transcripts(video_id, transcript_segments, embeddings)
+    except Exception as exc:
+        logger.warning(
+            "Transcript vector storage skipped for video_id=%s: %s",
+            video_id,
+            exc,
+        )
+        return
+
+    logger.info(
+        "Stored %d transcript vectors for video_id=%s",
+        stored,
+        video_id,
     )
 
 
