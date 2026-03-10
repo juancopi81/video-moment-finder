@@ -25,7 +25,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Video data:</strong> Video files you upload for processing and optional
-              YouTube URLs you submit for best-effort import.
+              YouTube URLs you submit for import.
             </li>
             <li>
               <strong>Usage data:</strong> Search queries, optional example images submitted for

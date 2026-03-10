@@ -169,7 +169,6 @@ def _is_youtube_bot_challenge_error(message: str) -> bool:
     return (
         ("sign in" in normalized and "not a bot" in normalized)
         or ("--cookies-from-browser" in normalized)
-        or ("--cookies" in normalized)
         or ("http error 429" in normalized)
         or ("too many requests" in normalized)
     )
@@ -178,7 +177,7 @@ def _is_youtube_bot_challenge_error(message: str) -> bool:
 def _youtube_server_blocked_error() -> dict[str, str]:
     return {
         "code": YOUTUBE_SERVER_BLOCKED_ERROR_CODE,
-        "detail": YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL,
+        "message": YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL,
     }
 
 

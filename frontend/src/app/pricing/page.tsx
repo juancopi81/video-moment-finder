@@ -46,7 +46,7 @@ const tiers: Tier[] = [
       "Text & image moment search",
       "Thumbnail previews",
       "Direct upload (recommended)",
-      "Best-effort YouTube URL import",
+      "YouTube import (not guaranteed)",
     ],
     highlighted: true,
     ctaHref: "/",
@@ -62,7 +62,7 @@ const tiers: Tier[] = [
       "Text & image moment search",
       "Thumbnail previews",
       "Direct upload (recommended)",
-      "Best-effort YouTube URL import",
+      "YouTube import (not guaranteed)",
     ],
     ctaHref: "/",
   },
@@ -157,8 +157,9 @@ function PricingPageContent() {
           Pay for what you use. Each credit processes one video up to 30 minutes.
         </p>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Direct upload is the reliable path. Best-effort YouTube URL import is
-          still available for videos you own or are authorized to use.
+          Direct upload is the reliable path. You can also use YouTube import
+          for videos you own or are authorized to use, but it may not always
+          work.
         </p>
         <CheckoutStatusBanner
           status={checkoutStatus}

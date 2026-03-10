@@ -123,13 +123,12 @@ export default function HomeContent() {
 
     setIsUploading(true);
     setUploadProgress(0);
+    let shouldResetUploadState = true;
 
     try {
       const token = await getToken();
       if (!token) {
         setError("Please sign in to process a video.");
-        setIsUploading(false);
-        setUploadProgress(null);
         return;
       }
 
@@ -196,6 +195,7 @@ export default function HomeContent() {
       }
 
       const data = await completeResponse.json();
+      shouldResetUploadState = false;
       router.push(`/video/${data.id}`);
     } catch (err) {
       if (err instanceof TypeError && err.message.includes("Network")) {
@@ -205,8 +205,11 @@ export default function HomeContent() {
       } else {
         setError("An unexpected error occurred");
       }
-      setIsUploading(false);
-      setUploadProgress(null);
+    } finally {
+      if (shouldResetUploadState) {
+        setIsUploading(false);
+        setUploadProgress(null);
+      }
     }
   }
 
@@ -225,11 +228,10 @@ export default function HomeContent() {
         </h1>
         <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
           Upload a video file, then search by description or example image to
-          jump to the exact timestamp. YouTube URL import remains available as a
-          best-effort option for videos you own.
+          jump to the exact timestamp.
         </p>
         <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-          1 free video &middot; up to 30 min &middot; upload-first
+          1 free video &middot; up to 30 min &middot; direct upload
         </span>
         <div className="mt-8 flex items-center gap-4">
           <SignedOut>
@@ -276,15 +278,19 @@ export default function HomeContent() {
           <div className="w-full max-w-xl">
             <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
               Direct upload is the reliable path. YouTube URL import is a
-              secondary convenience for videos you own and can still be blocked
-              server-side.
+              secondary convenience for videos you own, but it may not always
+              work server-side.
             </p>
-            <div className="mb-4 flex gap-2">
+            <div className="mb-4 flex gap-2" role="tablist" aria-label="Video source">
               <button
                 type="button"
                 onClick={() => handleModeChange("upload")}
                 className={modeButtonClass(mode === "upload")}
                 disabled={isLoading || isUploading}
+                role="tab"
+                id="upload-tab"
+                aria-controls="upload-panel"
+                aria-selected={mode === "upload"}
               >
                 Upload Video
               </button>
@@ -293,16 +299,27 @@ export default function HomeContent() {
                 onClick={() => handleModeChange("youtube")}
                 className={modeButtonClass(mode === "youtube")}
                 disabled={isLoading || isUploading}
+                role="tab"
+                id="youtube-tab"
+                aria-controls="youtube-panel"
+                aria-selected={mode === "youtube"}
               >
                 YouTube URL
               </button>
             </div>
 
             {mode === "upload" ? (
-              <form key="upload-form" onSubmit={handleUpload}>
+              <form
+                key="upload-form"
+                id="upload-panel"
+                role="tabpanel"
+                aria-labelledby="upload-tab"
+                onSubmit={handleUpload}
+              >
                 <input
                   type="file"
                   accept="video/*"
+                  aria-label="Upload a video file"
                   onChange={(event) => {
                     setUploadFile(event.target.files?.[0] ?? null);
                   }}
@@ -327,10 +344,17 @@ export default function HomeContent() {
                 )}
               </form>
             ) : (
-              <form key="youtube-form" onSubmit={handleSubmit}>
+              <form
+                key="youtube-form"
+                id="youtube-panel"
+                role="tabpanel"
+                aria-labelledby="youtube-tab"
+                onSubmit={handleSubmit}
+              >
                 <input
                   type="text"
                   value={url}
+                  aria-label="Paste a YouTube video URL"
                   onChange={(e) => {
                     setUrl(e.target.value);
                     setYoutubeFallbackDetail(null);
@@ -340,7 +364,7 @@ export default function HomeContent() {
                   disabled={isLoading}
                 />
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  Best effort for videos you own or are authorized to use. If
+                  Use this for videos you own or are authorized to use. If
                   import is blocked, upload the video file instead.
                 </p>
                 <button
@@ -348,7 +372,7 @@ export default function HomeContent() {
                   className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Trying import..." : "Try YouTube import"}
+                  {isLoading ? "Importing..." : "Import from YouTube"}
                 </button>
                 {youtubeFallbackDetail && (
                   <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
@@ -422,7 +446,7 @@ export default function HomeContent() {
               step: "1",
               title: "Upload a video",
               description:
-                "Upload a file you own or can use. YouTube import is a secondary best-effort option.",
+                "Upload a file you own or can use. YouTube import is a secondary option and may not always work.",
             },
             {
               step: "2",

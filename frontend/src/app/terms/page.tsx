@@ -29,9 +29,9 @@ export default function TermsPage() {
           <p className="mt-2">
             Video Moment Finder is a web-based tool that allows users to search for specific
             moments within videos using AI-powered semantic search. Users primarily upload video
-            files and may also submit YouTube URLs as a best-effort convenience for content they
-            own or are authorized to use. The Service processes submitted videos to enable
-            text-based or image-based frame search.
+            files and may also submit YouTube URLs as a convenience for content they own or are
+            authorized to use. That YouTube import path may not always work. The Service processes
+            submitted videos to enable text-based or image-based frame search.
           </p>
         </section>
 

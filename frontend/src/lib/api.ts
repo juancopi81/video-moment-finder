@@ -20,15 +20,12 @@ export async function parseApiErrorPayload(
     return {
       code: typeof data.detail.code === "string" ? data.detail.code : undefined,
       detail:
-        typeof data.detail.detail === "string" ? data.detail.detail : fallback,
+        typeof data.detail.message === "string" ? data.detail.message : fallback,
     };
   }
 
   if (typeof data?.detail === "string") {
-    return {
-      code: typeof data?.code === "string" ? data.code : undefined,
-      detail: data.detail,
-    };
+    return { detail: data.detail };
   }
 
   if (response.status === 401) {
