@@ -23,10 +23,19 @@ class VideoMetadata:
     is_live: bool
 
 
+def _yt_dlp_base_cmd() -> list[str]:
+    return [
+        "yt-dlp",
+        "--no-update",
+        "--js-runtimes",
+        "node",
+    ]
+
+
 def fetch_video_metadata(url: str) -> VideoMetadata:
     """Fetch video metadata with yt-dlp without downloading the file."""
     cmd = [
-        "yt-dlp",
+        *_yt_dlp_base_cmd(),
         "--skip-download",
         "--no-playlist",
         "--dump-json",
@@ -82,7 +91,7 @@ def download_video(
     output_template = str(output_dir / f"{output_basename}.%(ext)s")
 
     cmd = [
-        "yt-dlp",
+        *_yt_dlp_base_cmd(),
         "-f",
         quality,
         "-o",

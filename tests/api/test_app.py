@@ -26,7 +26,7 @@ from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
 from src.storage.config import StorageConfigError
 from src.storage.qdrant import SearchResult
-from src.video.download import VideoMetadata
+from src.video.download import VideoMetadata, VideoMetadataError
 from src.video.youtube import extract_youtube_video_id
 
 UPLOAD_VIDEO_ID = "00000000-0000-4000-8000-000000000123"
@@ -263,6 +263,49 @@ def test_create_video_rejects_long_video(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Video exceeds 1-minute limit"
+
+
+def test_create_video_returns_actionable_503_for_youtube_bot_challenge(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    def _raise(_youtube_url: str) -> VideoMetadata:
+        raise VideoMetadataError(
+            "ERROR: [youtube] abc123xyz45: Sign in to confirm you're not a bot. "
+            "Use --cookies-from-browser or --cookies for the authentication."
+        )
+
+    monkeypatch.setattr("src.api.app.fetch_video_metadata", _raise)
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "YouTube is blocking server-side access to this video right now. "
+        "Retry in a few minutes or upload the video file directly."
+    )
+    assert response.headers["retry-after"] == "120"
+
+
+def test_create_video_keeps_generic_metadata_fetch_failures_as_400(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    def _raise(_youtube_url: str) -> VideoMetadata:
+        raise VideoMetadataError("yt-dlp returned invalid JSON metadata")
+
+    monkeypatch.setattr("src.api.app.fetch_video_metadata", _raise)
+
+    response = client.post(
+        "/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unable to fetch YouTube metadata for this URL"
 
 
 def test_create_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch) -> None:

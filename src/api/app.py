@@ -88,6 +88,10 @@ BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
 WEBHOOK_RATE_LIMITER = SlidingWindowRateLimiter()
+YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL = (
+    "YouTube is blocking server-side access to this video right now. "
+    "Retry in a few minutes or upload the video file directly."
+)
 
 
 class UploadDurationValidationError(RuntimeError):
@@ -159,11 +163,28 @@ def _upload_duration_limit_detail() -> str:
     return f"Video exceeds {max_minutes}-minute limit"
 
 
+def _is_youtube_bot_challenge_error(message: str) -> bool:
+    normalized = message.casefold()
+    return (
+        ("sign in" in normalized and "not a bot" in normalized)
+        or ("--cookies-from-browser" in normalized)
+        or ("--cookies" in normalized)
+        or ("http error 429" in normalized)
+        or ("too many requests" in normalized)
+    )
+
+
 def _validate_video_duration(youtube_url: str) -> None:
     try:
         metadata = fetch_video_metadata(youtube_url)
     except VideoMetadataError as exc:
         logger.warning("Failed to fetch YouTube metadata for %s: %s", youtube_url, exc)
+        if _is_youtube_bot_challenge_error(str(exc)):
+            raise HTTPException(
+                status_code=503,
+                detail=YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL,
+                headers={"Retry-After": "120"},
+            ) from exc
         raise HTTPException(
             status_code=400,
             detail="Unable to fetch YouTube metadata for this URL",
