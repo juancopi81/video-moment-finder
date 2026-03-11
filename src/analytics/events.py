@@ -7,7 +7,6 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 ALLOWED_EVENTS = {
-    "landing_visit",
     "signup_complete",
     "video_submitted",
     "video_ready",

@@ -60,10 +60,11 @@ Expected behavior:
 
 ## Analytics Event Contract
 
+- Pageview and visitor analytics are collected in the frontend by Vercel Web Analytics.
 - Endpoint: `POST /analytics/event`
 - Body: `{"event_name": "...", "metadata": {...}}`
-- Allowed frontend events: `landing_visit`, `signup_complete`
-- Auth: optional for `landing_visit`, required for `signup_complete`
+- Allowed frontend events: `signup_complete`
+- Auth: required
 - Table: `analytics_events` in Supabase (service_role only RLS)
 - Backend events (`video_submitted`, `video_ready`, `search_run`, `search_success`, `checkout_started`, `checkout_success`) are inserted directly by API and worker handlers.
 

@@ -670,7 +670,7 @@ class BillingCheckoutResponse(BaseModel):
 
 
 class AnalyticsEventRequest(BaseModel):
-    event_name: Literal["landing_visit", "signup_complete"]
+    event_name: Literal["signup_complete"]
     metadata: dict | None = None
 
 

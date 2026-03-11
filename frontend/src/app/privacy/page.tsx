@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: March 10, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: March 11, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -32,10 +32,15 @@ export default function PrivacyPage() {
               search, processing history, and credit usage.
             </li>
             <li>
-              <strong>Product analytics:</strong> We record first-party behavioral events (e.g.,
-              page visits, video submissions, searches) to understand how the Service is used.
-              These events are stored in our own database and are not shared with third-party
-              analytics providers.
+              <strong>Traffic analytics:</strong> We use Vercel Web Analytics to measure page
+              visits and visitor trends across the website. We use this to understand which pages
+              are useful, detect site regressions, and prioritize improvements to the hosted
+              product.
+            </li>
+            <li>
+              <strong>Product analytics:</strong> We also record limited first-party product
+              events, such as signup completion, in our own database to understand onboarding and
+              improve the Service.
             </li>
           </ul>
         </section>
@@ -78,8 +83,15 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-foreground">4. Third-Party Services</h2>
-          <p className="mt-2">We use the following third-party services to operate:</p>
+          <p className="mt-2">
+            We use the following third-party services to operate. Because Video Moment Finder is
+            an open-source product, we want to be explicit about which providers help us run the
+            hosted service and why.
+          </p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>
+              <strong>Vercel:</strong> Frontend hosting and web analytics
+            </li>
             <li>
               <strong>Clerk:</strong> Authentication and user management
             </li>
@@ -116,8 +128,10 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold text-foreground">6. Cookies</h2>
           <p className="mt-2">
-            We use essential cookies for authentication session management. We do not use
-            tracking or advertising cookies.
+            We use essential cookies for authentication session management. We also use Vercel Web
+            Analytics to understand overall page traffic and whether our public site is helping
+            users discover and trust the product. We use this analytics tooling for product
+            improvement and reliability, not for advertising or cross-site retargeting.
           </p>
         </section>
 
