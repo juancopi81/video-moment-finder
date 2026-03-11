@@ -871,7 +871,7 @@ def analytics_event(
     user_id: str | None = Depends(get_optional_user_id),
 ) -> None:
     """Record a frontend-originating analytics event."""
-    if request.event_name == "signup_complete" and user_id is None:
+    if user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required for signup_complete")
     track(request.event_name, user_id=user_id, metadata=request.metadata)
 

@@ -161,6 +161,10 @@ function PricingPageContent() {
           for videos you own or are authorized to use, but it may not always
           work.
         </p>
+        <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Beta pricing: current introductory rates may change as the product
+          matures.
+        </p>
         <CheckoutStatusBanner
           status={checkoutStatus}
           successMessage="Checkout completed. Your latest credit balance is shown below."
