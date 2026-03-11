@@ -37,10 +37,6 @@ export default function HomeContent() {
   );
 
   useEffect(() => {
-    trackEvent("landing_visit");
-  }, []);
-
-  useEffect(() => {
     if (!isSignedIn) return;
     getToken().then((token) => {
       trackEvent("signup_complete", undefined, token);

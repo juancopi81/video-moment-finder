@@ -2526,21 +2526,6 @@ def _authenticate_optional_anonymous() -> None:
     app.dependency_overrides[get_optional_user_id] = lambda: None
 
 
-def test_analytics_event_landing_visit_anonymous(monkeypatch) -> None:
-    client = TestClient(app)
-    _authenticate_optional_anonymous()
-    track_calls: list[dict] = []
-    monkeypatch.setattr(
-        "src.api.app.track",
-        lambda event_name, **kwargs: track_calls.append({"event_name": event_name, **kwargs}),
-    )
-
-    response = client.post("/analytics/event", json={"event_name": "landing_visit"})
-
-    assert response.status_code == 204
-    assert track_calls == [{"event_name": "landing_visit", "user_id": None, "metadata": None}]
-
-
 def test_analytics_event_signup_complete_requires_auth() -> None:
     client = TestClient(app)
     _authenticate_optional_anonymous()

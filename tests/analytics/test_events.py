@@ -52,7 +52,7 @@ def test_track_swallows_exceptions(monkeypatch):
     mock_client.table.side_effect = RuntimeError("db down")
     monkeypatch.setattr("src.analytics.events.get_client", lambda: mock_client)
     # Should not raise
-    track("landing_visit")
+    track("video_ready")
 
 
 def test_track_swallows_duplicate_signup(monkeypatch):
@@ -71,7 +71,7 @@ def test_track_swallows_duplicate_signup(monkeypatch):
 
 
 def test_track_defaults_metadata_to_empty_dict(_mock_supabase):
-    track("landing_visit")
+    track("video_ready")
     payload = _mock_supabase.table.return_value.insert.call_args[0][0]
     assert payload["metadata"] == {}
     assert payload["user_id"] is None

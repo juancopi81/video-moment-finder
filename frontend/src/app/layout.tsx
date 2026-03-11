@@ -3,6 +3,7 @@ import { Outfit, Source_Sans_3 } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { VercelAnalytics } from "@/components/vercel-analytics";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -52,6 +53,7 @@ export default function RootLayout({
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
+          <VercelAnalytics />
         </body>
       </html>
     </ClerkProvider>
