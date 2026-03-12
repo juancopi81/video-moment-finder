@@ -19,7 +19,7 @@ Process a video, run text or image queries, and jump to matching timestamps.
 Current transcript scope:
 
 - YouTube videos use existing subtitle tracks when available and index them for semantic transcript retrieval.
-- Direct uploads remain visual-only for text queries until ASR support is added.
+- Direct uploads extract speech with Whisper large-v3-turbo via `faster-whisper` and index those transcript segments for spoken-text queries.
 
 ## Quick Start (Local)
 

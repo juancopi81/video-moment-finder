@@ -5,10 +5,12 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 import tempfile
 from pathlib import Path
+from typing import TypedDict
 
 from src.config.modal import (
     EMBED_IMAGES_FUNCTION_NAME,
     EMBED_TEXTS_FUNCTION_NAME,
+    TRANSCRIBE_AUDIO_FUNCTION_NAME,
     get_embedding_modal_function,
     raise_modal_auth_error,
 )
@@ -21,6 +23,7 @@ from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
 from src.storage.r2 import R2Store, R2StorageError
 from src.utils.logging import get_logger
+from src.video.audio import AudioExtractionError, extract_audio_track
 from src.video.download import download_video
 from src.video.frames import extract_frames
 from src.video.metadata import (
@@ -42,6 +45,15 @@ class VideoProcessingError(RuntimeError):
 
 class VideoValidationError(VideoProcessingError):
     """Raised when input validation fails and retries should not continue."""
+
+
+class TranscriptionSegmentPayload(TypedDict):
+    """Normalized ASR segment payload returned by the Modal transcription function."""
+
+    start_s: float
+    end_s: float
+    text: str
+    language_code: str | None
 
 
 def process_video(video: VideoRecord) -> ProcessingResult:
@@ -75,37 +87,10 @@ def process_video(video: VideoRecord) -> ProcessingResult:
             )
             _ensure_storage_ready(video_id=video.id, qdrant_config=qdrant_config)
 
-            if video.source_type == "youtube":
-                transcript_dir = temp_path / "transcript"
-                with ThreadPoolExecutor(max_workers=2) as executor:
-                    visual_future = executor.submit(
-                        _process_visual_branch,
-                        video_id=video.id,
-                        video_path=video_path,
-                        frames_dir=frames_dir,
-                        thumbnails_dir=thumbnails_dir,
-                        qdrant_config=qdrant_config,
-                        r2_config=r2_config,
-                    )
-                    transcript_future = executor.submit(
-                        _process_transcript_branch,
-                        video=video,
-                        output_dir=transcript_dir,
-                        qdrant_config=qdrant_config,
-                    )
-                    try:
-                        result = visual_future.result()
-                    finally:
-                        try:
-                            transcript_future.result()
-                        except Exception as exc:
-                            logger.warning(
-                                "Transcript branch failed for video_id=%s: %s",
-                                video.id,
-                                exc,
-                            )
-            else:
-                result = _process_visual_branch(
+            transcript_dir = temp_path / "transcript"
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                visual_future = executor.submit(
+                    _process_visual_branch,
                     video_id=video.id,
                     video_path=video_path,
                     frames_dir=frames_dir,
@@ -113,6 +98,24 @@ def process_video(video: VideoRecord) -> ProcessingResult:
                     qdrant_config=qdrant_config,
                     r2_config=r2_config,
                 )
+                transcript_future = executor.submit(
+                    _process_transcript_branch,
+                    video=video,
+                    video_path=video_path,
+                    output_dir=transcript_dir,
+                    qdrant_config=qdrant_config,
+                )
+                try:
+                    result = visual_future.result()
+                finally:
+                    try:
+                        transcript_future.result()
+                    except Exception as exc:
+                        logger.warning(
+                            "Spoken branch failed for video_id=%s: %s",
+                            video.id,
+                            exc,
+                        )
             logger.info(
                 "Stored %d embeddings, %d thumbnails for video_id=%s",
                 result.embeddings_stored,
@@ -200,11 +203,16 @@ def _process_visual_branch(
 def _process_transcript_branch(
     *,
     video: VideoRecord,
+    video_path: Path,
     output_dir: Path,
     qdrant_config: QdrantConfig,
 ) -> None:
-    logger.info("Starting transcript branch for video_id=%s", video.id)
-    transcript_segments = _sync_video_transcript_segments(video, output_dir)
+    logger.info("Starting spoken branch for video_id=%s", video.id)
+    transcript_segments = _sync_video_transcript_segments(
+        video,
+        output_dir,
+        video_path=video_path,
+    )
     if not transcript_segments:
         return
 
@@ -292,41 +300,22 @@ def _resolve_video_source(
 def _sync_video_transcript_segments(
     video: VideoRecord,
     output_dir: Path,
+    *,
+    video_path: Path | None = None,
 ) -> list[TranscriptSegment]:
-    if video.source_type != "youtube" or not video.youtube_url:
+    segments = _fetch_video_transcript_segments(
+        video,
+        output_dir,
+        video_path=video_path,
+    )
+    if not segments:
         return []
 
     try:
-        segments = extract_transcript_segments(video.youtube_url, output_dir)
-    except TranscriptError as exc:
-        logger.warning(
-            "Transcript extraction skipped for video_id=%s: %s",
+        stored = replace_video_transcript_segments(
             video.id,
-            exc,
+            _build_transcript_segment_records(video.id, segments),
         )
-        return []
-    except Exception as exc:
-        logger.warning(
-            "Unexpected transcript extraction failure for video_id=%s: %s",
-            video.id,
-            exc,
-        )
-        return []
-
-    segment_records = [
-        TranscriptSegmentRecord(
-            video_id=video.id,
-            segment_index=segment.segment_index,
-            start_s=segment.start_s,
-            end_s=segment.end_s,
-            text=segment.text,
-            language_code=segment.language_code,
-        )
-        for segment in segments
-    ]
-
-    try:
-        stored = replace_video_transcript_segments(video.id, segment_records)
     except Exception as exc:
         logger.warning(
             "Transcript storage skipped for video_id=%s: %s",
@@ -343,15 +332,128 @@ def _sync_video_transcript_segments(
     return segments
 
 
+def _fetch_video_transcript_segments(
+    video: VideoRecord,
+    output_dir: Path,
+    *,
+    video_path: Path | None = None,
+) -> list[TranscriptSegment]:
+    if video.source_type == "youtube":
+        if not video.youtube_url:
+            return []
+        try:
+            return extract_transcript_segments(video.youtube_url, output_dir)
+        except TranscriptError as exc:
+            logger.warning(
+                "Transcript extraction skipped for video_id=%s: %s",
+                video.id,
+                exc,
+            )
+            return []
+        except Exception as exc:
+            logger.warning(
+                "Unexpected transcript extraction failure for video_id=%s: %s",
+                video.id,
+                exc,
+            )
+            return []
+
+    if video.source_type == "upload":
+        if video_path is None:
+            raise VideoProcessingError(
+                f"Missing video_path for upload transcript sync: {video.id}"
+            )
+        try:
+            return _transcribe_uploaded_video_segments(
+                video_id=video.id,
+                video_path=video_path,
+                output_dir=output_dir,
+            )
+        except AudioExtractionError as exc:
+            logger.warning(
+                "Upload audio extraction skipped for video_id=%s: %s",
+                video.id,
+                exc,
+            )
+            return []
+        except Exception as exc:
+            logger.warning(
+                "Upload ASR skipped for video_id=%s: %s",
+                video.id,
+                exc,
+            )
+            return []
+
+    return []
+
+
+def _transcribe_uploaded_video_segments(
+    *,
+    video_id: str,
+    video_path: Path,
+    output_dir: Path,
+) -> list[TranscriptSegment]:
+    logger.info("Extracting audio track for video_id=%s", video_id)
+    audio_path = extract_audio_track(video_path, output_dir / "input.wav")
+    logger.info("Transcribing uploaded audio via Modal for video_id=%s", video_id)
+    transcribe_fn = get_embedding_modal_function(TRANSCRIBE_AUDIO_FUNCTION_NAME)
+    segment_payloads: list[TranscriptionSegmentPayload] = transcribe_fn.remote(
+        audio_path.read_bytes()
+    )
+    return _transcript_segments_from_payloads(segment_payloads)
+
+
+def _transcript_segments_from_payloads(
+    segment_payloads: list[TranscriptionSegmentPayload],
+) -> list[TranscriptSegment]:
+    segments: list[TranscriptSegment] = []
+    for payload in segment_payloads:
+        text = payload["text"].strip()
+        if not text:
+            continue
+
+        start_s = float(payload["start_s"])
+        end_s = float(payload["end_s"])
+        language_code = payload["language_code"]
+        if language_code is not None:
+            language_code = language_code.strip() or None
+
+        segments.append(
+            TranscriptSegment(
+                segment_index=len(segments),
+                start_s=start_s,
+                end_s=end_s,
+                text=text,
+                language_code=language_code,
+            )
+        )
+
+    return segments
+
+
+def _build_transcript_segment_records(
+    video_id: str,
+    segments: list[TranscriptSegment],
+) -> list[TranscriptSegmentRecord]:
+    return [
+        TranscriptSegmentRecord(
+            video_id=video_id,
+            segment_index=segment.segment_index,
+            start_s=segment.start_s,
+            end_s=segment.end_s,
+            text=segment.text,
+            language_code=segment.language_code,
+        )
+        for segment in segments
+    ]
+
+
 def _index_transcript_segments(
     *,
     video_id: str,
     transcript_segments: list[TranscriptSegment],
     pipeline: StoragePipeline,
 ) -> None:
-    if not transcript_segments:
-        return
-
     logger.info(
         "Embedding %d transcript segments via Modal for video_id=%s",
         len(transcript_segments),

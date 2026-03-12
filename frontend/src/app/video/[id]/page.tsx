@@ -417,9 +417,8 @@ export default function VideoPage({ params }: VideoPageProps) {
                   />
                   <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                     Text search shows visual matches and spoken matches together.
-                    Spoken matches currently use YouTube captions when available.
-                    Uploaded videos remain visual-only until speech transcription
-                    is added.
+                    Spoken matches use YouTube captions when available and speech
+                    transcription for direct uploads.
                   </p>
                 </div>
               ) : (

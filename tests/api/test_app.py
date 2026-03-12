@@ -782,6 +782,49 @@ def test_search_video_includes_transcript_result_metadata(monkeypatch) -> None:
     assert payload["results"][1]["transcript_text"] is None
 
 
+def test_search_uploaded_video_can_return_transcript_matches(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.search_video_by_text_service",
+        lambda video_id, query_text, limit=5: [
+            SearchResult(
+                video_id=video_id,
+                frame_index=-1,
+                timestamp_s=18.5,
+                thumbnail_url=None,
+                score=0.9,
+                source="transcript",
+                transcript_text="Here the instructor explains tritone substitution.",
+            )
+        ],
+    )
+
+    response = client.post(
+        f"/videos/{UPLOAD_VIDEO_ID}/search",
+        json={"query_text": "where does the instructor explain tritone substitution"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["video_id"] == UPLOAD_VIDEO_ID
+    assert payload["youtube_url"] is None
+    assert payload["source_url"] is None
+    assert payload["results"] == [
+        {
+            "timestamp_s": 18.5,
+            "thumbnail_url": None,
+            "score": 0.9,
+            "source": "transcript",
+            "transcript_text": "Here the instructor explains tritone substitution.",
+        }
+    ]
+
+
 def test_search_video_limit_is_per_result_source(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")

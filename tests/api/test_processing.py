@@ -94,6 +94,11 @@ def test_sync_video_transcript_segments_replaces_segments(
         )
         or len(segments),
     )
+    monkeypatch.setattr(
+        processing_module,
+        "_transcribe_uploaded_video_segments",
+        lambda **kwargs: pytest.fail("youtube videos should not use upload ASR"),
+    )
 
     processing_module._sync_video_transcript_segments(_video("video_123"), tmp_path)
 
@@ -120,10 +125,14 @@ def test_sync_video_transcript_segments_replaces_segments(
     ]
 
 
-def test_sync_video_transcript_segments_skips_upload_sources(
+def test_sync_video_transcript_segments_transcribes_upload_sources(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    captured: dict[str, object] = {}
+    upload_path = tmp_path / "upload.mp4"
+    upload_path.write_bytes(b"video")
+
     monkeypatch.setattr(
         processing_module,
         "extract_transcript_segments",
@@ -131,10 +140,77 @@ def test_sync_video_transcript_segments_skips_upload_sources(
             "upload videos should not request transcripts"
         ),
     )
+    monkeypatch.setattr(
+        processing_module,
+        "_transcribe_uploaded_video_segments",
+        lambda **kwargs: [
+            TranscriptSegment(
+                segment_index=0,
+                start_s=4.0,
+                end_s=7.5,
+                text="The teacher explains interval classes.",
+                language_code="en",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "replace_video_transcript_segments",
+        lambda video_id, segments: captured.update(
+            {"video_id": video_id, "segments": segments}
+        )
+        or len(segments),
+    )
 
     processing_module._sync_video_transcript_segments(
         _video("video_upload", source_type="upload", youtube_url=None),
         tmp_path,
+        video_path=upload_path,
+    )
+
+    assert captured == {
+        "video_id": "video_upload",
+        "segments": [
+            TranscriptSegmentRecord(
+                video_id="video_upload",
+                segment_index=0,
+                start_s=4.0,
+                end_s=7.5,
+                text="The teacher explains interval classes.",
+                language_code="en",
+                score=None,
+            )
+        ],
+    }
+
+
+def test_sync_video_transcript_segments_skips_empty_upload_asr_results(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    upload_path = tmp_path / "upload.mp4"
+    upload_path.write_bytes(b"video")
+
+    monkeypatch.setattr(
+        processing_module,
+        "_transcribe_uploaded_video_segments",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "replace_video_transcript_segments",
+        lambda video_id, segments: pytest.fail(
+            "should not store transcript rows when ASR returns no segments"
+        ),
+    )
+
+    assert (
+        processing_module._sync_video_transcript_segments(
+            _video("video_upload", source_type="upload", youtube_url=None),
+            tmp_path,
+            video_path=upload_path,
+        )
+        == []
     )
 
 
@@ -164,6 +240,44 @@ def test_sync_video_transcript_segments_swallows_transcript_errors(
     processing_module._sync_video_transcript_segments(_video("video_123"), tmp_path)
 
     assert any("Transcript extraction skipped" in message for message, _ in warnings)
+
+
+def test_sync_video_transcript_segments_swallows_upload_asr_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    warnings: list[tuple[str, tuple[object, ...]]] = []
+    upload_path = tmp_path / "upload.mp4"
+    upload_path.write_bytes(b"video")
+
+    def _raise(**kwargs) -> list[TranscriptSegment]:
+        raise RuntimeError("asr unavailable")
+
+    monkeypatch.setattr(
+        processing_module,
+        "_transcribe_uploaded_video_segments",
+        _raise,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "replace_video_transcript_segments",
+        lambda video_id, segments: pytest.fail(
+            "should not store transcript rows on upload ASR failure"
+        ),
+    )
+    monkeypatch.setattr(
+        processing_module.logger,
+        "warning",
+        lambda message, *args: warnings.append((message, args)),
+    )
+
+    processing_module._sync_video_transcript_segments(
+        _video("video_upload", source_type="upload", youtube_url=None),
+        tmp_path,
+        video_path=upload_path,
+    )
+
+    assert any("Upload ASR skipped" in message for message, _ in warnings)
 
 
 def test_index_transcript_segments_embeds_and_stores(monkeypatch) -> None:
@@ -325,13 +439,25 @@ def test_process_video_youtube_runs_branches_via_executor(
     assert "transcript_branch" in events
 
 
-def test_process_video_upload_skips_executor_and_transcript_branch(
+def test_process_video_upload_runs_spoken_branch_via_executor(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    events: list[str] = []
     video_path = tmp_path / "upload.mp4"
     video_path.write_bytes(b"video")
-    called: dict[str, int] = {"visual": 0}
+
+    def _visual_branch(**kwargs) -> ProcessingResult:
+        events.append("visual_branch")
+        return ProcessingResult(
+            video_id="video_upload",
+            frames_processed=1,
+            embeddings_stored=1,
+            thumbnails_uploaded=1,
+        )
+
+    def _transcript_branch(**kwargs) -> None:
+        events.append("transcript_branch")
 
     monkeypatch.setattr(
         processing_module,
@@ -356,50 +482,46 @@ def test_process_video_upload_skips_executor_and_transcript_branch(
     monkeypatch.setattr(
         processing_module,
         "_process_visual_branch",
-        lambda **kwargs: called.__setitem__("visual", called["visual"] + 1)
-        or ProcessingResult(
-            video_id="video_upload",
-            frames_processed=1,
-            embeddings_stored=1,
-            thumbnails_uploaded=1,
-        ),
+        _visual_branch,
     )
     monkeypatch.setattr(
         processing_module,
         "_process_transcript_branch",
-        lambda **kwargs: pytest.fail("upload videos should not run transcript branch"),
+        _transcript_branch,
     )
     monkeypatch.setattr(
         processing_module,
         "ThreadPoolExecutor",
-        lambda max_workers: pytest.fail("upload videos should not use the executor"),
+        lambda max_workers: _RecordingExecutor(events=events, max_workers=max_workers),
     )
 
     result = processing_module.process_video(
         _video("video_upload", source_type="upload", youtube_url=None)
     )
 
-    assert called["visual"] == 1
     assert result == ProcessingResult(
         video_id="video_upload",
         frames_processed=1,
         embeddings_stored=1,
         thumbnails_uploaded=1,
     )
+    assert events.index("submit:_visual_branch") < events.index("visual_branch")
+    assert events.index("submit:_transcript_branch") < events.index("transcript_branch")
+    assert "enter:2" in events
 
 
-def test_process_video_transcript_branch_failure_is_non_fatal(
+def test_process_video_spoken_branch_failure_is_non_fatal(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     warnings: list[tuple[str, tuple[object, ...]]] = []
-    video_path = tmp_path / "video.mp4"
+    video_path = tmp_path / "upload.mp4"
     video_path.write_bytes(b"video")
 
     monkeypatch.setattr(
         processing_module,
         "_resolve_video_source",
-        lambda video, video_dir: (video_path, None),
+        lambda video, video_dir: (video_path, object()),
     )
     monkeypatch.setattr(
         processing_module,
@@ -409,7 +531,7 @@ def test_process_video_transcript_branch_failure_is_non_fatal(
     monkeypatch.setattr(
         processing_module,
         "_resolve_processing_storage",
-        lambda *, video_id, r2_config: (object(), None),
+        lambda *, video_id, r2_config: (object(), r2_config),
     )
     monkeypatch.setattr(
         processing_module,
@@ -446,10 +568,12 @@ def test_process_video_transcript_branch_failure_is_non_fatal(
         lambda message, *args: warnings.append((message, args)),
     )
 
-    result = processing_module.process_video(_video("video_123"))
+    result = processing_module.process_video(
+        _video("video_123", source_type="upload", youtube_url=None)
+    )
 
     assert result.video_id == "video_123"
-    assert any("Transcript branch failed" in message for message, _ in warnings)
+    assert any("Spoken branch failed" in message for message, _ in warnings)
 
 
 def test_process_video_visual_branch_failure_remains_fatal(

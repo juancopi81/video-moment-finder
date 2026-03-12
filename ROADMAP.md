@@ -63,7 +63,7 @@
 
 - Treat Phase 5 and Phase 6 as one staged rollout: strengthen core search first, then expose the same capabilities to agents. See [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
 - ~~Ship transcript-backed or hybrid search first (`where was this said?` queries).~~
-- Add ASR-backed spoken retrieval for uploaded videos after subtitle-backed hybrid search proves out.
+- ~~Add ASR-backed spoken retrieval for uploaded videos after subtitle-backed hybrid search proves out.~~
 - Keep UI refinements scoped to issues surfaced by early-user feedback.
 
 ---
