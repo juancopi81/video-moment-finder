@@ -25,6 +25,10 @@ It complements global guidance and takes precedence for project-specific executi
   - `./scripts/setup_local.sh`
 - Existing DB without migration history:
   - `./scripts/setup_local.sh --baseline-existing-db`
+- Isolated local development (no production interference):
+  - `cp .env.local.example .env.local`
+  - `just dev-services`
+  - `.env.local` overrides `.env` — points at local Supabase + in-memory Qdrant.
 - Run API:
   - `uv run uvicorn src.api.app:app --reload --port 8000`
 - Run worker:

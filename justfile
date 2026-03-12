@@ -3,6 +3,30 @@ set shell := ["bash", "-cu"]
 default:
     @just --list
 
+# Start local Supabase for isolated development.
+dev-services:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v supabase >/dev/null 2>&1; then
+        echo "supabase CLI is required: brew install supabase/tap/supabase"
+        exit 1
+    fi
+    echo "Starting local Supabase (DB + Auth + API)..."
+    supabase start
+    echo ""
+    echo "Qdrant runs in-memory (no separate process needed)."
+    echo ""
+    echo "Copy .env.local.example to .env.local if you haven't already:"
+    echo "  cp .env.local.example .env.local"
+    echo ""
+    echo "Then start API + worker as usual:"
+    echo "  just api"
+    echo "  just worker"
+
+# Stop local Supabase services.
+dev-services-stop:
+    supabase stop
+
 # Start the FastAPI app with autoreload on port 8000.
 api:
     uv run uvicorn src.api.app:app --reload --port 8000

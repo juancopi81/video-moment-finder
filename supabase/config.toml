@@ -1,0 +1,20 @@
+# Minimal config for `supabase start` (local dev stack).
+# Migrations in supabase/migrations/ are applied automatically.
+# Reference: https://supabase.com/docs/guides/local-development/cli/config
+
+project_id = "video-moment-finder"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
