@@ -59,6 +59,20 @@ Frontend:
 cd frontend && npm run dev
 ```
 
+### Local Development (Supabase + Qdrant Isolation)
+
+To develop with a local database and vector store (no production queue
+or index interference):
+
+1. Install the Supabase CLI: `brew install supabase/tap/supabase`
+2. Copy the local config: `cp .env.local.example .env.local`
+3. Start local services: `just dev-services`
+4. Run API and worker as usual: `just api` / `just worker`
+
+Local Supabase runs on port 54321/54322. Local Qdrant runs on port 6333
+via Docker. Modal GPU functions and R2 storage are still shared with
+production (stateless).
+
 ### 4) Verify quality checks
 
 ```bash

@@ -9,7 +9,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 
 def load_env(*, required: bool = False) -> None:
-    """Load .env if present for local development.
+    """Load .env.local (if present) then .env for local development.
+
+    ``.env.local`` values take precedence over ``.env`` defaults so that
+    developers can point at local Supabase / in-memory Qdrant without
+    editing the shared ``.env`` file.
 
     When required=True and python-dotenv is missing, raise a clear error so
     local scripts don't silently skip env loading.
@@ -21,4 +25,5 @@ def load_env(*, required: bool = False) -> None:
                 "load_env(required=True)."
             )
         return
+    load_dotenv(dotenv_path=".env.local", override=True)
     load_dotenv(override=False)

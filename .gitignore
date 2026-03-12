@@ -13,6 +13,7 @@ test_video*
 
 # Environment variables
 .env
+.env.local
 
 .DS_Store
 supabase/.temp/
