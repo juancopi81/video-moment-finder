@@ -80,6 +80,7 @@
 
 ### 6.2 Environment and Cost Maturity
 
+- ~~Introduce local dev environment isolation (local Supabase + in-memory Qdrant) so development never touches production.~~
 - Keep lightweight infra while validating; avoid full staging complexity too early.
-- Introduce separate dev/staging environments when usage, team size, or release risk justifies it.
+- Introduce separate staging environment when usage, team size, or release risk justifies it.
 - Continue embedding/storage cost optimization and adaptive frame-sampling evaluation as volume grows.
