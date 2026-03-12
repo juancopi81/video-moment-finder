@@ -21,11 +21,6 @@ class QdrantConfig:
     @classmethod
     def from_env(cls, collection_name: str = "video_frames") -> QdrantConfig:
         """Create config from environment variables."""
-        raw_in_memory = os.environ.get("QDRANT_USE_IN_MEMORY", "").strip().lower()
-        use_in_memory = raw_in_memory in ("1", "true", "yes")
-        if use_in_memory:
-            return cls.in_memory(collection_name=collection_name)
-
         url = os.environ.get("QDRANT_URL")
         api_key = os.environ.get("QDRANT_API_KEY")
 
