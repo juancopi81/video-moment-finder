@@ -50,6 +50,7 @@ Authoring rules:
 | 2026-03-06 | Phase 5 | Transcript-backed text search                         | Done        | Added YouTube subtitle extraction plus grouped spoken and visual text results; upload ASR remains future work. |
 | 2026-03-10 | Phase 5 | Upload-first ingest positioning                       | Done        | Made direct upload the primary product story, simplified YouTube fallback UX, and updated owning docs. |
 | 2026-03-10 | Phase 5 | Semantic transcript retrieval                         | Done        | Added Qdrant transcript embeddings for captioned videos and kept Supabase transcript search as fallback. |
+| 2026-03-12 | Phase 5 | Parallel transcript and visual processing             | Done        | Parallelized independent worker branches, validated captioned YouTube retrieval end to end locally, and kept the search response contract unchanged. |
 
 ## Blockers
 

@@ -7,6 +7,7 @@ import pytest
 
 from src.api import processing as processing_module
 from src.db.supabase import TranscriptSegmentRecord, VideoRecord
+from src.pipeline.orchestrator import ProcessingResult
 from src.video.transcripts import TranscriptDownloadError, TranscriptSegment
 
 
@@ -29,6 +30,34 @@ def _video(
         created_at=now,
         updated_at=now,
     )
+
+
+class _ImmediateFuture:
+    def __init__(self, fn, *args, **kwargs) -> None:
+        self._fn = fn
+        self._args = args
+        self._kwargs = kwargs
+
+    def result(self):
+        return self._fn(*self._args, **self._kwargs)
+
+
+class _RecordingExecutor:
+    def __init__(self, *, events: list[str], max_workers: int) -> None:
+        self._events = events
+        self._max_workers = max_workers
+
+    def __enter__(self) -> _RecordingExecutor:
+        self._events.append(f"enter:{self._max_workers}")
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self._events.append("exit")
+        return False
+
+    def submit(self, fn, *args, **kwargs) -> _ImmediateFuture:
+        self._events.append(f"submit:{fn.__name__}")
+        return _ImmediateFuture(fn, *args, **kwargs)
 
 
 def test_sync_video_transcript_segments_replaces_segments(
@@ -228,3 +257,243 @@ def test_index_transcript_segments_skips_storage_errors(monkeypatch) -> None:
     )
 
     assert any("Transcript vector storage skipped" in message for message, _ in warnings)
+
+
+def test_process_video_youtube_runs_branches_via_executor(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"video")
+
+    def _resolve_source(video: VideoRecord, video_dir: Path) -> tuple[Path, None]:
+        events.append("resolve_source")
+        return video_path, None
+
+    def _validate_duration(video: VideoRecord, passed_video_path: Path) -> None:
+        assert passed_video_path == video_path
+        events.append("validate_duration")
+
+    def _resolve_storage(*, video_id: str, r2_config):
+        assert video_id == "video_123"
+        assert r2_config is None
+        events.append("resolve_storage")
+        return object(), None
+
+    def _ensure_ready(*, video_id: str, qdrant_config) -> None:
+        assert video_id == "video_123"
+        assert qdrant_config is not None
+        events.append("ensure_ready")
+
+    def _visual_branch(**kwargs) -> ProcessingResult:
+        events.append("visual_branch")
+        return ProcessingResult(
+            video_id="video_123",
+            frames_processed=3,
+            embeddings_stored=3,
+            thumbnails_uploaded=2,
+        )
+
+    def _transcript_branch(**kwargs) -> None:
+        events.append("transcript_branch")
+
+    monkeypatch.setattr(processing_module, "_resolve_video_source", _resolve_source)
+    monkeypatch.setattr(processing_module, "_validate_video_duration", _validate_duration)
+    monkeypatch.setattr(processing_module, "_resolve_processing_storage", _resolve_storage)
+    monkeypatch.setattr(processing_module, "_ensure_storage_ready", _ensure_ready)
+    monkeypatch.setattr(processing_module, "_process_visual_branch", _visual_branch)
+    monkeypatch.setattr(processing_module, "_process_transcript_branch", _transcript_branch)
+    monkeypatch.setattr(
+        processing_module,
+        "ThreadPoolExecutor",
+        lambda max_workers: _RecordingExecutor(events=events, max_workers=max_workers),
+    )
+
+    result = processing_module.process_video(_video("video_123"))
+
+    assert result == ProcessingResult(
+        video_id="video_123",
+        frames_processed=3,
+        embeddings_stored=3,
+        thumbnails_uploaded=2,
+    )
+    assert events.index("ensure_ready") < events.index("submit:_visual_branch")
+    assert events.index("ensure_ready") < events.index("submit:_transcript_branch")
+    assert "enter:2" in events
+    assert "visual_branch" in events
+    assert "transcript_branch" in events
+
+
+def test_process_video_upload_skips_executor_and_transcript_branch(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "upload.mp4"
+    video_path.write_bytes(b"video")
+    called: dict[str, int] = {"visual": 0}
+
+    monkeypatch.setattr(
+        processing_module,
+        "_resolve_video_source",
+        lambda video, video_dir: (video_path, object()),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_validate_video_duration",
+        lambda video, passed_video_path: None,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_resolve_processing_storage",
+        lambda *, video_id, r2_config: (object(), r2_config),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_ensure_storage_ready",
+        lambda *, video_id, qdrant_config: None,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_process_visual_branch",
+        lambda **kwargs: called.__setitem__("visual", called["visual"] + 1)
+        or ProcessingResult(
+            video_id="video_upload",
+            frames_processed=1,
+            embeddings_stored=1,
+            thumbnails_uploaded=1,
+        ),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_process_transcript_branch",
+        lambda **kwargs: pytest.fail("upload videos should not run transcript branch"),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "ThreadPoolExecutor",
+        lambda max_workers: pytest.fail("upload videos should not use the executor"),
+    )
+
+    result = processing_module.process_video(
+        _video("video_upload", source_type="upload", youtube_url=None)
+    )
+
+    assert called["visual"] == 1
+    assert result == ProcessingResult(
+        video_id="video_upload",
+        frames_processed=1,
+        embeddings_stored=1,
+        thumbnails_uploaded=1,
+    )
+
+
+def test_process_video_transcript_branch_failure_is_non_fatal(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    warnings: list[tuple[str, tuple[object, ...]]] = []
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"video")
+
+    monkeypatch.setattr(
+        processing_module,
+        "_resolve_video_source",
+        lambda video, video_dir: (video_path, None),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_validate_video_duration",
+        lambda video, passed_video_path: None,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_resolve_processing_storage",
+        lambda *, video_id, r2_config: (object(), None),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_ensure_storage_ready",
+        lambda *, video_id, qdrant_config: None,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_process_visual_branch",
+        lambda **kwargs: ProcessingResult(
+            video_id="video_123",
+            frames_processed=2,
+            embeddings_stored=2,
+            thumbnails_uploaded=0,
+        ),
+    )
+
+    def _raise_transcript(**kwargs) -> None:
+        raise RuntimeError("transcript boom")
+
+    monkeypatch.setattr(
+        processing_module,
+        "_process_transcript_branch",
+        _raise_transcript,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "ThreadPoolExecutor",
+        lambda max_workers: _RecordingExecutor(events=[], max_workers=max_workers),
+    )
+    monkeypatch.setattr(
+        processing_module.logger,
+        "warning",
+        lambda message, *args: warnings.append((message, args)),
+    )
+
+    result = processing_module.process_video(_video("video_123"))
+
+    assert result.video_id == "video_123"
+    assert any("Transcript branch failed" in message for message, _ in warnings)
+
+
+def test_process_video_visual_branch_failure_remains_fatal(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"video")
+
+    monkeypatch.setattr(
+        processing_module,
+        "_resolve_video_source",
+        lambda video, video_dir: (video_path, None),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_validate_video_duration",
+        lambda video, passed_video_path: None,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_resolve_processing_storage",
+        lambda *, video_id, r2_config: (object(), None),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_ensure_storage_ready",
+        lambda *, video_id, qdrant_config: None,
+    )
+
+    def _raise_visual(**kwargs):
+        raise RuntimeError("visual boom")
+
+    monkeypatch.setattr(processing_module, "_process_visual_branch", _raise_visual)
+    monkeypatch.setattr(
+        processing_module,
+        "_process_transcript_branch",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "ThreadPoolExecutor",
+        lambda max_workers: _RecordingExecutor(events=[], max_workers=max_workers),
+    )
+
+    with pytest.raises(processing_module.VideoProcessingError, match="visual boom"):
+        processing_module.process_video(_video("video_123"))

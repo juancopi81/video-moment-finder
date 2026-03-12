@@ -1,6 +1,7 @@
 """Video processing pipeline implementation."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 import tempfile
 from pathlib import Path
@@ -68,55 +69,50 @@ def process_video(video: VideoRecord) -> ProcessingResult:
 
             video_path, r2_config = _resolve_video_source(video, video_dir)
             _validate_video_duration(video, video_path)
-            transcript_segments = _sync_video_transcript_segments(
-                video,
-                temp_path / "transcript",
-            )
-
-            logger.info("Extracting frames for video_id=%s", video.id)
-            frames = extract_frames(
-                video_path,
-                frames_dir,
-                fps=1.0,
-                thumbnail_dir=thumbnails_dir,
-            )
-            logger.info("Extracted %d frames", len(frames))
-
-            if len(frames) > MAX_FRAMES:
-                logger.warning(
-                    "Truncating frames from %d to %d (30-min limit)",
-                    len(frames),
-                    MAX_FRAMES,
-                )
-                frames = frames[:MAX_FRAMES]
-
-            logger.info("Embedding %d frames via Modal", len(frames))
-            frame_bytes = [frame.path.read_bytes() for frame in frames]
-            embed_fn = get_embedding_modal_function(EMBED_IMAGES_FUNCTION_NAME)
-            try:
-                embeddings = embed_fn.remote(frame_bytes, batch_size=8)
-            except Exception as exc:
-                raise_modal_auth_error(exc, context="embedding video frames")
-                raise
-            logger.info("Got %d embeddings", len(embeddings))
-
-            logger.info("Storing embeddings and thumbnails for video_id=%s", video.id)
-            qdrant_config = QdrantConfig.from_env()
-            if r2_config is None:
-                try:
-                    r2_config = R2Config.from_env()
-                except StorageConfigError:
-                    logger.warning("R2 not configured, thumbnails will not be uploaded")
-                    r2_config = None
-
-            pipeline = StoragePipeline(qdrant_config, r2_config)
-            pipeline.ensure_ready()
-            result = pipeline.process_video(video.id, frames, embeddings)
-            _index_transcript_segments(
+            qdrant_config, r2_config = _resolve_processing_storage(
                 video_id=video.id,
-                transcript_segments=transcript_segments,
-                pipeline=pipeline,
+                r2_config=r2_config,
             )
+            _ensure_storage_ready(video_id=video.id, qdrant_config=qdrant_config)
+
+            if video.source_type == "youtube":
+                transcript_dir = temp_path / "transcript"
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    visual_future = executor.submit(
+                        _process_visual_branch,
+                        video_id=video.id,
+                        video_path=video_path,
+                        frames_dir=frames_dir,
+                        thumbnails_dir=thumbnails_dir,
+                        qdrant_config=qdrant_config,
+                        r2_config=r2_config,
+                    )
+                    transcript_future = executor.submit(
+                        _process_transcript_branch,
+                        video=video,
+                        output_dir=transcript_dir,
+                        qdrant_config=qdrant_config,
+                    )
+                    try:
+                        result = visual_future.result()
+                    finally:
+                        try:
+                            transcript_future.result()
+                        except Exception as exc:
+                            logger.warning(
+                                "Transcript branch failed for video_id=%s: %s",
+                                video.id,
+                                exc,
+                            )
+            else:
+                result = _process_visual_branch(
+                    video_id=video.id,
+                    video_path=video_path,
+                    frames_dir=frames_dir,
+                    thumbnails_dir=thumbnails_dir,
+                    qdrant_config=qdrant_config,
+                    r2_config=r2_config,
+                )
             logger.info(
                 "Stored %d embeddings, %d thumbnails for video_id=%s",
                 result.embeddings_stored,
@@ -131,6 +127,93 @@ def process_video(video: VideoRecord) -> ProcessingResult:
     except Exception as exc:
         logger.exception("Failed to process video_id=%s: %s", video.id, exc)
         raise VideoProcessingError(str(exc)) from exc
+
+
+def _resolve_processing_storage(
+    *,
+    video_id: str,
+    r2_config: R2Config | None,
+) -> tuple[QdrantConfig, R2Config | None]:
+    qdrant_config = QdrantConfig.from_env()
+    if r2_config is not None:
+        return qdrant_config, r2_config
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError:
+        logger.warning(
+            "R2 not configured, thumbnails will not be uploaded for video_id=%s",
+            video_id,
+        )
+        r2_config = None
+
+    return qdrant_config, r2_config
+
+
+def _ensure_storage_ready(*, video_id: str, qdrant_config: QdrantConfig) -> None:
+    logger.info("Ensuring Qdrant collection is ready for video_id=%s", video_id)
+    StoragePipeline(qdrant_config).ensure_ready()
+
+
+def _process_visual_branch(
+    *,
+    video_id: str,
+    video_path: Path,
+    frames_dir: Path,
+    thumbnails_dir: Path,
+    qdrant_config: QdrantConfig,
+    r2_config: R2Config | None,
+) -> ProcessingResult:
+    logger.info("Starting visual branch for video_id=%s", video_id)
+    logger.info("Extracting frames for video_id=%s", video_id)
+    frames = extract_frames(
+        video_path,
+        frames_dir,
+        fps=1.0,
+        thumbnail_dir=thumbnails_dir,
+    )
+    logger.info("Extracted %d frames", len(frames))
+
+    if len(frames) > MAX_FRAMES:
+        logger.warning(
+            "Truncating frames from %d to %d (30-min limit)",
+            len(frames),
+            MAX_FRAMES,
+        )
+        frames = frames[:MAX_FRAMES]
+
+    logger.info("Embedding %d frames via Modal", len(frames))
+    frame_bytes = [frame.path.read_bytes() for frame in frames]
+    embed_fn = get_embedding_modal_function(EMBED_IMAGES_FUNCTION_NAME)
+    try:
+        embeddings = embed_fn.remote(frame_bytes, batch_size=8)
+    except Exception as exc:
+        raise_modal_auth_error(exc, context="embedding video frames")
+        raise
+    logger.info("Got %d embeddings", len(embeddings))
+
+    logger.info("Storing embeddings and thumbnails for video_id=%s", video_id)
+    pipeline = StoragePipeline(qdrant_config, r2_config)
+    return pipeline.process_video(video_id, frames, embeddings)
+
+
+def _process_transcript_branch(
+    *,
+    video: VideoRecord,
+    output_dir: Path,
+    qdrant_config: QdrantConfig,
+) -> None:
+    logger.info("Starting transcript branch for video_id=%s", video.id)
+    transcript_segments = _sync_video_transcript_segments(video, output_dir)
+    if not transcript_segments:
+        return
+
+    pipeline = StoragePipeline(qdrant_config)
+    _index_transcript_segments(
+        video_id=video.id,
+        transcript_segments=transcript_segments,
+        pipeline=pipeline,
+    )
 
 
 def _validate_video_duration(video: VideoRecord, video_path: Path) -> None:
