@@ -8,6 +8,8 @@ import modal
 
 EMBEDDING_MODAL_APP_NAME = "video-moment-finder-embed"
 EMBED_IMAGES_FUNCTION_NAME = "embed_images_in_batches"
+EMBED_TEXTS_FUNCTION_NAME = "embed_texts_in_batches"
+TRANSCRIBE_AUDIO_FUNCTION_NAME = "transcribe_audio_bytes"
 EMBED_QUERY_CLASS_NAME = "QueryEmbedder"
 _MODAL_AUTH_ERROR_SNIPPETS = (
     "token missing",

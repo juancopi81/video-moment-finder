@@ -18,11 +18,14 @@ type VideoPageProps = {
 
 type VideoStatus = "queued" | "processing" | "ready" | "failed";
 type SearchMode = "text" | "image";
+type SearchResultSource = "visual" | "transcript";
 
 type SearchResult = {
   timestamp_s: number;
   thumbnail_url: string | null;
   score: number;
+  source: SearchResultSource;
+  transcript_text: string | null;
 };
 
 type VideoStatusResponse = {
@@ -46,6 +49,30 @@ const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 300; // 10 minutes at 2s interval
 const MAX_QUERY_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_QUERY_IMAGE_SIZE_LABEL = "10 MB";
+
+function labelForResultSource(source: SearchResultSource): string {
+  return source === "visual" ? "Visual matches" : "Spoken matches";
+}
+
+function groupedSearchResults(
+  results: SearchResult[]
+): Array<{ source: SearchResultSource; results: SearchResult[] }> {
+  const grouped = new Map<SearchResultSource, SearchResult[]>();
+  const order: SearchResultSource[] = [];
+
+  for (const result of results) {
+    if (!grouped.has(result.source)) {
+      grouped.set(result.source, []);
+      order.push(result.source);
+    }
+    grouped.get(result.source)?.push(result);
+  }
+
+  return order.map((source) => ({
+    source,
+    results: grouped.get(source) ?? [],
+  }));
+}
 
 function formatTimestamp(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -81,6 +108,7 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const queryImageInputRef = useRef<HTMLInputElement | null>(null);
+  const resultGroups = groupedSearchResults(results);
 
   function resetQueryImageSelection() {
     setQueryImageFile(null);
@@ -387,6 +415,11 @@ export default function VideoPage({ params }: VideoPageProps) {
                     className="mt-4 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900"
                     disabled={isSearching}
                   />
+                  <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    Text search shows visual matches and spoken matches together.
+                    Spoken matches use YouTube captions when available and speech
+                    transcription for direct uploads.
+                  </p>
                 </div>
               ) : (
                 <div
@@ -456,64 +489,139 @@ export default function VideoPage({ params }: VideoPageProps) {
                 <p className="mt-6 text-xs text-center text-zinc-500 dark:text-zinc-400">
                   Results are AI-generated and may not always be accurate.
                 </p>
-                <div className="mt-2 grid grid-cols-3 gap-4">
-                {results.map((result, index) => {
-                  const timestampUrl = videoUrl
-                    ? buildTimestampUrl(videoUrl, result.timestamp_s)
-                    : null;
-                  const canJumpToUpload = sourceType === "upload" && sourceUrl;
-
-                  return (
-                    <div key={index} className="relative">
-                      <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 rounded overflow-hidden">
-                        {result.thumbnail_url ? (
-                          <Image
-                            src={result.thumbnail_url}
-                            alt={`Result at ${formatTimestamp(result.timestamp_s)}`}
-                            width={320}
-                            height={180}
-                            unoptimized
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
-                            No thumbnail
-                          </div>
-                        )}
+                <div className="mt-4 space-y-6">
+                  {resultGroups.map((group) => (
+                    <section key={group.source}>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          {labelForResultSource(group.source)}
+                        </h2>
+                        <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                          {group.results.length}
+                        </span>
                       </div>
-                      <p className="mt-1 text-sm text-center text-zinc-600 dark:text-zinc-400">
-                        {formatTimestamp(result.timestamp_s)}
-                      </p>
-                      {timestampUrl && (
-                        <a
-                          href={timestampUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-1 block text-xs text-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                        >
-                          Open at timestamp
-                        </a>
+
+                      {group.source === "visual" ? (
+                        <div className="grid grid-cols-3 gap-4">
+                          {group.results.map((result, index) => {
+                            const timestampUrl = videoUrl
+                              ? buildTimestampUrl(videoUrl, result.timestamp_s)
+                              : null;
+                            const canJumpToUpload = sourceType === "upload" && sourceUrl;
+
+                            return (
+                              <div key={`${group.source}-${index}`} className="relative">
+                                <div className="aspect-video overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
+                                  {result.thumbnail_url ? (
+                                    <Image
+                                      src={result.thumbnail_url}
+                                      alt={`Result at ${formatTimestamp(result.timestamp_s)}`}
+                                      width={320}
+                                      height={180}
+                                      unoptimized
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
+                                      No thumbnail
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[11px] font-medium text-white">
+                                  Visual
+                                </span>
+                                <p className="mt-1 text-sm text-center text-zinc-600 dark:text-zinc-400">
+                                  {formatTimestamp(result.timestamp_s)}
+                                </p>
+                                {timestampUrl && (
+                                  <a
+                                    href={timestampUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 block text-xs text-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                  >
+                                    Open at timestamp
+                                  </a>
+                                )}
+                                {canJumpToUpload && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!videoRef.current) return;
+                                      videoRef.current.currentTime = result.timestamp_s;
+                                      void videoRef.current.play().catch(() => {});
+                                      videoRef.current.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    }}
+                                    className="mt-1 block w-full text-xs text-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                  >
+                                    Jump to timestamp
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {group.results.map((result, index) => {
+                            const timestampUrl = videoUrl
+                              ? buildTimestampUrl(videoUrl, result.timestamp_s)
+                              : null;
+                            const canJumpToUpload = sourceType === "upload" && sourceUrl;
+
+                            return (
+                              <div
+                                key={`${group.source}-${index}`}
+                                className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                                    Spoken
+                                  </span>
+                                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                    {formatTimestamp(result.timestamp_s)}
+                                  </span>
+                                </div>
+                                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+                                  {result.transcript_text || "Matched transcript segment"}
+                                </p>
+                                {timestampUrl && (
+                                  <a
+                                    href={timestampUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-3 block text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                  >
+                                    Open at timestamp
+                                  </a>
+                                )}
+                                {canJumpToUpload && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!videoRef.current) return;
+                                      videoRef.current.currentTime = result.timestamp_s;
+                                      void videoRef.current.play().catch(() => {});
+                                      videoRef.current.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                      });
+                                    }}
+                                    className="mt-2 block text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                                  >
+                                    Jump to timestamp
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
-                      {canJumpToUpload && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!videoRef.current) return;
-                            videoRef.current.currentTime = result.timestamp_s;
-                            void videoRef.current.play().catch(() => {});
-                            videoRef.current.scrollIntoView({
-                              behavior: "smooth",
-                              block: "center",
-                            });
-                          }}
-                          className="mt-1 block w-full text-xs text-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-                        >
-                          Jump to timestamp
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                    </section>
+                  ))}
                 </div>
               </div>
             )}

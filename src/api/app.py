@@ -625,7 +625,15 @@ class UploadCompleteRequest(BaseModel):
 
 class VideoSearchRequest(BaseModel):
     query_text: str | None = Field(default=None, max_length=500)
-    limit: int = Field(default=5, ge=1, le=20)
+    limit: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description=(
+            "Per-source result cap. Text search can return up to this many "
+            "visual matches plus this many spoken matches."
+        ),
+    )
 
     @field_validator("query_text")
     @classmethod
@@ -640,6 +648,10 @@ class SearchResult(BaseModel):
     timestamp_s: float
     thumbnail_url: HttpUrl | None = None
     score: float
+    source: Literal["visual", "transcript"] = Field(
+        description="Retrieval source for this result."
+    )
+    transcript_text: str | None = None
 
 
 class VideoSearchResponse(BaseModel):
@@ -811,6 +823,8 @@ def _build_video_search_response(
                 timestamp_s=r.timestamp_s,
                 thumbnail_url=r.thumbnail_url,
                 score=r.score,
+                source=r.source,
+                transcript_text=r.transcript_text,
             )
             for r in results
         ],

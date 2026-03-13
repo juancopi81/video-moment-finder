@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 4: Product Launch Hardening** - In Progress
+**Phase 5: Launch and Learn** - In Progress
 
 ## Progress Log
 
@@ -47,7 +47,11 @@ Authoring rules:
 | 2026-03-06 | Phase 4 | Security advisor closure and launch copy pass         | Done        | Cleared Supabase Security Advisor, verified backups, removed unimplemented feature claims, added AI disclaimer. |
 | 2026-03-06 | Phase 4 | Image query search                                    | Done        | Added uploaded-image query search across API, Modal, frontend, and docs. |
 | 2026-03-06 | Phase 5 | Analytics baseline (product events)                   | Done        | First-party event tracking via analytics_events table. |
+| 2026-03-06 | Phase 5 | Transcript-backed text search                         | Done        | Added YouTube subtitle extraction plus grouped spoken and visual text results. |
 | 2026-03-10 | Phase 5 | Upload-first ingest positioning                       | Done        | Made direct upload the primary product story, simplified YouTube fallback UX, and updated owning docs. |
+| 2026-03-10 | Phase 5 | Semantic transcript retrieval                         | Done        | Added Qdrant transcript embeddings for captioned videos and kept Supabase transcript search as fallback. |
+| 2026-03-12 | Phase 5 | Parallel transcript and visual processing             | Done        | Parallelized independent worker branches, validated captioned YouTube retrieval end to end locally, and kept the search response contract unchanged. |
+| 2026-03-12 | Phase 5 | Upload ASR-backed spoken retrieval                    | Done        | Added Whisper large-v3-turbo via faster-whisper for direct uploads, reused the transcript storage/indexing path, and kept the public search response schema unchanged. |
 
 ## Blockers
 

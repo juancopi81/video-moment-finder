@@ -27,6 +27,7 @@ dev = [
 modal = [
     "transformers>=4.57.0",
     "qwen-vl-utils>=0.0.14",
+    "faster-whisper>=1.2.1",
     "torch",
     "torchvision",
     "opencv-python>=4.13.0.90",

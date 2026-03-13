@@ -2,15 +2,99 @@
 from __future__ import annotations
 
 import io
+import re
 
 from PIL import Image, UnidentifiedImageError
 
 from src.config.modal import get_query_embedder_class, raise_modal_auth_error
+from src.db.supabase import search_video_transcript_segments
 from src.storage.config import QdrantConfig
 from src.storage.qdrant import QdrantStore, SearchResult
 from src.utils.logging import Timer, get_logger
 
 logger = get_logger(__name__)
+
+_TRANSCRIPT_QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9']+")
+_TRANSCRIPT_STOP_WORDS = {
+    "a",
+    "about",
+    "an",
+    "and",
+    "are",
+    "at",
+    "be",
+    "been",
+    "being",
+    "did",
+    "do",
+    "does",
+    "find",
+    "for",
+    "he",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "me",
+    "mention",
+    "mentioned",
+    "mentions",
+    "of",
+    "on",
+    "or",
+    "said",
+    "say",
+    "says",
+    "she",
+    "show",
+    "talk",
+    "talked",
+    "talking",
+    "that",
+    "the",
+    "they",
+    "this",
+    "to",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "you",
+}
+_TRANSCRIPT_INTENT_TOKENS = {
+    "explain",
+    "explains",
+    "explained",
+    "explanation",
+    "mention",
+    "mentions",
+    "mentioned",
+    "say",
+    "says",
+    "said",
+    "talk",
+    "talks",
+    "talked",
+    "talking",
+    "discuss",
+    "discusses",
+    "discussed",
+    "describe",
+    "describes",
+    "described",
+    "tell",
+    "tells",
+    "told",
+    "speech",
+    "speaks",
+    "speaking",
+}
 
 
 class QueryImageValidationError(ValueError):
@@ -22,7 +106,11 @@ def search_video_by_text(
     query_text: str,
     limit: int = 5,
 ) -> list[SearchResult]:
-    """Embed query text via Modal, search Qdrant, and return results."""
+    """Search text queries across transcript and visual retrieval paths.
+
+    ``limit`` is a per-source cap: text search can return up to ``limit``
+    transcript matches plus up to ``limit`` visual matches.
+    """
     logger.info(
         "Searching video_id=%s query_type=text query=%r limit=%d",
         video_id,
@@ -30,31 +118,143 @@ def search_video_by_text(
         limit,
     )
 
+    transcript_results: list[SearchResult] = []
+    transcript_timer: Timer | None = None
+    transcript_error: Exception | None = None
+    embed_timer: Timer | None = None
+    embed_error: Exception | None = None
+    visual_results: list[SearchResult] = []
+    qdrant_setup_timer: Timer | None = None
+    qdrant_search_timer: Timer | None = None
+    qdrant_error: Exception | None = None
+
     with Timer("Search total", logger, level="debug") as total_timer:
-        with Timer("Search embed query", logger, level="debug") as embed_timer:
-            query_embedder = get_query_embedder_class()
-            try:
+        transcript_query = _normalize_transcript_query(query_text)
+        try:
+            with Timer("Search embed query", logger, level="debug") as embed_timer:
+                query_embedder = get_query_embedder_class()
                 query_vector = query_embedder().embed_text.remote(query_text)
-            except Exception as exc:
+        except Exception as exc:
+            embed_error = exc
+            if transcript_query is None:
                 raise_modal_auth_error(exc, context="embedding a text search query")
                 raise
-        logger.debug("Got text query embedding with %d dimensions", len(query_vector))
+            logger.warning(
+                "Semantic text embedding unavailable for video_id=%s: %s",
+                video_id,
+                exc,
+            )
+        else:
+            logger.debug(
+                "Got text query embedding with %d dimensions",
+                len(query_vector),
+            )
 
-        results, qdrant_setup_timer, qdrant_search_timer = _search_with_query_vector(
-            video_id=video_id,
-            query_vector=query_vector,
-            limit=limit,
-        )
+            try:
+                qdrant_store, qdrant_setup_timer = _create_qdrant_store()
+            except Exception as exc:
+                qdrant_error = exc
+                if transcript_query is None:
+                    raise
+                logger.warning(
+                    "Vector search setup unavailable for video_id=%s: %s",
+                    video_id,
+                    exc,
+                )
+            else:
+                try:
+                    transcript_results, transcript_timer = _search_qdrant_results(
+                        qdrant_store=qdrant_store,
+                        video_id=video_id,
+                        query_vector=query_vector,
+                        limit=limit,
+                        source="transcript",
+                        timer_name="Search transcript vectors",
+                    )
+                    if not transcript_results:
+                        transcript_timer = None
+                except Exception as exc:
+                    transcript_error = exc
+                    transcript_timer = None
+                    logger.warning(
+                        "Semantic transcript search unavailable for video_id=%s: %s",
+                        video_id,
+                        exc,
+                    )
 
-    _log_search_timing(
-        video_id=video_id,
-        query_type="text",
-        embed_timer=embed_timer,
-        qdrant_setup_timer=qdrant_setup_timer,
-        qdrant_search_timer=qdrant_search_timer,
-        total_timer=total_timer,
-        limit=limit,
-        results_count=len(results),
+                try:
+                    visual_results, qdrant_search_timer = _search_qdrant_results(
+                        qdrant_store=qdrant_store,
+                        video_id=video_id,
+                        query_vector=query_vector,
+                        limit=limit,
+                        source="visual",
+                        timer_name="Search qdrant query",
+                    )
+                except Exception as exc:
+                    qdrant_error = exc
+                    if not transcript_results and transcript_query is None:
+                        raise
+                    logger.warning(
+                        "Visual text search unavailable for video_id=%s: %s",
+                        video_id,
+                        exc,
+                    )
+
+        if transcript_query is not None and not transcript_results:
+            try:
+                with Timer(
+                    "Search transcript fallback",
+                    logger,
+                    level="debug",
+                ) as transcript_timer:
+                    transcript_results = _search_transcript_results(
+                        video_id=video_id,
+                        query_text=transcript_query,
+                        limit=limit,
+                    )
+                if not transcript_results:
+                    transcript_timer = None
+            except Exception as exc:
+                if transcript_error is None:
+                    transcript_error = exc
+                transcript_timer = None
+                logger.warning(
+                    "Transcript fallback unavailable for video_id=%s: %s",
+                    video_id,
+                    exc,
+                )
+
+    results = _merge_text_search_results(
+        query_text=query_text,
+        transcript_results=transcript_results,
+        visual_results=visual_results,
+    )
+    if not results and transcript_error is not None:
+        raise transcript_error
+    if not results and qdrant_error is not None:
+        raise qdrant_error
+    if not results and embed_error is not None:
+        raise_modal_auth_error(embed_error, context="embedding a text search query")
+        raise embed_error
+
+    logger.info(
+        (
+            "Search timing video_id=%s query_type=text transcript_ms=%.1f "
+            "embed_ms=%.1f qdrant_setup_ms=%.1f qdrant_search_ms=%.1f "
+            "total_ms=%.1f limit=%d transcript_results=%d visual_results=%d "
+            "results=%d"
+        ),
+        video_id,
+        _elapsed_ms(transcript_timer),
+        _elapsed_ms(embed_timer),
+        _elapsed_ms(qdrant_setup_timer),
+        _elapsed_ms(qdrant_search_timer),
+        (total_timer.elapsed or 0.0) * 1000,
+        limit,
+        len(transcript_results),
+        len(visual_results),
+        len(results),
     )
 
     return results
@@ -79,10 +279,14 @@ def search_video_by_image(
                 raise
         logger.debug("Got image query embedding with %d dimensions", len(query_vector))
 
-        results, qdrant_setup_timer, qdrant_search_timer = _search_with_query_vector(
+        qdrant_store, qdrant_setup_timer = _create_qdrant_store()
+        results, qdrant_search_timer = _search_qdrant_results(
+            qdrant_store=qdrant_store,
             video_id=video_id,
             query_vector=query_vector,
             limit=limit,
+            source="visual",
+            timer_name="Search qdrant query",
         )
 
     _log_search_timing(
@@ -110,24 +314,57 @@ def _validate_query_image_bytes(image_bytes: bytes) -> None:
         raise QueryImageValidationError("Uploaded file is not a valid image") from exc
 
 
-def _search_with_query_vector(
+def _search_transcript_results(
     *,
     video_id: str,
-    query_vector: list[float],
+    query_text: str,
     limit: int,
-) -> tuple[list[SearchResult], Timer, Timer]:
+) -> list[SearchResult]:
+    segments = search_video_transcript_segments(
+        video_id,
+        query_text,
+        limit=limit,
+    )
+    return [
+        SearchResult(
+            video_id=segment.video_id,
+            frame_index=-1,
+            timestamp_s=segment.start_s,
+            thumbnail_url=None,
+            score=segment.score or 0.0,
+            source="transcript",
+            transcript_text=segment.text,
+        )
+        for segment in segments
+    ]
+
+
+def _create_qdrant_store() -> tuple[QdrantStore, Timer]:
     with Timer("Search qdrant setup", logger, level="debug") as qdrant_setup_timer:
         qdrant_config = QdrantConfig.from_env()
         qdrant_store = QdrantStore(qdrant_config)
 
-    with Timer("Search qdrant query", logger, level="debug") as qdrant_search_timer:
+    return qdrant_store, qdrant_setup_timer
+
+
+def _search_qdrant_results(
+    *,
+    qdrant_store: QdrantStore,
+    video_id: str,
+    query_vector: list[float],
+    limit: int,
+    source: str,
+    timer_name: str,
+) -> tuple[list[SearchResult], Timer]:
+    with Timer(timer_name, logger, level="debug") as qdrant_search_timer:
         results = qdrant_store.search(
             query_vector=query_vector,
             video_id=video_id,
             limit=limit,
+            source=source,
         )
 
-    return results, qdrant_setup_timer, qdrant_search_timer
+    return results, qdrant_search_timer
 
 
 def _log_search_timing(
@@ -156,3 +393,50 @@ def _log_search_timing(
         limit,
         results_count,
     )
+
+
+def _elapsed_ms(timer: Timer | None) -> float:
+    return (timer.elapsed or 0.0) * 1000 if timer is not None else 0.0
+
+
+def _merge_text_search_results(
+    *,
+    query_text: str,
+    transcript_results: list[SearchResult],
+    visual_results: list[SearchResult],
+) -> list[SearchResult]:
+    if _prefers_transcript_first(query_text):
+        ordered_groups = (transcript_results, visual_results)
+    else:
+        ordered_groups = (visual_results, transcript_results)
+    return [result for group in ordered_groups for result in group]
+
+
+def _prefers_transcript_first(query_text: str) -> bool:
+    query_tokens = _query_tokens(query_text)
+    return any(token in _TRANSCRIPT_INTENT_TOKENS for token in query_tokens)
+
+
+def _normalize_transcript_query(query_text: str) -> str | None:
+    tokens = []
+    seen: set[str] = set()
+
+    for token in _query_tokens(query_text):
+        if token in _TRANSCRIPT_STOP_WORDS or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+
+    if not tokens:
+        return None
+    return " ".join(tokens)
+
+
+def _query_tokens(query_text: str) -> list[str]:
+    tokens = []
+    for raw_token in _TRANSCRIPT_QUERY_TOKEN_RE.findall(query_text.lower()):
+        token = raw_token.strip("'")
+        if len(token) < 2:
+            continue
+        tokens.append(token)
+    return tokens

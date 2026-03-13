@@ -22,7 +22,8 @@ class QdrantConfig:
     def from_env(cls, collection_name: str = "video_frames") -> QdrantConfig:
         """Create config from environment variables."""
         url = os.environ.get("QDRANT_URL")
-        api_key = os.environ.get("QDRANT_API_KEY")
+        raw_api_key = os.environ.get("QDRANT_API_KEY")
+        api_key = raw_api_key.strip() or None if raw_api_key is not None else None
 
         if not url:
             raise StorageConfigError("QDRANT_URL environment variable is required")

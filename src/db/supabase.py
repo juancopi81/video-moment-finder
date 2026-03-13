@@ -35,6 +35,19 @@ class VideoRecord:
 
 
 @dataclass
+class TranscriptSegmentRecord:
+    """Transcript segment database record."""
+
+    video_id: str
+    segment_index: int
+    start_s: float
+    end_s: float
+    text: str
+    language_code: str | None = None
+    score: float | None = None
+
+
+@dataclass
 class CreditRecord:
     """Credit database record."""
 
@@ -157,6 +170,21 @@ def _row_to_credit(row: dict) -> CreditRecord:
     )
 
 
+def _row_to_transcript_segment(row: dict) -> TranscriptSegmentRecord:
+    """Convert database row to TranscriptSegmentRecord."""
+    score_raw = row.get("score")
+    score = float(score_raw) if score_raw is not None else None
+    return TranscriptSegmentRecord(
+        video_id=row["video_id"],
+        segment_index=int(row["segment_index"]),
+        start_s=float(row["start_s"]),
+        end_s=float(row["end_s"]),
+        text=row["text"],
+        language_code=row.get("language_code"),
+        score=score,
+    )
+
+
 def _row_to_video_job(row: dict) -> VideoJobRecord:
     """Convert database row to VideoJobRecord."""
     return VideoJobRecord(
@@ -208,7 +236,11 @@ def create_video(
         Created VideoRecord with generated ID.
     """
     client = get_client()
-    data: dict = {"youtube_url": youtube_url, "status": status, "source_type": "youtube"}
+    data: dict = {
+        "youtube_url": youtube_url,
+        "status": status,
+        "source_type": "youtube",
+    }
     if user_id is not None:
         data["user_id"] = user_id
     if video_id is not None:
@@ -351,6 +383,66 @@ def has_unlimited_video_access(user_id: str) -> bool:
         .execute()
     )
     return bool(result.data)
+
+
+def replace_video_transcript_segments(
+    video_id: str,
+    segments: list[TranscriptSegmentRecord],
+) -> int:
+    """Replace all transcript segments for one video atomically."""
+    if not video_id.strip():
+        raise ValueError("video_id must be non-empty")
+
+    client = get_client()
+    rows = [
+        {
+            "segment_index": segment.segment_index,
+            "start_s": segment.start_s,
+            "end_s": segment.end_s,
+            "text": segment.text,
+            "language_code": segment.language_code,
+        }
+        for segment in segments
+    ]
+
+    result = client.rpc(
+        "replace_video_transcript_segments",
+        {
+            "p_video_id": video_id,
+            "p_segments": rows,
+        },
+    ).execute()
+
+    inserted_raw = _rpc_first_item(result.data)
+    if inserted_raw is None:
+        return 0
+    return int(inserted_raw)
+
+
+def search_video_transcript_segments(
+    video_id: str,
+    query: str,
+    *,
+    limit: int = 5,
+) -> list[TranscriptSegmentRecord]:
+    """Search transcript segments for a single video."""
+    if not video_id.strip():
+        raise ValueError("video_id must be non-empty")
+    if limit <= 0:
+        raise ValueError("limit must be > 0")
+
+    client = get_client()
+    result = client.rpc(
+        "search_video_transcript_segments",
+        {
+            "p_video_id": video_id,
+            "p_query": query,
+            "p_limit": limit,
+        },
+    ).execute()
+
+    rows = result.data or []
+    return [_row_to_transcript_segment(row) for row in rows]
 
 
 # ---------------------------------------------------------------------------

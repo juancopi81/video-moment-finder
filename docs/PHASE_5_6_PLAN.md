@@ -52,6 +52,42 @@ Suggested milestone gates:
 - If a phase grows too large or gets blocked, split at a milestone boundary instead of mixing partial work into one PR.
 - A milestone is done only when its review gate is explicit and repeatable.
 
+## Phase 5 Technical Decisions
+
+### ASR Model: Whisper large-v3-turbo via faster-whisper
+
+Chosen over IBM Granite 4.0 1B Speech (5.52% WER, 1B params) and NVIDIA Canary-Qwen 2.5B (5.63% WER, English-only).
+
+- **Word-level timestamps** are critical for moment search; Whisper has native, battle-tested support. Granite and Canary do not document this.
+- **99 languages** vs Granite's 6 and Canary's 1 (English-only).
+- **Auto-chunking** for long audio built in. Canary has a hard 40s input limit.
+- **Tiny container image** (`faster-whisper` is a single pip install) means fast cold starts on Modal. NeMo (Canary) is 10-15 GB.
+- **INT8 quantization** brings VRAM to ~2-3 GB, fitting on a **T4 GPU** ($0.59/hr) — nearly half the cost of the A10G used for embeddings.
+- WER (~7-9%) is slightly behind Granite/Canary but more than sufficient for search indexing.
+
+Runs on Modal using the existing $30/month free tier. Budget covers ~500-1,000+ videos/month.
+
+### Transcript Retrieval: Semantic Embeddings in Qdrant
+
+Chosen over adding BM25 or staying with Supabase FTS keyword matching alone.
+
+- **Problem with keyword matching**: a query like "when does the speaker explain machine learning?" won't match transcript text saying "deep learning is a subset of AI" — there is no word overlap. BM25 does not solve this; it still requires lexical overlap.
+- **Solution**: embed transcript segments with the same **Qwen3-VL-Embedding-2B** model already used for frame embeddings and query embeddings. Store in the same Qdrant collection with `source="transcript"`. One query embedding → one Qdrant search returns both visual and spoken matches ranked by cosine similarity.
+- **Why not BM25**: Supabase `ts_rank` already approximates BM25. Adding Elasticsearch would mean new infrastructure for a problem semantic embeddings solve more completely.
+- **Supabase FTS stays** as a free, zero-GPU bonus layer for exact keyword hits (proper nouns, technical terms). It is no longer the primary spoken-content search path.
+- **Cost**: ~200 text segments per video adds <1s of A10G time (~$0.0003 per video). Negligible.
+
+### Processing Pipeline Shape
+
+After downloading the video, the visual and spoken branches are fully independent and run in parallel via `ThreadPoolExecutor` (threads are fine since the heavy work is remote Modal calls, not local CPU):
+
+- **Visual branch**: extract frames → embed via Qwen3-VL (A10G) → upload thumbnails → store in Qdrant.
+- **Spoken branch**: extract audio (ffmpeg) → ASR via faster-whisper (T4) → embed transcript segments via Qwen3-VL (A10G) → store in Qdrant + Supabase.
+
+For YouTube videos, caption fetch also runs in parallel as a simple network call.
+
+At search time: embed query once → single Qdrant search returns both visual and transcript matches. Supabase FTS stays as an optional keyword boost.
+
 ## Suggested Commit Sequence
 
 The intent is that a developer can work in order and stop after any milestone commit for review.

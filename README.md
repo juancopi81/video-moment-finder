@@ -1,6 +1,6 @@
 # Video Moment Finder
 
-Semantic video moment search for creators and researchers.
+Semantic and transcript-aware video moment search for creators and researchers.
 Process a video, run text or image queries, and jump to matching timestamps.
 
 **Live site:** [videomomentfinder.com](https://videomomentfinder.com)
@@ -10,8 +10,16 @@ Process a video, run text or image queries, and jump to matching timestamps.
 - Accepts direct video uploads as the reliable ingest path.
 - Supports best-effort YouTube URL import for videos you own or are authorized to use.
 - Processes video frames asynchronously.
+- Stores YouTube transcript segments when captions are available.
 - Embeds frames into a vector index for semantic retrieval.
-- Returns top timestamped matches with thumbnails for text or example-image queries.
+- Runs text queries across visual retrieval and semantically indexed transcript retrieval.
+- Returns top timestamped matches for text or example-image queries, with thumbnails when visual matches are available.
+- For text queries, the `limit` applies per result group: up to `limit` visual matches and up to `limit` spoken matches.
+
+Current transcript scope:
+
+- YouTube videos use existing subtitle tracks when available and index them for semantic transcript retrieval.
+- Direct uploads extract speech with Whisper large-v3-turbo via `faster-whisper` and index those transcript segments for spoken-text queries.
 
 ## Quick Start (Local)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 import modal
@@ -12,6 +13,9 @@ APP_PATH = Path("/root/app")
 MODAL_UV_SYNC_COMMAND = "uv sync --frozen --group modal --compile-bytecode --python-preference=only-system"
 
 app = modal.App(APP_NAME)
+WHISPER_MODEL_NAME = "turbo"
+WHISPER_COMPUTE_TYPE = "int8_float16"
+WHISPER_BATCH_SIZE = 16
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -100,6 +104,43 @@ def _create_qwen_embedder():
     from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
 
     return Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
+
+
+def _create_whisper_pipeline():
+    from faster_whisper import BatchedInferencePipeline, WhisperModel  # type: ignore
+
+    model = WhisperModel(
+        WHISPER_MODEL_NAME,
+        device="cuda",
+        compute_type=WHISPER_COMPUTE_TYPE,
+    )
+    return BatchedInferencePipeline(model=model)
+
+
+def _normalize_transcription_segments(
+    segments: Any,
+    *,
+    language_code: str | None,
+) -> list[dict[str, Any]]:
+    normalized_segments: list[dict[str, Any]] = []
+
+    for segment in segments:
+        text = " ".join(segment.text.split()).strip()
+        if not text:
+            continue
+
+        start_s = float(segment.start)
+        end_s = float(segment.end)
+        normalized_segments.append(
+            {
+                "start_s": start_s,
+                "end_s": max(end_s, start_s),
+                "text": text,
+                "language_code": language_code,
+            }
+        )
+
+    return normalized_segments
 
 
 @app.cls(
@@ -195,6 +236,44 @@ def _normalize_embedding(embedding):
 
 
 @app.function(image=image, gpu="A10G", timeout=1800)
+def embed_texts_in_batches(
+    texts: list[str], *, batch_size: int = 32
+) -> list[list[float]]:
+    """Embed texts in fixed-size batches and return normalized vectors."""
+    if not texts:
+        raise ValueError("texts must be a non-empty list")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be > 0")
+
+    from models.qwen3_vl_embedding import Qwen3VLEmbedder  # type: ignore
+
+    model = Qwen3VLEmbedder(model_name_or_path="Qwen/Qwen3-VL-Embedding-2B")
+
+    embeddings: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        cleaned_batch = []
+        for text in batch:
+            cleaned = text.strip()
+            if not cleaned:
+                raise ValueError("text items must be non-empty")
+            cleaned_batch.append({"text": cleaned})
+
+        batch_embeddings = _normalize_embedding(model.process(cleaned_batch))
+        if batch_embeddings.shape[0] != len(batch):
+            raise RuntimeError(
+                f"Embedding count mismatch: {batch_embeddings.shape[0]} != {len(batch)}"
+            )
+
+        embeddings.extend([emb.tolist() for emb in batch_embeddings])
+
+    if len(embeddings) != len(texts):
+        raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} != {len(texts)}")
+
+    return embeddings
+
+
+@app.function(image=image, gpu="A10G", timeout=1800)
 def embed_images_in_batches(
     images: list[bytes], *, batch_size: int = 8
 ) -> list[list[float]]:
@@ -239,3 +318,33 @@ def embed_images_in_batches(
         raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} != {len(images)}")
 
     return embeddings
+
+
+@app.function(image=image, gpu="T4", timeout=1800)
+def transcribe_audio_bytes(
+    audio_bytes: bytes,
+    *,
+    batch_size: int = WHISPER_BATCH_SIZE,
+) -> list[dict[str, Any]]:
+    """Transcribe audio bytes into normalized timestamped segments."""
+    if not audio_bytes:
+        raise ValueError("audio_bytes must be non-empty")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be > 0")
+
+    pipeline = _create_whisper_pipeline()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        audio_path = Path(temp_dir) / "input.wav"
+        audio_path.write_bytes(audio_bytes)
+        segments, info = pipeline.transcribe(
+            str(audio_path),
+            batch_size=batch_size,
+            task="transcribe",
+            vad_filter=True,
+            word_timestamps=False,
+        )
+        language_code = getattr(info, "language", None)
+        return _normalize_transcription_segments(
+            segments,
+            language_code=language_code,
+        )
