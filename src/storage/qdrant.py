@@ -207,6 +207,23 @@ class QdrantStore:
 
         return len(points)
 
+    def replace_transcripts(
+        self,
+        video_id: str,
+        transcripts: list[TranscriptVector],
+    ) -> int:
+        """Replace transcript vectors for one video and return current count."""
+        for transcript in transcripts:
+            if transcript.video_id != video_id:
+                raise QdrantStorageError(
+                    "Transcript vector video_id does not match replace target"
+                )
+
+        self.delete_video_transcripts(video_id)
+        if not transcripts:
+            return 0
+        return self.upsert_transcripts(transcripts)
+
     def search(
         self,
         query_vector: list[float],
@@ -251,24 +268,36 @@ class QdrantStore:
             for point in points
         ]
 
-    def delete_video(self, video_id: str) -> int:
-        """Delete all vectors for a video. Returns count of deleted points."""
+    def _delete_points(
+        self,
+        video_id: str,
+        *,
+        source: Literal["visual", "transcript"] | None = None,
+    ) -> int:
+        query_filter = _video_filter(video_id, source=source)
         try:
-            # First count existing points for this video
             count_result = self._client.count(
                 collection_name=self._config.collection_name,
-                count_filter=_video_filter(video_id),
+                count_filter=query_filter,
             )
-            count = count_result.count
+            count = int(count_result.count or 0)
 
             if count > 0:
                 self._client.delete(
                     collection_name=self._config.collection_name,
                     points_selector=models.FilterSelector(
-                        filter=_video_filter(video_id)
+                        filter=query_filter
                     ),
                 )
 
             return count
         except Exception as exc:
-            raise QdrantStorageError(f"Failed to delete video: {exc}") from exc
+            raise QdrantStorageError(f"Failed to delete points: {exc}") from exc
+
+    def delete_video(self, video_id: str) -> int:
+        """Delete all vectors for a video. Returns count of deleted points."""
+        return self._delete_points(video_id)
+
+    def delete_video_transcripts(self, video_id: str) -> int:
+        """Delete transcript vectors for a video. Returns count of deleted points."""
+        return self._delete_points(video_id, source="transcript")

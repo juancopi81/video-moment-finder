@@ -65,26 +65,27 @@ def test_sync_video_transcript_segments_replaces_segments(
     tmp_path: Path,
 ) -> None:
     captured: dict[str, object] = {}
+    expected_segments = [
+        TranscriptSegment(
+            segment_index=0,
+            start_s=12.0,
+            end_s=14.0,
+            text="Let me explain the experiment setup.",
+            language_code="en",
+        ),
+        TranscriptSegment(
+            segment_index=1,
+            start_s=20.0,
+            end_s=22.0,
+            text="Now we compare the two versions.",
+            language_code="en",
+        ),
+    ]
 
     monkeypatch.setattr(
         processing_module,
         "extract_transcript_segments",
-        lambda youtube_url, output_dir: [
-            TranscriptSegment(
-                segment_index=0,
-                start_s=12.0,
-                end_s=14.0,
-                text="Let me explain the experiment setup.",
-                language_code="en",
-            ),
-            TranscriptSegment(
-                segment_index=1,
-                start_s=20.0,
-                end_s=22.0,
-                text="Now we compare the two versions.",
-                language_code="en",
-            ),
-        ],
+        lambda youtube_url, output_dir: expected_segments,
     )
     monkeypatch.setattr(
         processing_module,
@@ -100,7 +101,10 @@ def test_sync_video_transcript_segments_replaces_segments(
         lambda **kwargs: pytest.fail("youtube videos should not use upload ASR"),
     )
 
-    processing_module._sync_video_transcript_segments(_video("video_123"), tmp_path)
+    result = processing_module._sync_video_transcript_segments(
+        _video("video_123"),
+        tmp_path,
+    )
 
     assert captured["video_id"] == "video_123"
     assert captured["segments"] == [
@@ -123,6 +127,8 @@ def test_sync_video_transcript_segments_replaces_segments(
             score=None,
         ),
     ]
+    assert result.replaced is True
+    assert result.segments == expected_segments
 
 
 def test_sync_video_transcript_segments_transcribes_upload_sources(
@@ -132,6 +138,15 @@ def test_sync_video_transcript_segments_transcribes_upload_sources(
     captured: dict[str, object] = {}
     upload_path = tmp_path / "upload.mp4"
     upload_path.write_bytes(b"video")
+    expected_segments = [
+        TranscriptSegment(
+            segment_index=0,
+            start_s=4.0,
+            end_s=7.5,
+            text="The teacher explains interval classes.",
+            language_code="en",
+        )
+    ]
 
     monkeypatch.setattr(
         processing_module,
@@ -143,15 +158,7 @@ def test_sync_video_transcript_segments_transcribes_upload_sources(
     monkeypatch.setattr(
         processing_module,
         "_transcribe_uploaded_video_segments",
-        lambda **kwargs: [
-            TranscriptSegment(
-                segment_index=0,
-                start_s=4.0,
-                end_s=7.5,
-                text="The teacher explains interval classes.",
-                language_code="en",
-            )
-        ],
+        lambda **kwargs: expected_segments,
     )
     monkeypatch.setattr(
         processing_module,
@@ -162,7 +169,7 @@ def test_sync_video_transcript_segments_transcribes_upload_sources(
         or len(segments),
     )
 
-    processing_module._sync_video_transcript_segments(
+    result = processing_module._sync_video_transcript_segments(
         _video("video_upload", source_type="upload", youtube_url=None),
         tmp_path,
         video_path=upload_path,
@@ -182,12 +189,15 @@ def test_sync_video_transcript_segments_transcribes_upload_sources(
             )
         ],
     }
+    assert result.replaced is True
+    assert result.segments == expected_segments
 
 
-def test_sync_video_transcript_segments_skips_empty_upload_asr_results(
+def test_sync_video_transcript_segments_replaces_empty_upload_asr_results(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    captured: dict[str, object] = {}
     upload_path = tmp_path / "upload.mp4"
     upload_path.write_bytes(b"video")
 
@@ -199,25 +209,28 @@ def test_sync_video_transcript_segments_skips_empty_upload_asr_results(
     monkeypatch.setattr(
         processing_module,
         "replace_video_transcript_segments",
-        lambda video_id, segments: pytest.fail(
-            "should not store transcript rows when ASR returns no segments"
-        ),
+        lambda video_id, segments: captured.update(
+            {"video_id": video_id, "segments": segments}
+        )
+        or len(segments),
     )
 
-    assert (
-        processing_module._sync_video_transcript_segments(
-            _video("video_upload", source_type="upload", youtube_url=None),
-            tmp_path,
-            video_path=upload_path,
-        )
-        == []
+    result = processing_module._sync_video_transcript_segments(
+        _video("video_upload", source_type="upload", youtube_url=None),
+        tmp_path,
+        video_path=upload_path,
     )
+
+    assert captured == {"video_id": "video_upload", "segments": []}
+    assert result.replaced is True
+    assert result.segments == []
 
 
 def test_sync_video_transcript_segments_swallows_transcript_errors(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    captured: dict[str, object] = {}
     warnings: list[tuple[str, tuple[object, ...]]] = []
 
     def _raise(youtube_url: str, output_dir: Path) -> list[TranscriptSegment]:
@@ -227,9 +240,10 @@ def test_sync_video_transcript_segments_swallows_transcript_errors(
     monkeypatch.setattr(
         processing_module,
         "replace_video_transcript_segments",
-        lambda video_id, segments: pytest.fail(
-            "should not store transcript rows on extraction failure"
-        ),
+        lambda video_id, segments: captured.update(
+            {"video_id": video_id, "segments": segments}
+        )
+        or len(segments),
     )
     monkeypatch.setattr(
         processing_module.logger,
@@ -237,15 +251,22 @@ def test_sync_video_transcript_segments_swallows_transcript_errors(
         lambda message, *args: warnings.append((message, args)),
     )
 
-    processing_module._sync_video_transcript_segments(_video("video_123"), tmp_path)
+    result = processing_module._sync_video_transcript_segments(
+        _video("video_123"),
+        tmp_path,
+    )
 
+    assert captured == {"video_id": "video_123", "segments": []}
     assert any("Transcript extraction skipped" in message for message, _ in warnings)
+    assert result.replaced is True
+    assert result.segments == []
 
 
 def test_sync_video_transcript_segments_swallows_upload_asr_errors(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    captured: dict[str, object] = {}
     warnings: list[tuple[str, tuple[object, ...]]] = []
     upload_path = tmp_path / "upload.mp4"
     upload_path.write_bytes(b"video")
@@ -261,9 +282,10 @@ def test_sync_video_transcript_segments_swallows_upload_asr_errors(
     monkeypatch.setattr(
         processing_module,
         "replace_video_transcript_segments",
-        lambda video_id, segments: pytest.fail(
-            "should not store transcript rows on upload ASR failure"
-        ),
+        lambda video_id, segments: captured.update(
+            {"video_id": video_id, "segments": segments}
+        )
+        or len(segments),
     )
     monkeypatch.setattr(
         processing_module.logger,
@@ -271,13 +293,107 @@ def test_sync_video_transcript_segments_swallows_upload_asr_errors(
         lambda message, *args: warnings.append((message, args)),
     )
 
-    processing_module._sync_video_transcript_segments(
+    result = processing_module._sync_video_transcript_segments(
         _video("video_upload", source_type="upload", youtube_url=None),
         tmp_path,
         video_path=upload_path,
     )
 
+    assert captured == {"video_id": "video_upload", "segments": []}
     assert any("Upload ASR skipped" in message for message, _ in warnings)
+    assert result.replaced is True
+    assert result.segments == []
+
+
+def test_process_transcript_branch_clears_qdrant_when_sync_replaces_empty_state(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"video")
+
+    class FakePipeline:
+        def __init__(self, qdrant_config) -> None:
+            captured["qdrant_config"] = qdrant_config
+
+        def store_transcripts(self, video_id: str, passed_segments, embeddings):
+            captured["video_id"] = video_id
+            captured["segments"] = passed_segments
+            captured["embeddings"] = embeddings
+            return 0
+
+    monkeypatch.setattr(
+        processing_module,
+        "_sync_video_transcript_segments",
+        lambda video, output_dir, video_path=None: processing_module.TranscriptSyncResult(
+            segments=[],
+            replaced=True,
+        ),
+    )
+    monkeypatch.setattr(processing_module, "StoragePipeline", FakePipeline)
+    monkeypatch.setattr(
+        processing_module,
+        "_index_transcript_segments",
+        lambda **kwargs: pytest.fail("should not embed transcripts for an empty replace"),
+    )
+
+    processing_module._process_transcript_branch(
+        video=_video("video_123"),
+        video_path=video_path,
+        output_dir=tmp_path,
+        qdrant_config=object(),  # type: ignore[arg-type]
+    )
+
+    assert captured["video_id"] == "video_123"
+    assert captured["segments"] == []
+    assert captured["embeddings"] == []
+
+
+def test_process_transcript_branch_skips_qdrant_when_supabase_replace_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"video")
+
+    monkeypatch.setattr(
+        processing_module,
+        "_sync_video_transcript_segments",
+        lambda video, output_dir, video_path=None: processing_module.TranscriptSyncResult(
+            segments=[
+                TranscriptSegment(
+                    segment_index=0,
+                    start_s=1.0,
+                    end_s=2.0,
+                    text="hello world",
+                    language_code="en",
+                )
+            ],
+            replaced=False,
+        ),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "StoragePipeline",
+        lambda qdrant_config: pytest.fail(
+            "should not touch qdrant when transcript row replacement fails"
+        ),
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "_index_transcript_segments",
+        lambda **kwargs: pytest.fail(
+            "should not embed transcripts when transcript row replacement fails"
+        ),
+    )
+
+    processing_module._process_transcript_branch(
+        video=_video("video_123"),
+        video_path=video_path,
+        output_dir=tmp_path,
+        qdrant_config=object(),  # type: ignore[arg-type]
+    )
 
 
 def test_index_transcript_segments_embeds_and_stores(monkeypatch) -> None:

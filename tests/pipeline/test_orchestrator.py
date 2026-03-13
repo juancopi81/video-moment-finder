@@ -124,12 +124,12 @@ def test_process_video_mismatched_lengths_raises(tmp_path: Path) -> None:
         pipeline.process_video("video_mismatch", frames, embeddings)
 
 
-def test_store_transcripts_in_memory() -> None:
+def test_store_transcripts_replaces_existing_transcripts_in_memory() -> None:
     config = QdrantConfig.in_memory(collection_name="orchestrator_transcripts")
     pipeline = StoragePipeline(config)
     pipeline.ensure_ready()
 
-    segments = [
+    first_segments = [
         TranscriptSegment(
             segment_index=0,
             start_s=2.0,
@@ -145,19 +145,66 @@ def test_store_transcripts_in_memory() -> None:
             language_code="en",
         ),
     ]
-    embeddings = [_vector(0.4), _vector(0.5)]
+    first_embeddings = [_vector(0.4), _vector(0.5)]
 
-    stored = pipeline.store_transcripts("video_transcript", segments, embeddings)
+    pipeline.store_transcripts("video_transcript", first_segments, first_embeddings)
+    stored = pipeline.store_transcripts(
+        "video_transcript",
+        [
+            TranscriptSegment(
+                segment_index=0,
+                start_s=3.0,
+                end_s=5.0,
+                text="replacement transcript",
+                language_code="en",
+            )
+        ],
+        [_vector(0.6)],
+    )
 
-    assert stored == 2
+    assert stored == 1
     results = pipeline._qdrant.search(
-        _vector(0.4),
+        _vector(0.6),
         video_id="video_transcript",
         limit=5,
         source="transcript",
     )
-    assert len(results) == 2
+    assert len(results) == 1
     assert all(result.source == "transcript" for result in results)
+    assert results[0].transcript_text == "replacement transcript"
+
+
+def test_store_transcripts_empty_clears_existing_transcripts() -> None:
+    config = QdrantConfig.in_memory(collection_name="orchestrator_transcripts_empty")
+    pipeline = StoragePipeline(config)
+    pipeline.ensure_ready()
+
+    pipeline.store_transcripts(
+        "video_transcript",
+        [
+            TranscriptSegment(
+                segment_index=0,
+                start_s=2.0,
+                end_s=4.0,
+                text="intro transcript",
+                language_code="en",
+            )
+        ],
+        [_vector(0.4)],
+    )
+
+    stored = pipeline.store_transcripts("video_transcript", [], [])
+
+    assert stored == 0
+    assert (
+        pipeline._qdrant.search(
+            _vector(0.4),
+            video_id="video_transcript",
+            limit=5,
+            source="transcript",
+        )
+        == []
+    )
 
 
 def test_store_transcripts_mismatched_lengths_raises() -> None:

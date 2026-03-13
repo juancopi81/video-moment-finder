@@ -115,6 +115,132 @@ def test_upsert_transcripts_search_in_memory() -> None:
     assert results[0].transcript_text is not None
 
 
+def test_replace_transcripts_removes_orphans_and_preserves_visual_points() -> None:
+    config = QdrantConfig.in_memory(collection_name="replace_transcripts")
+    store = QdrantStore(config)
+    store.ensure_collection()
+
+    store.upsert_frames(
+        [
+            FrameVector(
+                video_id="video_a",
+                frame_index=0,
+                timestamp_s=0.0,
+                vector=_vector(0.9),
+                thumbnail_url="https://cdn/thumb/video_a/thumb_00000.jpg",
+            )
+        ]
+    )
+    store.upsert_transcripts(
+        [
+            TranscriptVector(
+                video_id="video_a",
+                segment_index=0,
+                timestamp_s=5.0,
+                end_s=7.0,
+                vector=_vector(0.1),
+                text="first transcript hit",
+                language_code="en",
+            ),
+            TranscriptVector(
+                video_id="video_a",
+                segment_index=1,
+                timestamp_s=9.0,
+                end_s=12.0,
+                vector=_vector(0.2),
+                text="orphan transcript hit",
+                language_code="en",
+            ),
+        ]
+    )
+
+    replaced = store.replace_transcripts(
+        "video_a",
+        [
+            TranscriptVector(
+                video_id="video_a",
+                segment_index=0,
+                timestamp_s=6.0,
+                end_s=8.0,
+                vector=_vector(0.3),
+                text="replacement transcript hit",
+                language_code="en",
+            )
+        ],
+    )
+
+    assert replaced == 1
+
+    transcript_results = store.search(
+        _vector(0.3),
+        video_id="video_a",
+        limit=5,
+        source="transcript",
+    )
+    assert len(transcript_results) == 1
+    assert transcript_results[0].transcript_text == "replacement transcript hit"
+
+    visual_results = store.search(
+        _vector(0.9),
+        video_id="video_a",
+        limit=5,
+        source="visual",
+    )
+    assert len(visual_results) == 1
+    assert visual_results[0].source == "visual"
+
+
+def test_replace_transcripts_empty_clears_only_transcript_points() -> None:
+    config = QdrantConfig.in_memory(collection_name="replace_transcripts_empty")
+    store = QdrantStore(config)
+    store.ensure_collection()
+
+    store.upsert_frames(
+        [
+            FrameVector(
+                video_id="video_a",
+                frame_index=0,
+                timestamp_s=0.0,
+                vector=_vector(0.9),
+                thumbnail_url="https://cdn/thumb/video_a/thumb_00000.jpg",
+            )
+        ]
+    )
+    store.upsert_transcripts(
+        [
+            TranscriptVector(
+                video_id="video_a",
+                segment_index=0,
+                timestamp_s=5.0,
+                end_s=7.0,
+                vector=_vector(0.1),
+                text="first transcript hit",
+                language_code="en",
+            )
+        ]
+    )
+
+    replaced = store.replace_transcripts("video_a", [])
+
+    assert replaced == 0
+    assert (
+        store.search(
+            _vector(0.1),
+            video_id="video_a",
+            limit=5,
+            source="transcript",
+        )
+        == []
+    )
+    visual_results = store.search(
+        _vector(0.9),
+        video_id="video_a",
+        limit=5,
+        source="visual",
+    )
+    assert len(visual_results) == 1
+
+
 def test_upsert_empty_returns_zero() -> None:
     config = QdrantConfig.in_memory(collection_name="empty_frames")
     store = QdrantStore(config)

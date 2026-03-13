@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 import os
 import tempfile
 from pathlib import Path
@@ -31,8 +32,11 @@ from src.video.metadata import (
     max_video_duration_s,
     probe_video_duration_s,
 )
-from src.video.transcripts import TranscriptError, extract_transcript_segments
-from src.video.transcripts import TranscriptSegment
+from src.video.transcripts import (
+    TranscriptError,
+    TranscriptSegment,
+    extract_transcript_segments,
+)
 
 logger = get_logger(__name__)
 
@@ -54,6 +58,14 @@ class TranscriptionSegmentPayload(TypedDict):
     end_s: float
     text: str
     language_code: str | None
+
+
+@dataclass(frozen=True)
+class TranscriptSyncResult:
+    """Transcript rows written for one processing attempt."""
+
+    segments: list[TranscriptSegment]
+    replaced: bool
 
 
 def process_video(video: VideoRecord) -> ProcessingResult:
@@ -208,18 +220,31 @@ def _process_transcript_branch(
     qdrant_config: QdrantConfig,
 ) -> None:
     logger.info("Starting spoken branch for video_id=%s", video.id)
-    transcript_segments = _sync_video_transcript_segments(
+    sync_result = _sync_video_transcript_segments(
         video,
         output_dir,
         video_path=video_path,
     )
-    if not transcript_segments:
+    if not sync_result.replaced:
         return
 
     pipeline = StoragePipeline(qdrant_config)
+    if not sync_result.segments:
+        try:
+            pipeline.store_transcripts(video.id, [], [])
+        except Exception as exc:
+            logger.warning(
+                "Transcript vector storage skipped for video_id=%s: %s",
+                video.id,
+                exc,
+            )
+            return
+        logger.info("Cleared transcript vectors for video_id=%s", video.id)
+        return
+
     _index_transcript_segments(
         video_id=video.id,
-        transcript_segments=transcript_segments,
+        transcript_segments=sync_result.segments,
         pipeline=pipeline,
     )
 
@@ -302,15 +327,15 @@ def _sync_video_transcript_segments(
     output_dir: Path,
     *,
     video_path: Path | None = None,
-) -> list[TranscriptSegment]:
+) -> TranscriptSyncResult:
     segments = _fetch_video_transcript_segments(
         video,
         output_dir,
         video_path=video_path,
     )
-    if not segments:
-        return []
 
+    # Always replace transcript rows, including [], so retries do not leave
+    # stale spoken hits behind after a later successful run.
     try:
         stored = replace_video_transcript_segments(
             video.id,
@@ -322,14 +347,14 @@ def _sync_video_transcript_segments(
             video.id,
             exc,
         )
-        return []
+        return TranscriptSyncResult(segments=segments, replaced=False)
 
     logger.info(
-        "Stored %d transcript segments for video_id=%s",
+        "Replaced transcript rows with %d segments for video_id=%s",
         stored,
         video.id,
     )
-    return segments
+    return TranscriptSyncResult(segments=segments, replaced=True)
 
 
 def _fetch_video_transcript_segments(
