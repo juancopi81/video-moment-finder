@@ -51,6 +51,7 @@ Suggested milestone gates:
 - Default target: one focused PR for the main Phase 5 work and a small sequence of focused PRs for Phase 6.
 - Inside each PR, milestone commits should still land at clear review checkpoints.
 - Phase 6 should split at clear product boundaries instead of combining API contract, account controls, CLI behavior, and docs into one large PR.
+- Keep the repository-required `codex/` branch prefix, but use conventional `feat` or `docs` naming in the branch suffix and PR title when it improves clarity.
 - A milestone is done only when its review gate is explicit and repeatable.
 
 ## Phase 5 Technical Decisions
@@ -102,21 +103,30 @@ The intent is that a developer can work in order, with each PR ending at a revie
 3. Normalize the search response shape needed by later API clients.
    Review gate: result fields are stable enough to reuse without web-specific assumptions.
 
-### Phase 6 PR 1: API Contract (`codex/phase6-api-contract`)
+### Phase 6 PR 1: API Contract
+
+Suggested branch: `codex/feat-phase6-api-contract`
+Suggested PR title: `feat(api): productize external API contract`
 
 1. Productize the authenticated REST happy path over the same core capabilities.
 2. Stabilize the external request and response shapes the CLI will depend on.
 3. Keep the initial happy path focused on submit or upload, poll status, and text search end to end.
    Review gate: a stable external API flow can submit or upload a video, poll status, and run text search end to end without web-specific assumptions.
 
-### Phase 6 PR 2: API Keys and Usage Controls (`codex/phase6-api-keys`)
+### Phase 6 PR 2: API Keys and Usage Controls
+
+Suggested branch: `codex/feat-phase6-api-keys`
+Suggested PR title: `feat(auth): add API keys and usage controls`
 
 1. Add API keys with account ownership, scope, revocation, and quota checks.
 2. Add retry-safe usage attribution and accounting rules over the stabilized API contract.
 3. Keep billing and quota behavior aligned with the same ownership and idempotency guarantees already expected in the web product.
    Review gate: ownership, key lifecycle, quota enforcement, and idempotent accounting rules are covered by tests.
 
-### Phase 6 PR 3: CLI and Agent Guide (`codex/phase6-cli-docs`)
+### Phase 6 PR 3: CLI and Agent Guide
+
+Suggested branch: `codex/feat-phase6-cli-docs`
+Suggested PR title: `feat(cli): add agent CLI and usage guide`
 
 1. Add a thin CLI wrapper over the external API.
 2. Cover the supported CLI happy path with smoke checks, including image search only if the API contract is stable enough to expose it cleanly.
