@@ -48,9 +48,9 @@ Suggested milestone gates:
 
 ## Delivery Shape
 
-- Default target: one focused PR for the main Phase 5 work and one focused PR for the main Phase 6 work.
-- Inside each PR, milestone commits should land at clear review checkpoints.
-- If a phase grows too large or gets blocked, split at a milestone boundary instead of mixing partial work into one PR.
+- Default target: one focused PR for the main Phase 5 work and a small sequence of focused PRs for Phase 6.
+- Inside each PR, milestone commits should still land at clear review checkpoints.
+- Phase 6 should split at clear product boundaries instead of combining API contract, account controls, CLI behavior, and docs into one large PR.
 - A milestone is done only when its review gate is explicit and repeatable.
 
 ## Phase 5 Technical Decisions
@@ -89,9 +89,9 @@ For YouTube videos, caption fetch also runs in parallel as a simple network call
 
 At search time: embed query once → single Qdrant search returns both visual and transcript matches. Supabase FTS stays as an optional keyword boost.
 
-## Suggested Commit Sequence
+## Suggested PR Sequence
 
-The intent is that a developer can work in order and stop after any milestone commit for review.
+The intent is that a developer can work in order, with each PR ending at a reviewable boundary and each commit still mapping cleanly to milestone progress.
 
 ### Phase 5 PR
 
@@ -102,15 +102,23 @@ The intent is that a developer can work in order and stop after any milestone co
 3. Normalize the search response shape needed by later API clients.
    Review gate: result fields are stable enough to reuse without web-specific assumptions.
 
-### Phase 6 PR
+### Phase 6 PR 1: API Contract (`codex/phase6-api-contract`)
 
 1. Productize the authenticated REST happy path over the same core capabilities.
-   Review gate: a stable external API flow can submit or upload a video, poll status, and run text search end to end.
-2. Add API keys with account ownership, scope, revocation, quota checks, and retry-safe usage attribution.
+2. Stabilize the external request and response shapes the CLI will depend on.
+3. Keep the initial happy path focused on submit or upload, poll status, and text search end to end.
+   Review gate: a stable external API flow can submit or upload a video, poll status, and run text search end to end without web-specific assumptions.
+
+### Phase 6 PR 2: API Keys and Usage Controls (`codex/phase6-api-keys`)
+
+1. Add API keys with account ownership, scope, revocation, and quota checks.
+2. Add retry-safe usage attribution and accounting rules over the stabilized API contract.
+3. Keep billing and quota behavior aligned with the same ownership and idempotency guarantees already expected in the web product.
    Review gate: ownership, key lifecycle, quota enforcement, and idempotent accounting rules are covered by tests.
-3. Add a thin CLI wrapper over the external API.
-   Review gate: the CLI can authenticate, submit or complete uploads, poll status, and run search without diverging from API behavior.
-4. Extend the CLI happy path only where the API contract is stable enough to support it cleanly.
-   Review gate: CLI smoke checks cover the supported happy path, including image search only if the API contract is stable enough to expose it cleanly.
-5. Add a public agent-readable markdown guide for the CLI and API happy path.
-   Review gate: the markdown guide explains auth setup, stable command examples, expected outputs, and failure cases well enough for an agent to use the product without reading implementation code.
+
+### Phase 6 PR 3: CLI and Agent Guide (`codex/phase6-cli-docs`)
+
+1. Add a thin CLI wrapper over the external API.
+2. Cover the supported CLI happy path with smoke checks, including image search only if the API contract is stable enough to expose it cleanly.
+3. Add a public agent-readable markdown guide for the CLI and API happy path.
+   Review gate: the CLI can authenticate, submit or complete uploads, poll status, and run supported search flows without diverging from API behavior, and the markdown guide is sufficient for an agent to use the product without reading implementation code.
