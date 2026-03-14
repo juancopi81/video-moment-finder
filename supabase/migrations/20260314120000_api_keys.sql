@@ -43,3 +43,38 @@ on public.api_keys
 for delete
 to authenticated
 using (user_id = (auth.jwt() ->> 'sub'));
+
+-- Atomic key creation with per-user cap (avoids count-then-insert race).
+create or replace function public.create_api_key_atomic(
+  p_user_id text,
+  p_name text,
+  p_key_hash text,
+  p_key_prefix text,
+  p_max_keys integer default 10
+)
+returns uuid
+language plpgsql
+set search_path = public
+as $$
+declare
+  active_count integer;
+  new_id uuid;
+begin
+  -- Lock active keys for this user to prevent concurrent inserts.
+  select count(*) into active_count
+    from public.api_keys
+   where user_id = p_user_id
+     and revoked_at is null
+     for update;
+
+  if active_count >= p_max_keys then
+    raise exception 'Maximum of % active API keys per user', p_max_keys;
+  end if;
+
+  insert into public.api_keys (user_id, name, key_hash, key_prefix)
+  values (p_user_id, p_name, p_key_hash, p_key_prefix)
+  returning id into new_id;
+
+  return new_id;
+end;
+$$;

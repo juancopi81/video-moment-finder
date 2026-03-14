@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.app import app
+from src.api.auth import AuthIdentity
 from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult
 from src.video.download import VideoMetadata
 
@@ -134,6 +135,102 @@ class TestApiKeyAuth:
             headers={"Authorization": f"Bearer {raw_key}"},
         )
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Scope restriction: API keys rejected on legacy / internal routes
+# ---------------------------------------------------------------------------
+
+
+class TestApiKeyScopeRestriction:
+    def test_api_key_rejected_on_legacy_video_list(self, monkeypatch):
+        """API keys must not authenticate legacy @app routes."""
+        raw_key, record = _make_api_key_record(user_id="user_scope")
+
+        # Even with a valid key in the DB, legacy routes must reject it.
+        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+        resp = client.get(
+            "/users/me/videos",
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 401
+        assert "not accepted" in resp.json()["detail"].lower()
+
+    def test_api_key_rejected_on_billing_summary(self, monkeypatch):
+        raw_key, record = _make_api_key_record(user_id="user_scope")
+        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+        resp = client.get(
+            "/users/me/billing-summary",
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 401
+
+    def test_api_key_rejected_on_billing_checkout(self, monkeypatch):
+        raw_key, record = _make_api_key_record(user_id="user_scope")
+        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+        resp = client.post(
+            "/billing/checkout",
+            json={"plan": "starter"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 401
+
+    def test_api_key_rejected_on_legacy_video_create(self, monkeypatch):
+        raw_key, record = _make_api_key_record(user_id="user_scope")
+        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+        resp = client.post(
+            "/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Auth identity attribution
+# ---------------------------------------------------------------------------
+
+
+class TestAuthIdentityAttribution:
+    def test_verify_api_key_returns_identity_with_key_id(self, monkeypatch):
+        """verify_api_key must return AuthIdentity with api_key_id for attribution."""
+        from src.api.auth import verify_api_key
+
+        raw_key, record = _make_api_key_record(
+            user_id="user_attr",
+            key_id="key-id-for-attribution",
+        )
+        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+        identity = verify_api_key(raw_key)
+        assert isinstance(identity, AuthIdentity)
+        assert identity.user_id == "user_attr"
+        assert identity.auth_method == "api_key"
+        assert identity.api_key_id == "key-id-for-attribution"
+
+    def test_jwt_auth_returns_identity_without_key_id(self, monkeypatch):
+        """JWT path must return AuthIdentity with auth_method='jwt' and no api_key_id."""
+        from src.api.auth import _verify_token
+
+        monkeypatch.setattr(
+            "src.api.auth.verify_bearer_token",
+            lambda token: "user_jwt",
+        )
+
+        identity = _verify_token("eyJhbGciOiJSUzI1NiJ9.fake.token")
+        assert isinstance(identity, AuthIdentity)
+        assert identity.user_id == "user_jwt"
+        assert identity.auth_method == "jwt"
+        assert identity.api_key_id is None
 
 
 # ---------------------------------------------------------------------------

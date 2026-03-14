@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.analytics.events import track
-from src.api.auth import get_current_user_id, get_optional_user_id
+from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user, get_optional_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,
@@ -1347,7 +1347,7 @@ class ApiKeyCreatedResponse(ApiKeyResponse):
 
 def create_api_key(
     body: CreateApiKeyRequest,
-    user_id: str = Depends(get_current_user_id),
+    identity: AuthIdentity = Depends(get_current_user),
 ) -> ApiKeyCreatedResponse:
     """Create a new API key. The raw key is returned once and never stored."""
     raw_key = "vmf_" + secrets.token_hex(16)
@@ -1355,7 +1355,7 @@ def create_api_key(
     key_prefix = "vmf_" + raw_key[4:8]
 
     try:
-        record = db_create_api_key(user_id, body.name, key_hash, key_prefix)
+        record = db_create_api_key(identity.user_id, body.name, key_hash, key_prefix)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -1366,26 +1366,80 @@ def create_api_key(
 
 
 def list_api_keys(
-    user_id: str = Depends(get_current_user_id),
+    identity: AuthIdentity = Depends(get_current_user),
 ) -> list[ApiKeyResponse]:
     """List the caller's active API keys."""
-    records = db_list_api_keys(user_id)
+    records = db_list_api_keys(identity.user_id)
     return [ApiKeyResponse.model_validate(r) for r in records]
 
 
 def revoke_api_key(
     key_id: str,
-    user_id: str = Depends(get_current_user_id),
+    identity: AuthIdentity = Depends(get_current_user),
 ) -> None:
     """Revoke an API key (soft delete)."""
-    revoked = db_revoke_api_key(key_id, user_id)
+    revoked = db_revoke_api_key(key_id, identity.user_id)
     if not revoked:
         raise HTTPException(status_code=404, detail="API key not found")
 
 
 # ---------------------------------------------------------------------------
-# Versioned external API (v1)
+# Versioned external API (v1) — accepts both JWT and API key auth
 # ---------------------------------------------------------------------------
+
+# Thin v1 wrappers that accept API keys (via get_current_user) and delegate
+# to the shared business logic.  Legacy @app routes keep get_current_user_id
+# (JWT-only) so API keys are scoped to /api/v1/ only.
+
+
+def v1_create_video(
+    request: VideoCreateRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    return create_video(request, user_id=identity.user_id)
+
+
+def v1_upload_video(
+    file: UploadFile = File(...),
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    return upload_video(file, user_id=identity.user_id)
+
+
+def v1_init_upload(
+    request: UploadInitRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> UploadInitResponse:
+    return init_upload(request, user_id=identity.user_id)
+
+
+def v1_complete_upload(
+    request: UploadCompleteRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    return complete_upload(request, user_id=identity.user_id)
+
+
+def v1_get_video(
+    video_id: str,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    return get_video(video_id, user_id=identity.user_id)
+
+
+def v1_list_my_videos(
+    identity: AuthIdentity = Depends(get_current_user),
+) -> list[VideoResponse]:
+    return list_my_videos(user_id=identity.user_id)
+
+
+def v1_search_video(
+    video_id: str,
+    request: VideoSearchRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoSearchResponse:
+    return search_video(video_id, request, user_id=identity.user_id)
+
 
 v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
 
@@ -1395,13 +1449,13 @@ v1_router.add_api_route("/keys", list_api_keys, methods=["GET"], response_model=
 v1_router.add_api_route("/keys/{key_id}", revoke_api_key, methods=["DELETE"], status_code=204)
 
 # Static paths first (Starlette matches by registration order).
-v1_router.add_api_route("/videos/upload", upload_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/upload/init", init_upload, methods=["POST"], response_model=UploadInitResponse)
-v1_router.add_api_route("/videos/upload/complete", complete_upload, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/upload", v1_upload_video, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/upload/init", v1_init_upload, methods=["POST"], response_model=UploadInitResponse)
+v1_router.add_api_route("/videos/upload/complete", v1_complete_upload, methods=["POST"], response_model=VideoResponse)
 # Collection + parameterized paths.
-v1_router.add_api_route("/videos", create_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos", list_my_videos, methods=["GET"], response_model=list[VideoResponse])
-v1_router.add_api_route("/videos/{video_id}", get_video, methods=["GET"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/{video_id}/search", search_video, methods=["POST"], response_model=VideoSearchResponse)
+v1_router.add_api_route("/videos", v1_create_video, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos", v1_list_my_videos, methods=["GET"], response_model=list[VideoResponse])
+v1_router.add_api_route("/videos/{video_id}", v1_get_video, methods=["GET"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/{video_id}/search", v1_search_video, methods=["POST"], response_model=VideoSearchResponse)
 
 app.include_router(v1_router)

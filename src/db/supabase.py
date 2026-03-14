@@ -774,38 +774,43 @@ def _row_to_api_key(row: dict) -> ApiKeyRecord:
 def create_api_key(
     user_id: str, name: str, key_hash: str, key_prefix: str
 ) -> ApiKeyRecord:
-    """Create a new API key record."""
+    """Create a new API key record atomically with per-user cap."""
     client = get_client()
 
-    # Application-level per-user cap.
-    existing = (
-        client.table("api_keys")
-        .select("id", count="exact")
-        .eq("user_id", user_id)
-        .is_("revoked_at", "null")
-        .execute()
-    )
-    count = existing.count if existing.count is not None else len(existing.data or [])
-    if count >= MAX_API_KEYS_PER_USER:
-        raise ValueError(
-            f"Maximum of {MAX_API_KEYS_PER_USER} active API keys per user"
-        )
-
-    result = (
-        client.table("api_keys")
-        .insert(
+    try:
+        result = client.rpc(
+            "create_api_key_atomic",
             {
-                "user_id": user_id,
-                "name": name,
-                "key_hash": key_hash,
-                "key_prefix": key_prefix,
-            }
-        )
+                "p_user_id": user_id,
+                "p_name": name,
+                "p_key_hash": key_hash,
+                "p_key_prefix": key_prefix,
+                "p_max_keys": MAX_API_KEYS_PER_USER,
+            },
+        ).execute()
+    except Exception as exc:
+        msg = str(exc)
+        if "Maximum of" in msg and "active API keys per user" in msg:
+            raise ValueError(
+                f"Maximum of {MAX_API_KEYS_PER_USER} active API keys per user"
+            ) from exc
+        raise
+
+    new_id = _rpc_first_item(result.data)
+    if new_id is None:
+        raise RuntimeError("Failed to create API key record")
+
+    # Fetch the full record by ID.
+    row_result = (
+        client.table("api_keys")
+        .select("*")
+        .eq("id", str(new_id))
+        .limit(1)
         .execute()
     )
-    if not result.data:
-        raise RuntimeError("Failed to create API key record")
-    return _row_to_api_key(result.data[0])
+    if not row_result.data:
+        raise RuntimeError("Failed to fetch created API key record")
+    return _row_to_api_key(row_result.data[0])
 
 
 def get_api_key_by_hash(key_hash: str) -> ApiKeyRecord | None:

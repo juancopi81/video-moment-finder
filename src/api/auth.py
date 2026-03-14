@@ -5,7 +5,7 @@ import hashlib
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import jwt
 from fastapi import Header, HTTPException, Security
@@ -16,6 +16,8 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+AuthMethod = Literal["jwt", "api_key"]
+
 
 class AuthConfigError(RuntimeError):
     """Raised when auth configuration is missing or invalid."""
@@ -23,6 +25,15 @@ class AuthConfigError(RuntimeError):
 
 class TokenVerificationError(RuntimeError):
     """Raised when a bearer token cannot be verified."""
+
+
+@dataclass(frozen=True)
+class AuthIdentity:
+    """Authenticated caller identity with attribution metadata."""
+
+    user_id: str
+    auth_method: AuthMethod
+    api_key_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -91,25 +102,35 @@ def verify_bearer_token(token: str) -> str:
     return user_id
 
 
-def verify_api_key(token: str) -> str:
-    """Verify an API key token and return the owning user_id."""
+def verify_api_key(token: str) -> AuthIdentity:
+    """Verify an API key token and return an AuthIdentity with attribution."""
     key_hash = hashlib.sha256(token.encode()).hexdigest()
     record = get_api_key_by_hash(key_hash)
     if record is None:
         raise TokenVerificationError("Invalid authentication token")
 
     touch_api_key_last_used(record.id)
-    return record.user_id
+    return AuthIdentity(
+        user_id=record.user_id,
+        auth_method="api_key",
+        api_key_id=record.id,
+    )
 
 
-def _verify_token(token: str) -> str:
-    """Route token to API-key or JWT verification."""
+def _verify_token(token: str) -> AuthIdentity:
+    """Route token to API-key or JWT verification, returning full identity."""
     if token.startswith("vmf_"):
         return verify_api_key(token)
-    return verify_bearer_token(token)
+    user_id = verify_bearer_token(token)
+    return AuthIdentity(user_id=user_id, auth_method="jwt")
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+
+# ---------------------------------------------------------------------------
+# JWT-only dependencies (legacy / internal routes)
+# ---------------------------------------------------------------------------
 
 
 def get_current_user_id(
@@ -117,7 +138,69 @@ def get_current_user_id(
         HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
     ] = None,
 ) -> str:
-    """FastAPI dependency that returns the authenticated user id."""
+    """FastAPI dependency: JWT-only auth, returns user id.
+
+    Used by legacy and internal routes (billing, checkout, unversioned
+    handlers). API keys are rejected to limit key scope to /api/v1/.
+    """
+    if credentials is None:
+        raise _unauthorized("Missing Authorization header")
+
+    token = credentials.credentials
+    if token.startswith("vmf_"):
+        raise _unauthorized("API keys are not accepted on this endpoint")
+
+    try:
+        return verify_bearer_token(token)
+    except AuthConfigError as exc:
+        logger.error("Auth configuration error: %s", exc)
+        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
+    except TokenVerificationError as exc:
+        raise _unauthorized(str(exc)) from exc
+
+
+def get_optional_user_id(
+    authorization: Annotated[str | None, Header()] = None,
+) -> str | None:
+    """FastAPI dependency: JWT-only optional auth, returns user id or None.
+
+    Raises 401 if the header is present but the token is invalid.
+    API keys are rejected to limit key scope to /api/v1/.
+    """
+    if authorization is None:
+        return None
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise _unauthorized("Invalid Authorization header")
+
+    token = token.strip()
+    if token.startswith("vmf_"):
+        raise _unauthorized("API keys are not accepted on this endpoint")
+
+    try:
+        return verify_bearer_token(token)
+    except AuthConfigError as exc:
+        logger.error("Auth configuration error: %s", exc)
+        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
+    except TokenVerificationError as exc:
+        raise _unauthorized(str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# JWT + API key dependencies (v1 external routes)
+# ---------------------------------------------------------------------------
+
+
+def get_current_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
+    ] = None,
+) -> AuthIdentity:
+    """FastAPI dependency: JWT or API key auth, returns full AuthIdentity.
+
+    Used by /api/v1/ routes where API keys are accepted.
+    """
     if credentials is None:
         raise _unauthorized("Missing Authorization header")
 
@@ -130,13 +213,12 @@ def get_current_user_id(
         raise _unauthorized(str(exc)) from exc
 
 
-def get_optional_user_id(
+def get_optional_user(
     authorization: Annotated[str | None, Header()] = None,
-) -> str | None:
-    """FastAPI dependency: returns user id when token present, None when header absent.
+) -> AuthIdentity | None:
+    """FastAPI dependency: JWT or API key optional auth, returns AuthIdentity or None.
 
-    Raises 401 if the header is present but the token is invalid (prevents
-    broken tokens from being silently treated as anonymous).
+    Raises 401 if the header is present but the token is invalid.
     """
     if authorization is None:
         return None

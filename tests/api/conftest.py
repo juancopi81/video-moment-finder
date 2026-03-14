@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from src.api.app import app
-from src.api.auth import get_current_user_id
+from src.api.auth import AuthIdentity, get_current_user, get_current_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult, VideoRecord
 
@@ -46,6 +46,9 @@ def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord
 
 def _authenticate(user_id: str = "user_123") -> None:
     app.dependency_overrides[get_current_user_id] = lambda: user_id
+    app.dependency_overrides[get_current_user] = lambda: AuthIdentity(
+        user_id=user_id, auth_method="jwt"
+    )
 
 
 @pytest.fixture(autouse=True)
