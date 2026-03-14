@@ -74,6 +74,21 @@ class ProcessingCreditConsumeResult:
 
 
 @dataclass
+class ApiKeyRecord:
+    """API key database record."""
+
+    id: str
+    user_id: str
+    name: str
+    key_hash: str
+    key_prefix: str
+    revoked_at: str | None = None
+    last_used_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
 class VideoJobRecord:
     """Video processing job record."""
 
@@ -732,3 +747,117 @@ def apply_billing_credit_grant(
     ).execute()
     applied = bool(_rpc_first_item(result.data))
     return BillingCreditGrantResult(applied=applied)
+
+
+# ---------------------------------------------------------------------------
+# API keys CRUD
+# ---------------------------------------------------------------------------
+
+MAX_API_KEYS_PER_USER = 10
+
+
+def _row_to_api_key(row: dict) -> ApiKeyRecord:
+    """Convert database row to ApiKeyRecord."""
+    return ApiKeyRecord(
+        id=row["id"],
+        user_id=row["user_id"],
+        name=row.get("name", ""),
+        key_hash=row["key_hash"],
+        key_prefix=row["key_prefix"],
+        revoked_at=row.get("revoked_at"),
+        last_used_at=row.get("last_used_at"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def create_api_key(
+    user_id: str, name: str, key_hash: str, key_prefix: str
+) -> ApiKeyRecord:
+    """Create a new API key record."""
+    client = get_client()
+
+    # Application-level per-user cap.
+    existing = (
+        client.table("api_keys")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    count = existing.count if existing.count is not None else len(existing.data or [])
+    if count >= MAX_API_KEYS_PER_USER:
+        raise ValueError(
+            f"Maximum of {MAX_API_KEYS_PER_USER} active API keys per user"
+        )
+
+    result = (
+        client.table("api_keys")
+        .insert(
+            {
+                "user_id": user_id,
+                "name": name,
+                "key_hash": key_hash,
+                "key_prefix": key_prefix,
+            }
+        )
+        .execute()
+    )
+    if not result.data:
+        raise RuntimeError("Failed to create API key record")
+    return _row_to_api_key(result.data[0])
+
+
+def get_api_key_by_hash(key_hash: str) -> ApiKeyRecord | None:
+    """Look up an active API key by its SHA-256 hash."""
+    client = get_client()
+    result = (
+        client.table("api_keys")
+        .select("*")
+        .eq("key_hash", key_hash)
+        .is_("revoked_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_api_key(result.data[0])
+
+
+def list_api_keys(user_id: str) -> list[ApiKeyRecord]:
+    """List active API keys for a user, newest first."""
+    client = get_client()
+    result = (
+        client.table("api_keys")
+        .select("*")
+        .eq("user_id", user_id)
+        .is_("revoked_at", "null")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return [_row_to_api_key(row) for row in result.data]
+
+
+def revoke_api_key(key_id: str, user_id: str) -> bool:
+    """Soft-revoke an API key. Returns True if a key was revoked."""
+    client = get_client()
+    result = (
+        client.table("api_keys")
+        .update({"revoked_at": _utc_now_iso()})
+        .eq("id", key_id)
+        .eq("user_id", user_id)
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return bool(result.data)
+
+
+def touch_api_key_last_used(key_id: str) -> None:
+    """Update last_used_at timestamp. Fire-and-forget — logs errors, never raises."""
+    try:
+        client = get_client()
+        client.table("api_keys").update(
+            {"last_used_at": _utc_now_iso()}
+        ).eq("id", key_id).execute()
+    except Exception as exc:
+        logger.debug("Failed to update api_key last_used_at: %s", exc, exc_info=True)

@@ -1,6 +1,7 @@
 """Shared fixtures and helpers for API tests."""
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 from src.api.app import app
 from src.api.auth import get_current_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
-from src.db.supabase import ProcessingCreditConsumeResult, VideoRecord
+from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult, VideoRecord
 
 UPLOAD_VIDEO_ID = "00000000-0000-4000-8000-000000000123"
 
@@ -82,3 +83,25 @@ def _mock_upload_duration_validation(monkeypatch) -> None:
         "src.api.app._validate_uploaded_source_duration_with_cleanup",
         lambda store, key, user_id: None,
     )
+
+
+def _make_api_key_record(
+    user_id: str = "user_123",
+    *,
+    raw_key: str = "vmf_deadbeef12345678deadbeef12345678",
+    name: str = "test-key",
+    key_id: str = "00000000-0000-4000-8000-aaaaaaaaaaaa",
+) -> tuple[str, ApiKeyRecord]:
+    """Return (raw_key, ApiKeyRecord) pair for testing API key auth."""
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_prefix = "vmf_" + raw_key[4:8]
+    record = ApiKeyRecord(
+        id=key_id,
+        user_id=user_id,
+        name=name,
+        key_hash=key_hash,
+        key_prefix=key_prefix,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    return raw_key, record

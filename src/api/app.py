@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
+import secrets
 from math import ceil
 import os
 from pathlib import Path
@@ -35,17 +36,21 @@ from src.billing.lemonsqueezy import (
 from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.db.supabase import (
+    ApiKeyRecord,
     VideoRecord,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
+    create_api_key as db_create_api_key,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_credits as db_get_credits,
     get_video as db_get_video,
     has_unlimited_video_access as db_has_unlimited_video_access,
+    list_api_keys as db_list_api_keys,
     list_videos as db_list_videos,
+    revoke_api_key as db_revoke_api_key,
     update_video_status,
 )
 from src.storage.config import R2Config, StorageConfigError
@@ -1318,10 +1323,76 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
 
 
 # ---------------------------------------------------------------------------
+# API key management
+# ---------------------------------------------------------------------------
+
+
+class CreateApiKeyRequest(BaseModel):
+    name: str = ""
+
+
+class ApiKeyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    key_prefix: str
+    created_at: str | None = None
+    last_used_at: str | None = None
+
+
+class ApiKeyCreatedResponse(ApiKeyResponse):
+    key: str
+
+
+def create_api_key(
+    body: CreateApiKeyRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> ApiKeyCreatedResponse:
+    """Create a new API key. The raw key is returned once and never stored."""
+    raw_key = "vmf_" + secrets.token_hex(16)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_prefix = "vmf_" + raw_key[4:8]
+
+    try:
+        record = db_create_api_key(user_id, body.name, key_hash, key_prefix)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return ApiKeyCreatedResponse(
+        **ApiKeyResponse.model_validate(record).model_dump(),
+        key=raw_key,
+    )
+
+
+def list_api_keys(
+    user_id: str = Depends(get_current_user_id),
+) -> list[ApiKeyResponse]:
+    """List the caller's active API keys."""
+    records = db_list_api_keys(user_id)
+    return [ApiKeyResponse.model_validate(r) for r in records]
+
+
+def revoke_api_key(
+    key_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    """Revoke an API key (soft delete)."""
+    revoked = db_revoke_api_key(key_id, user_id)
+    if not revoked:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+
+# ---------------------------------------------------------------------------
 # Versioned external API (v1)
 # ---------------------------------------------------------------------------
 
 v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+
+# Key management — static paths registered before parameterized /videos/{id}.
+v1_router.add_api_route("/keys", create_api_key, methods=["POST"], response_model=ApiKeyCreatedResponse, status_code=201)
+v1_router.add_api_route("/keys", list_api_keys, methods=["GET"], response_model=list[ApiKeyResponse])
+v1_router.add_api_route("/keys/{key_id}", revoke_api_key, methods=["DELETE"], status_code=204)
 
 # Static paths first (Starlette matches by registration order).
 v1_router.add_api_route("/videos/upload", upload_video, methods=["POST"], response_model=VideoResponse)

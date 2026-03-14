@@ -1,6 +1,7 @@
 """Authentication utilities for API endpoints."""
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -10,6 +11,7 @@ import jwt
 from fastapi import Header, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from src.db.supabase import get_api_key_by_hash, touch_api_key_last_used
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -89,6 +91,24 @@ def verify_bearer_token(token: str) -> str:
     return user_id
 
 
+def verify_api_key(token: str) -> str:
+    """Verify an API key token and return the owning user_id."""
+    key_hash = hashlib.sha256(token.encode()).hexdigest()
+    record = get_api_key_by_hash(key_hash)
+    if record is None:
+        raise TokenVerificationError("Invalid authentication token")
+
+    touch_api_key_last_used(record.id)
+    return record.user_id
+
+
+def _verify_token(token: str) -> str:
+    """Route token to API-key or JWT verification."""
+    if token.startswith("vmf_"):
+        return verify_api_key(token)
+    return verify_bearer_token(token)
+
+
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -97,12 +117,12 @@ def get_current_user_id(
         HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
     ] = None,
 ) -> str:
-    """FastAPI dependency that returns the authenticated Clerk user id."""
+    """FastAPI dependency that returns the authenticated user id."""
     if credentials is None:
         raise _unauthorized("Missing Authorization header")
 
     try:
-        return verify_bearer_token(credentials.credentials)
+        return _verify_token(credentials.credentials)
     except AuthConfigError as exc:
         logger.error("Auth configuration error: %s", exc)
         raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
@@ -126,7 +146,7 @@ def get_optional_user_id(
         raise _unauthorized("Invalid Authorization header")
 
     try:
-        return verify_bearer_token(token.strip())
+        return _verify_token(token.strip())
     except AuthConfigError as exc:
         logger.error("Auth configuration error: %s", exc)
         raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
