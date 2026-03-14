@@ -6,9 +6,9 @@ Phase 5 and Phase 6 should be treated as one staged expansion:
 
 - strengthen the core search product first,
 - then expose the same capabilities through an external API,
-- add MCP or CLI only after the API contract is stable.
+- then ship a thin CLI over that API once the contract is stable.
 
-The web app remains the primary product. Agent access is an additional interface, not a separate product path.
+The web app remains the primary product. Agent access is an additional interface, not a separate product path. For this phase, the CLI is the agent-facing wrapper and MCP is explicitly out of scope.
 
 ## Working Rules
 
@@ -34,22 +34,24 @@ Suggested milestone gates:
 - Expose authenticated REST access for the same core capabilities.
 - Add account-scoped API keys, usage attribution, quotas, and revocation.
 - Keep room for separate API pricing and usage accounting if later usage patterns justify a different billing model.
-- Add MCP or CLI only after the API surface is stable enough to wrap cleanly.
-- Add agent-facing docs and discovery only after the interface is stable enough to describe clearly.
+- Add a thin CLI over the external API only after the API surface is stable enough to wrap cleanly.
+- Add an agent-readable markdown usage guide only after the CLI and API happy path are stable enough to describe clearly.
 
 Suggested milestone gates:
 
 1. Account ownership, key scope, and revocation are covered by tests.
 2. Usage is attributed correctly and retries do not create double billing.
-3. The API can process a video and run search end-to-end in a reviewable happy path.
-4. MCP or CLI smoke checks are added only after the API milestone is stable.
-5. An agent can discover the supported interface and complete a documented happy path without reading implementation code.
+3. The API can process a video and run search end-to-end in a reviewable happy path with stable request and response shapes.
+4. CLI smoke checks are added only after the API milestone is stable and prove the wrapper does not add product-only logic beyond the API contract.
+5. An agent can complete a documented happy path entirely through the CLI without reading implementation code.
+6. The public agent-readable markdown guide matches the real CLI and API behavior, including auth setup, command examples, expected outputs, and failure cases.
 
 ## Delivery Shape
 
-- Default target: one focused PR for the main Phase 5 work and one focused PR for the main Phase 6 work.
-- Inside each PR, milestone commits should land at clear review checkpoints.
-- If a phase grows too large or gets blocked, split at a milestone boundary instead of mixing partial work into one PR.
+- Default target: one focused PR for the main Phase 5 work and a small sequence of focused PRs for Phase 6.
+- Inside each PR, milestone commits should still land at clear review checkpoints.
+- Phase 6 should split at clear product boundaries instead of combining API contract, account controls, CLI behavior, and docs into one large PR.
+- Keep the repository-required `codex/` branch prefix, but use conventional `feat` or `docs` naming in the branch suffix and PR title when it improves clarity.
 - A milestone is done only when its review gate is explicit and repeatable.
 
 ## Phase 5 Technical Decisions
@@ -88,9 +90,9 @@ For YouTube videos, caption fetch also runs in parallel as a simple network call
 
 At search time: embed query once → single Qdrant search returns both visual and transcript matches. Supabase FTS stays as an optional keyword boost.
 
-## Suggested Commit Sequence
+## Suggested PR Sequence
 
-The intent is that a developer can work in order and stop after any milestone commit for review.
+The intent is that a developer can work in order, with each PR ending at a reviewable boundary and each commit still mapping cleanly to milestone progress.
 
 ### Phase 5 PR
 
@@ -101,15 +103,32 @@ The intent is that a developer can work in order and stop after any milestone co
 3. Normalize the search response shape needed by later API clients.
    Review gate: result fields are stable enough to reuse without web-specific assumptions.
 
-### Phase 6 PR
+### Phase 6 PR 1: API Contract
 
-1. Add authenticated REST endpoints over the same core capabilities.
-   Review gate: a happy-path API flow can process a video and run search.
-2. Add API keys with account ownership, scope, revocation, and quota checks.
-   Review gate: ownership and key lifecycle rules are covered by tests.
-3. Add usage attribution rules that avoid double billing on retries.
-   Review gate: usage accounting is correct for normal calls and idempotent retries.
-4. Add MCP or CLI only if the API contract is stable after the earlier milestones.
-   Review gate: wrapper smoke checks pass without adding new product-only logic.
-5. Add agent-facing docs and discovery updates only after the earlier milestones are stable.
-   Review gate: `llms.txt` and a public `/skill.md` or equivalent agent-onboarding doc match the real interface and support a documented happy path.
+Suggested branch: `codex/feat-phase6-api-contract`
+Suggested PR title: `feat(api): productize external API contract`
+
+1. Productize the authenticated REST happy path over the same core capabilities.
+2. Stabilize the external request and response shapes the CLI will depend on.
+3. Keep the initial happy path focused on submit or upload, poll status, and text search end to end.
+   Review gate: a stable external API flow can submit or upload a video, poll status, and run text search end to end without web-specific assumptions.
+
+### Phase 6 PR 2: API Keys and Usage Controls
+
+Suggested branch: `codex/feat-phase6-api-keys`
+Suggested PR title: `feat(auth): add API keys and usage controls`
+
+1. Add API keys with account ownership, scope, revocation, and quota checks.
+2. Add retry-safe usage attribution and accounting rules over the stabilized API contract.
+3. Keep billing and quota behavior aligned with the same ownership and idempotency guarantees already expected in the web product.
+   Review gate: ownership, key lifecycle, quota enforcement, and idempotent accounting rules are covered by tests.
+
+### Phase 6 PR 3: CLI and Agent Guide
+
+Suggested branch: `codex/feat-phase6-cli-docs`
+Suggested PR title: `feat(cli): add agent CLI and usage guide`
+
+1. Add a thin CLI wrapper over the external API.
+2. Cover the supported CLI happy path with smoke checks, including image search only if the API contract is stable enough to expose it cleanly.
+3. Add a public agent-readable markdown guide for the CLI and API happy path.
+   Review gate: the CLI can authenticate, submit or complete uploads, poll status, and run supported search flows without diverging from API behavior, and the markdown guide is sufficient for an agent to use the product without reading implementation code.
