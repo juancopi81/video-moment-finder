@@ -22,7 +22,6 @@ from src.api.app import (
     report_unhandled_exceptions,
 )
 from src.api.auth import get_current_user_id, get_optional_user_id
-from src.api.rate_limit import SlidingWindowRateLimiter
 from src.billing.lemonsqueezy import LemonSqueezyProviderError
 from src.db.supabase import CreditRecord, ProcessingCreditConsumeResult, VideoRecord
 from src.storage.config import StorageConfigError
@@ -30,43 +29,19 @@ from src.storage.qdrant import SearchResult
 from src.video.download import VideoMetadata, VideoMetadataError
 from src.video.youtube import extract_youtube_video_id
 
-UPLOAD_VIDEO_ID = "00000000-0000-4000-8000-000000000123"
+from tests.api.conftest import (
+    UPLOAD_VIDEO_ID,
+    _authenticate,
+    _upload_video_record,
+    _video_record,
+)
+
 QUERY_IMAGE_BYTES = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
     b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDAT\x08\xd7c\xf8\xcf"
     b"\xc0\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 OVERSIZED_QUERY_IMAGE_BYTES = b"x" * ((10 * 1024 * 1024) + 1)
-
-
-def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
-    return VideoRecord(
-        id=video_id,
-        youtube_url="https://www.youtube.com/watch?v=abc123xyz45",
-        status=status,  # type: ignore[arg-type]
-        user_id="user_123",
-        error_message=None,
-        source_type="youtube",
-        source_r2_key=None,
-        source_filename=None,
-        created_at=datetime.now(timezone.utc).isoformat(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
-    )
-
-
-def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord:
-    return VideoRecord(
-        id=video_id,
-        youtube_url=None,
-        status=status,  # type: ignore[arg-type]
-        user_id="user_123",
-        error_message=None,
-        source_type="upload",
-        source_r2_key="source/video_123/upload.mp4",
-        source_filename="upload.mp4",
-        created_at=datetime.now(timezone.utc).isoformat(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
-    )
 
 
 def _credit_record(balance: int) -> CreditRecord:
@@ -77,47 +52,6 @@ def _credit_record(balance: int) -> CreditRecord:
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
     )
-
-
-@pytest.fixture(autouse=True)
-def _clear_dependency_overrides(monkeypatch) -> None:
-    app.dependency_overrides.clear()
-    monkeypatch.setattr("src.api.app.USER_WRITE_RATE_LIMITER", SlidingWindowRateLimiter())
-    monkeypatch.setattr("src.api.app.SEARCH_RATE_LIMITER", SlidingWindowRateLimiter())
-    monkeypatch.setattr("src.api.app.WEBHOOK_RATE_LIMITER", SlidingWindowRateLimiter())
-    monkeypatch.setattr("src.api.app.track", lambda *args, **kwargs: None)
-    yield
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture(autouse=True)
-def _mock_free_video_count(monkeypatch) -> None:
-    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
-    monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 0)
-    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: None)
-    monkeypatch.setattr(
-        "src.api.app.db_consume_processing_credit",
-        lambda _user_id: ProcessingCreditConsumeResult(
-            allowed=False,
-            remaining_balance=0,
-        ),
-    )
-
-
-@pytest.fixture(autouse=True)
-def _mock_upload_duration_validation(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "src.api.app._validate_upload_file_duration_or_raise",
-        lambda file: None,
-    )
-    monkeypatch.setattr(
-        "src.api.app._validate_uploaded_source_duration_with_cleanup",
-        lambda store, key, user_id: None,
-    )
-
-
-def _authenticate(user_id: str = "user_123") -> None:
-    app.dependency_overrides[get_current_user_id] = lambda: user_id
 
 
 def test_create_video_requires_authentication(monkeypatch) -> None:

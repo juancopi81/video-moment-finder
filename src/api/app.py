@@ -15,7 +15,7 @@ import tempfile
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
@@ -1315,3 +1315,22 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
         granted=applied,
         reason=None if applied else "Event already applied",
     )
+
+
+# ---------------------------------------------------------------------------
+# Versioned external API (v1)
+# ---------------------------------------------------------------------------
+
+v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+
+# Static paths first (Starlette matches by registration order).
+v1_router.add_api_route("/videos/upload", upload_video, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/upload/init", init_upload, methods=["POST"], response_model=UploadInitResponse)
+v1_router.add_api_route("/videos/upload/complete", complete_upload, methods=["POST"], response_model=VideoResponse)
+# Collection + parameterized paths.
+v1_router.add_api_route("/videos", create_video, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos", list_my_videos, methods=["GET"], response_model=list[VideoResponse])
+v1_router.add_api_route("/videos/{video_id}", get_video, methods=["GET"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/{video_id}/search", search_video, methods=["POST"], response_model=VideoSearchResponse)
+
+app.include_router(v1_router)
