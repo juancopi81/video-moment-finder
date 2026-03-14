@@ -128,6 +128,25 @@ def _verify_token(token: str) -> AuthIdentity:
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _run_auth(verify_fn, *args):
+    """Call a verification function, translating auth exceptions to HTTP errors."""
+    try:
+        return verify_fn(*args)
+    except AuthConfigError as exc:
+        logger.error("Auth configuration error: %s", exc)
+        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
+    except TokenVerificationError as exc:
+        raise _unauthorized(str(exc)) from exc
+
+
+def _extract_bearer_token(authorization: str) -> str:
+    """Parse raw Authorization header and return the bearer token."""
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise _unauthorized("Invalid Authorization header")
+    return token.strip()
+
+
 # ---------------------------------------------------------------------------
 # JWT-only dependencies (legacy / internal routes)
 # ---------------------------------------------------------------------------
@@ -150,13 +169,7 @@ def get_current_user_id(
     if token.startswith("vmf_"):
         raise _unauthorized("API keys are not accepted on this endpoint")
 
-    try:
-        return verify_bearer_token(token)
-    except AuthConfigError as exc:
-        logger.error("Auth configuration error: %s", exc)
-        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
-    except TokenVerificationError as exc:
-        raise _unauthorized(str(exc)) from exc
+    return _run_auth(verify_bearer_token, token)
 
 
 def get_optional_user_id(
@@ -170,21 +183,11 @@ def get_optional_user_id(
     if authorization is None:
         return None
 
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise _unauthorized("Invalid Authorization header")
-
-    token = token.strip()
+    token = _extract_bearer_token(authorization)
     if token.startswith("vmf_"):
         raise _unauthorized("API keys are not accepted on this endpoint")
 
-    try:
-        return verify_bearer_token(token)
-    except AuthConfigError as exc:
-        logger.error("Auth configuration error: %s", exc)
-        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
-    except TokenVerificationError as exc:
-        raise _unauthorized(str(exc)) from exc
+    return _run_auth(verify_bearer_token, token)
 
 
 # ---------------------------------------------------------------------------
@@ -204,33 +207,4 @@ def get_current_user(
     if credentials is None:
         raise _unauthorized("Missing Authorization header")
 
-    try:
-        return _verify_token(credentials.credentials)
-    except AuthConfigError as exc:
-        logger.error("Auth configuration error: %s", exc)
-        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
-    except TokenVerificationError as exc:
-        raise _unauthorized(str(exc)) from exc
-
-
-def get_optional_user(
-    authorization: Annotated[str | None, Header()] = None,
-) -> AuthIdentity | None:
-    """FastAPI dependency: JWT or API key optional auth, returns AuthIdentity or None.
-
-    Raises 401 if the header is present but the token is invalid.
-    """
-    if authorization is None:
-        return None
-
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise _unauthorized("Invalid Authorization header")
-
-    try:
-        return _verify_token(token.strip())
-    except AuthConfigError as exc:
-        logger.error("Auth configuration error: %s", exc)
-        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
-    except TokenVerificationError as exc:
-        raise _unauthorized(str(exc)) from exc
+    return _run_auth(_verify_token, credentials.credentials)

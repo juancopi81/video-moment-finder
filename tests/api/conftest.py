@@ -88,6 +88,12 @@ def _mock_upload_duration_validation(monkeypatch) -> None:
     )
 
 
+def _mock_api_key_auth(monkeypatch, record: ApiKeyRecord) -> None:
+    """Monkeypatch API key DB lookups so the given record is found on auth."""
+    monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+    monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+
 def _make_api_key_record(
     user_id: str = "user_123",
     *,

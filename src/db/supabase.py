@@ -796,21 +796,12 @@ def create_api_key(
             ) from exc
         raise
 
-    new_id = _rpc_first_item(result.data)
-    if new_id is None:
+    if not result.data:
         raise RuntimeError("Failed to create API key record")
-
-    # Fetch the full record by ID.
-    row_result = (
-        client.table("api_keys")
-        .select("*")
-        .eq("id", str(new_id))
-        .limit(1)
-        .execute()
-    )
-    if not row_result.data:
-        raise RuntimeError("Failed to fetch created API key record")
-    return _row_to_api_key(row_result.data[0])
+    row = _rpc_first_item(result.data)
+    if not isinstance(row, dict):
+        raise RuntimeError("Failed to create API key record")
+    return _row_to_api_key(row)
 
 
 def get_api_key_by_hash(key_hash: str) -> ApiKeyRecord | None:

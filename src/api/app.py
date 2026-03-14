@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.analytics.events import track
-from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user, get_optional_user_id
+from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,

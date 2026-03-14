@@ -1,8 +1,6 @@
 """Tests for API key management and authentication."""
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,7 +9,11 @@ from src.api.auth import AuthIdentity
 from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult
 from src.video.download import VideoMetadata
 
-from tests.api.conftest import _authenticate, _make_api_key_record, _video_record
+from tests.api.conftest import (
+    _authenticate,
+    _make_api_key_record,
+    _mock_api_key_auth,
+)
 
 client = TestClient(app)
 
@@ -114,9 +116,7 @@ class TestRevokeApiKey:
 class TestApiKeyAuth:
     def test_api_key_authenticates_v1_routes(self, monkeypatch):
         raw_key, record = _make_api_key_record(user_id="user_apikey")
-
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
         monkeypatch.setattr("src.api.app.db_list_videos", lambda user_id: [])
 
         resp = client.get(
@@ -146,10 +146,7 @@ class TestApiKeyScopeRestriction:
     def test_api_key_rejected_on_legacy_video_list(self, monkeypatch):
         """API keys must not authenticate legacy @app routes."""
         raw_key, record = _make_api_key_record(user_id="user_scope")
-
-        # Even with a valid key in the DB, legacy routes must reject it.
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
 
         resp = client.get(
             "/users/me/videos",
@@ -160,8 +157,7 @@ class TestApiKeyScopeRestriction:
 
     def test_api_key_rejected_on_billing_summary(self, monkeypatch):
         raw_key, record = _make_api_key_record(user_id="user_scope")
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
 
         resp = client.get(
             "/users/me/billing-summary",
@@ -171,8 +167,7 @@ class TestApiKeyScopeRestriction:
 
     def test_api_key_rejected_on_billing_checkout(self, monkeypatch):
         raw_key, record = _make_api_key_record(user_id="user_scope")
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
 
         resp = client.post(
             "/billing/checkout",
@@ -183,8 +178,7 @@ class TestApiKeyScopeRestriction:
 
     def test_api_key_rejected_on_legacy_video_create(self, monkeypatch):
         raw_key, record = _make_api_key_record(user_id="user_scope")
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
 
         resp = client.post(
             "/videos",
@@ -208,8 +202,7 @@ class TestAuthIdentityAttribution:
             user_id="user_attr",
             key_id="key-id-for-attribution",
         )
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
 
         identity = verify_api_key(raw_key)
         assert isinstance(identity, AuthIdentity)
@@ -241,9 +234,7 @@ class TestAuthIdentityAttribution:
 class TestApiKeyQuota:
     def test_api_key_auth_triggers_credit_check(self, monkeypatch):
         raw_key, record = _make_api_key_record(user_id="user_quota")
-
-        monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-        monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+        _mock_api_key_auth(monkeypatch, record)
 
         # Simulate credit check failure (free tier, no credits).
         monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: False)
