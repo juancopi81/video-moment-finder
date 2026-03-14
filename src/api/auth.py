@@ -7,7 +7,8 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.utils.logging import get_logger
 
@@ -88,19 +89,20 @@ def verify_bearer_token(token: str) -> str:
     return user_id
 
 
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
 def get_current_user_id(
-    authorization: Annotated[str | None, Header()] = None,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
+    ] = None,
 ) -> str:
     """FastAPI dependency that returns the authenticated Clerk user id."""
-    if authorization is None:
+    if credentials is None:
         raise _unauthorized("Missing Authorization header")
 
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise _unauthorized("Invalid Authorization header")
-
     try:
-        return verify_bearer_token(token.strip())
+        return verify_bearer_token(credentials.credentials)
     except AuthConfigError as exc:
         logger.error("Auth configuration error: %s", exc)
         raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
