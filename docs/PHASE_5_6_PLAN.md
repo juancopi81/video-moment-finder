@@ -6,9 +6,9 @@ Phase 5 and Phase 6 should be treated as one staged expansion:
 
 - strengthen the core search product first,
 - then expose the same capabilities through an external API,
-- add MCP or CLI only after the API contract is stable.
+- then ship a thin CLI over that API once the contract is stable.
 
-The web app remains the primary product. Agent access is an additional interface, not a separate product path.
+The web app remains the primary product. Agent access is an additional interface, not a separate product path. For this phase, the CLI is the agent-facing wrapper and MCP is explicitly out of scope.
 
 ## Working Rules
 
@@ -34,16 +34,17 @@ Suggested milestone gates:
 - Expose authenticated REST access for the same core capabilities.
 - Add account-scoped API keys, usage attribution, quotas, and revocation.
 - Keep room for separate API pricing and usage accounting if later usage patterns justify a different billing model.
-- Add MCP or CLI only after the API surface is stable enough to wrap cleanly.
-- Add agent-facing docs and discovery only after the interface is stable enough to describe clearly.
+- Add a thin CLI over the external API only after the API surface is stable enough to wrap cleanly.
+- Add an agent-readable markdown usage guide only after the CLI and API happy path are stable enough to describe clearly.
 
 Suggested milestone gates:
 
 1. Account ownership, key scope, and revocation are covered by tests.
 2. Usage is attributed correctly and retries do not create double billing.
-3. The API can process a video and run search end-to-end in a reviewable happy path.
-4. MCP or CLI smoke checks are added only after the API milestone is stable.
-5. An agent can discover the supported interface and complete a documented happy path without reading implementation code.
+3. The API can process a video and run search end-to-end in a reviewable happy path with stable request and response shapes.
+4. CLI smoke checks are added only after the API milestone is stable and prove the wrapper does not add product-only logic beyond the API contract.
+5. An agent can complete a documented happy path entirely through the CLI without reading implementation code.
+6. The public agent-readable markdown guide matches the real CLI and API behavior, including auth setup, command examples, expected outputs, and failure cases.
 
 ## Delivery Shape
 
@@ -103,13 +104,13 @@ The intent is that a developer can work in order and stop after any milestone co
 
 ### Phase 6 PR
 
-1. Add authenticated REST endpoints over the same core capabilities.
-   Review gate: a happy-path API flow can process a video and run search.
-2. Add API keys with account ownership, scope, revocation, and quota checks.
-   Review gate: ownership and key lifecycle rules are covered by tests.
-3. Add usage attribution rules that avoid double billing on retries.
-   Review gate: usage accounting is correct for normal calls and idempotent retries.
-4. Add MCP or CLI only if the API contract is stable after the earlier milestones.
-   Review gate: wrapper smoke checks pass without adding new product-only logic.
-5. Add agent-facing docs and discovery updates only after the earlier milestones are stable.
-   Review gate: `llms.txt` and a public `/skill.md` or equivalent agent-onboarding doc match the real interface and support a documented happy path.
+1. Productize the authenticated REST happy path over the same core capabilities.
+   Review gate: a stable external API flow can submit or upload a video, poll status, and run text search end to end.
+2. Add API keys with account ownership, scope, revocation, quota checks, and retry-safe usage attribution.
+   Review gate: ownership, key lifecycle, quota enforcement, and idempotent accounting rules are covered by tests.
+3. Add a thin CLI wrapper over the external API.
+   Review gate: the CLI can authenticate, submit or complete uploads, poll status, and run search without diverging from API behavior.
+4. Extend the CLI happy path only where the API contract is stable enough to support it cleanly.
+   Review gate: CLI smoke checks cover the supported happy path, including image search only if the API contract is stable enough to expose it cleanly.
+5. Add a public agent-readable markdown guide for the CLI and API happy path.
+   Review gate: the markdown guide explains auth setup, stable command examples, expected outputs, and failure cases well enough for an agent to use the product without reading implementation code.
