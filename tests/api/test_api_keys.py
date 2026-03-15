@@ -246,12 +246,16 @@ class TestApiKeyQuota:
             lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
         )
 
-        # No existing video for this URL — proceed to credit check.
-        monkeypatch.setattr("src.api.app.db_get_active_video_by_youtube_url", lambda uid, url: None)
+        # RPC inserts successfully, then billing fails.
+        monkeypatch.setattr(
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (_video_record("quota-vid-id", status="queued"), True),
+        )
         monkeypatch.setattr(
             "src.api.app.fetch_video_metadata",
             lambda _: VideoMetadata(duration_s=60.0, is_live=False),
         )
+        monkeypatch.setattr("src.api.app.update_video_status", lambda vid, status, error_message=None: None)
 
         resp = client.post(
             f"{V1}/videos",
@@ -269,15 +273,21 @@ class TestApiKeyQuota:
 class TestRetryIdempotency:
     def test_youtube_retry_returns_existing_without_credit(self, monkeypatch):
         """Retrying a YouTube video submit must return the existing record
-        without consuming another credit."""
+        without consuming another credit (atomic RPC-level dedup)."""
         raw_key, record = _make_api_key_record(user_id="user_retry")
         _mock_api_key_auth(monkeypatch, record)
 
         existing = _video_record("existing-vid-id", status="queued")
 
+        # RPC returns (existing_record, was_created=False) — simulates a retry
+        # where the first request already inserted the row.
         monkeypatch.setattr(
-            "src.api.app.db_get_active_video_by_youtube_url",
-            lambda uid, url: existing if uid == "user_retry" else None,
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (existing, False),
+        )
+        monkeypatch.setattr(
+            "src.api.app.fetch_video_metadata",
+            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
         )
         # If credit consumption were called, it would fail — proving no double billing.
         monkeypatch.setattr(
@@ -293,19 +303,22 @@ class TestRetryIdempotency:
         assert resp.status_code == 200
         assert resp.json()["id"] == "existing-vid-id"
 
-    def test_youtube_new_url_still_billed(self, monkeypatch):
-        """A new YouTube URL (no existing video) should proceed normally."""
+    def test_youtube_new_url_creates_and_bills(self, monkeypatch):
+        """A new YouTube URL inserts via RPC and consumes credit."""
         raw_key, record = _make_api_key_record(user_id="user_new")
         _mock_api_key_auth(monkeypatch, record)
 
-        monkeypatch.setattr("src.api.app.db_get_active_video_by_youtube_url", lambda uid, url: None)
+        created_video = _video_record("new-vid-id", status="queued")
+
+        # RPC returns (new_record, was_created=True)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (created_video, True),
+        )
         monkeypatch.setattr(
             "src.api.app.fetch_video_metadata",
             lambda _: VideoMetadata(duration_s=60.0, is_live=False),
         )
-
-        created = _video_record("new-vid-id", status="queued")
-        monkeypatch.setattr("src.api.app.db_create_video", lambda url, user_id, status: created)
         monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: None)
         monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
 
@@ -317,8 +330,45 @@ class TestRetryIdempotency:
         assert resp.status_code == 200
         assert resp.json()["id"] == "new-vid-id"
 
+    def test_youtube_billing_failure_marks_video_failed(self, monkeypatch):
+        """If billing fails after atomic insert, the video is marked failed."""
+        raw_key, record = _make_api_key_record(user_id="user_fail")
+        _mock_api_key_auth(monkeypatch, record)
+
+        created_video = _video_record("fail-vid-id", status="queued")
+        monkeypatch.setattr(
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (created_video, True),
+        )
+        monkeypatch.setattr(
+            "src.api.app.fetch_video_metadata",
+            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
+        )
+        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: False)
+        monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 1)
+        monkeypatch.setattr("src.api.app.db_get_credits", lambda _uid: None)
+        monkeypatch.setattr(
+            "src.api.app.db_consume_processing_credit",
+            lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
+        )
+
+        status_updates: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "src.api.app.update_video_status",
+            lambda vid, status, error_message=None: status_updates.append((vid, status)),
+        )
+
+        resp = client.post(
+            f"{V1}/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 402
+        assert ("fail-vid-id", "failed") in status_updates
+
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
-        """Upload retry with same Idempotency-Key must return existing record."""
+        """Upload retry with same Idempotency-Key must return existing record
+        via atomic RPC — no double billing."""
         raw_key, record = _make_api_key_record(user_id="user_upload_retry")
         _mock_api_key_auth(monkeypatch, record)
 
@@ -327,9 +377,23 @@ class TestRetryIdempotency:
         expected_vid_id = str(uuid5(NAMESPACE_URL, "user_upload_retry:upload-key-1"))
         existing = _video_record(expected_vid_id, status="queued")
 
+        # Mock R2 upload (both concurrent requests upload, but only one gets billed).
+        class FakeUploadResult:
+            key = "source/fake/upload.mp4"
+
+        class FakeStore:
+            def upload_source_video(self, **kwargs):
+                return FakeUploadResult()
+            def delete_source_object(self, key):
+                pass
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", lambda cfg: FakeStore())
+
+        # RPC returns (existing_record, was_created=False) — simulates retry.
         monkeypatch.setattr(
-            "src.api.app.db_get_video",
-            lambda vid, user_id=None: existing if vid == expected_vid_id else None,
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda vid, uid, r2key, fname: (existing, False),
         )
 
         import io

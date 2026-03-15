@@ -46,8 +46,9 @@ from src.db.supabase import (
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_credits as db_get_credits,
-    get_active_video_by_youtube_url as db_get_active_video_by_youtube_url,
     get_video as db_get_video,
+    insert_uploaded_video_idempotent as db_insert_uploaded_video_idempotent,
+    insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
     has_unlimited_video_access as db_has_unlimited_video_access,
     list_api_keys as db_list_api_keys,
     list_videos as db_list_videos,
@@ -915,8 +916,6 @@ def create_video(
 def upload_video(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
-    *,
-    video_id: str | None = None,
 ) -> VideoResponse:
     """Upload a video file and enqueue durable processing job."""
     _enforce_user_write_rate_limit(user_id)
@@ -940,8 +939,7 @@ def upload_video(
             detail="Upload storage is not configured",
         ) from exc
 
-    if video_id is None:
-        video_id = str(uuid4())
+    video_id = str(uuid4())
     filename = _sanitize_filename(file.filename)
     store = R2Store(r2_config)
 
@@ -1400,12 +1398,27 @@ def v1_create_video(
     request: VideoCreateRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoResponse:
-    # Retry-safe: if user already has a non-failed video for this URL, return it
-    # without consuming another credit.
-    existing = db_get_active_video_by_youtube_url(identity.user_id, request.youtube_url)
-    if existing is not None:
-        return _video_record_to_response(existing)
-    return create_video(request, user_id=identity.user_id)
+    _enforce_user_write_rate_limit(identity.user_id)
+    _validate_video_duration(request.youtube_url)
+
+    # Atomic insert: the unique partial index on (user_id, youtube_url) serializes
+    # concurrent retries at the DB level.  The record exists BEFORE billing so a
+    # racing retry sees it and short-circuits — no double charge.
+    record, created = db_insert_youtube_video_idempotent(
+        request.youtube_url, identity.user_id
+    )
+    if not created:
+        return _video_record_to_response(record)
+
+    try:
+        _consume_and_admit_video_processing(identity.user_id)
+    except HTTPException:
+        update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
+
+    _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=identity.user_id, metadata={"source_type": "youtube"})
+    return _video_record_to_response(record)
 
 
 def v1_upload_video(
@@ -1413,17 +1426,78 @@ def v1_upload_video(
     identity: AuthIdentity = Depends(get_current_user),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> VideoResponse:
-    # Retry-safe: if caller supplies Idempotency-Key, derive a deterministic
-    # video_id so a retry returns the existing record without double billing.
-    if idempotency_key is not None:
-        from uuid import uuid5, NAMESPACE_URL
+    if idempotency_key is None:
+        return upload_video(file, user_id=identity.user_id)
 
-        video_id = str(uuid5(NAMESPACE_URL, f"{identity.user_id}:{idempotency_key}"))
-        existing = db_get_video(video_id, user_id=identity.user_id)
-        if existing is not None:
-            return _video_record_to_response(existing)
-        return upload_video(file, user_id=identity.user_id, video_id=video_id)
-    return upload_video(file, user_id=identity.user_id)
+    # Idempotent upload: deterministic video_id from the key so concurrent
+    # retries collide on PK.  DB insert happens BEFORE billing.
+    from uuid import uuid5, NAMESPACE_URL
+
+    user_id = identity.user_id
+    video_id = str(uuid5(NAMESPACE_URL, f"{user_id}:{idempotency_key}"))
+
+    _enforce_user_write_rate_limit(user_id)
+    if not file.filename and not file.content_type:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    if file.content_type and not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Only video uploads are supported")
+    requires_credit = _precheck_video_processing_admission(user_id)
+    try:
+        _validate_upload_file_duration_or_raise(file)
+    except UploadDurationLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadDurationProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503, detail="Upload storage is not configured",
+        ) from exc
+
+    filename = _sanitize_filename(file.filename)
+    store = R2Store(r2_config)
+
+    try:
+        upload_result = store.upload_source_video(
+            video_id=video_id, filename=filename,
+            file_obj=file.file, content_type=file.content_type,
+        )
+    except R2StorageError as exc:
+        logger.exception("Failed to upload source video: %s", exc)
+        raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+    # Atomic insert: PK constraint serializes concurrent retries.
+    record, created = db_insert_uploaded_video_idempotent(
+        video_id, user_id, upload_result.key, filename
+    )
+    if not created:
+        # Retry — clean up the orphaned R2 object and return existing record.
+        try:
+            store.delete_source_object(upload_result.key)
+        except R2StorageError:
+            logger.warning("Failed to cleanup duplicate R2 upload key=%s", upload_result.key)
+        return _video_record_to_response(record)
+
+    try:
+        if requires_credit:
+            _consume_processing_credit_or_raise(user_id)
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            try:
+                store.delete_source_object(upload_result.key)
+            except R2StorageError as cleanup_exc:
+                logger.warning(
+                    "Failed to cleanup uploaded source for user_id=%s key=%s: %s",
+                    user_id, upload_result.key, cleanup_exc,
+                )
+            update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
+
+    _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+    return _video_record_to_response(record)
 
 
 def v1_init_upload(
