@@ -60,12 +60,18 @@ as $$
 declare
   active_count integer;
 begin
-  -- Lock active keys for this user to prevent concurrent inserts.
-  select count(*) into active_count
+  -- Row-lock all active keys for this user to serialize concurrent creates.
+  perform 1
     from public.api_keys
    where user_id = p_user_id
      and revoked_at is null
      for update;
+
+  -- Count after locking to get an accurate total.
+  select count(*) into active_count
+    from public.api_keys
+   where user_id = p_user_id
+     and revoked_at is null;
 
   if active_count >= p_max_keys then
     raise exception 'Maximum of % active API keys per user', p_max_keys;
