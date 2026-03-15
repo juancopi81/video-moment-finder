@@ -299,6 +299,24 @@ def create_uploaded_video(
     return _row_to_video(result.data[0])
 
 
+def get_active_video_by_youtube_url(user_id: str, youtube_url: str) -> VideoRecord | None:
+    """Find a non-failed video by user and YouTube URL (for retry dedup)."""
+    client = get_client()
+    result = (
+        client.table("videos")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("youtube_url", youtube_url)
+        .neq("status", "failed")
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_video(result.data[0])
+
+
 def get_video(video_id: str, user_id: str | None = None) -> VideoRecord | None:
     """Get video by ID.
 

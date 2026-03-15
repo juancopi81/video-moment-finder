@@ -24,6 +24,7 @@ def test_v1_submit_video(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
 
+    monkeypatch.setattr("src.api.app.db_get_active_video_by_youtube_url", lambda uid, url: None)
     monkeypatch.setattr(
         "src.api.app.db_create_video",
         lambda youtube_url, user_id=None, status="queued": _video_record("vid_1", status=status),
@@ -235,6 +236,7 @@ def test_v1_end_to_end_happy_path(monkeypatch) -> None:
         current_status = video_state.get(video_id, "ready")
         return _video_record(video_id, status=current_status)
 
+    monkeypatch.setattr("src.api.app.db_get_active_video_by_youtube_url", lambda uid, url: None)
     monkeypatch.setattr("src.api.app.db_create_video", fake_create_video)
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda video_id: object())
     monkeypatch.setattr(

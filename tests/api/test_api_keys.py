@@ -6,13 +6,14 @@ from fastapi.testclient import TestClient
 
 from src.api.app import app
 from src.api.auth import AuthIdentity
-from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult
+from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult, VideoRecord
 from src.video.download import VideoMetadata
 
 from tests.api.conftest import (
     _authenticate,
     _make_api_key_record,
     _mock_api_key_auth,
+    _video_record,
 )
 
 client = TestClient(app)
@@ -245,7 +246,8 @@ class TestApiKeyQuota:
             lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
         )
 
-        # Submitting a video should fail with credit gate.
+        # No existing video for this URL — proceed to credit check.
+        monkeypatch.setattr("src.api.app.db_get_active_video_by_youtube_url", lambda uid, url: None)
         monkeypatch.setattr(
             "src.api.app.fetch_video_metadata",
             lambda _: VideoMetadata(duration_s=60.0, is_live=False),
@@ -257,3 +259,89 @@ class TestApiKeyQuota:
             headers={"Authorization": f"Bearer {raw_key}"},
         )
         assert resp.status_code == 402
+
+
+# ---------------------------------------------------------------------------
+# Retry-safe idempotency (no double billing)
+# ---------------------------------------------------------------------------
+
+
+class TestRetryIdempotency:
+    def test_youtube_retry_returns_existing_without_credit(self, monkeypatch):
+        """Retrying a YouTube video submit must return the existing record
+        without consuming another credit."""
+        raw_key, record = _make_api_key_record(user_id="user_retry")
+        _mock_api_key_auth(monkeypatch, record)
+
+        existing = _video_record("existing-vid-id", status="queued")
+
+        monkeypatch.setattr(
+            "src.api.app.db_get_active_video_by_youtube_url",
+            lambda uid, url: existing if uid == "user_retry" else None,
+        )
+        # If credit consumption were called, it would fail — proving no double billing.
+        monkeypatch.setattr(
+            "src.api.app.db_consume_processing_credit",
+            lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
+        )
+
+        resp = client.post(
+            f"{V1}/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "existing-vid-id"
+
+    def test_youtube_new_url_still_billed(self, monkeypatch):
+        """A new YouTube URL (no existing video) should proceed normally."""
+        raw_key, record = _make_api_key_record(user_id="user_new")
+        _mock_api_key_auth(monkeypatch, record)
+
+        monkeypatch.setattr("src.api.app.db_get_active_video_by_youtube_url", lambda uid, url: None)
+        monkeypatch.setattr(
+            "src.api.app.fetch_video_metadata",
+            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
+        )
+
+        created = _video_record("new-vid-id", status="queued")
+        monkeypatch.setattr("src.api.app.db_create_video", lambda url, user_id, status: created)
+        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: None)
+        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
+
+        resp = client.post(
+            f"{V1}/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "new-vid-id"
+
+    def test_upload_idempotency_key_returns_existing(self, monkeypatch):
+        """Upload retry with same Idempotency-Key must return existing record."""
+        raw_key, record = _make_api_key_record(user_id="user_upload_retry")
+        _mock_api_key_auth(monkeypatch, record)
+
+        from uuid import uuid5, NAMESPACE_URL
+
+        expected_vid_id = str(uuid5(NAMESPACE_URL, "user_upload_retry:upload-key-1"))
+        existing = _video_record(expected_vid_id, status="queued")
+
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: existing if vid == expected_vid_id else None,
+        )
+
+        import io
+
+        fake_file = io.BytesIO(b"fake video data")
+        resp = client.post(
+            f"{V1}/videos/upload",
+            files={"file": ("test.mp4", fake_file, "video/mp4")},
+            headers={
+                "Authorization": f"Bearer {raw_key}",
+                "Idempotency-Key": "upload-key-1",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == expected_vid_id
