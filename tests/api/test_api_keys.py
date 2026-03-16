@@ -13,6 +13,7 @@ from tests.api.conftest import (
     _authenticate,
     _make_api_key_record,
     _mock_api_key_auth,
+    _setup_api_key_auth,
     _video_record,
 )
 
@@ -116,8 +117,7 @@ class TestRevokeApiKey:
 
 class TestApiKeyAuth:
     def test_api_key_authenticates_v1_routes(self, monkeypatch):
-        raw_key, record = _make_api_key_record(user_id="user_apikey")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_apikey")
         monkeypatch.setattr("src.api.app.db_list_videos", lambda user_id: [])
 
         resp = client.get(
@@ -144,49 +144,23 @@ class TestApiKeyAuth:
 
 
 class TestApiKeyScopeRestriction:
-    def test_api_key_rejected_on_legacy_video_list(self, monkeypatch):
-        """API keys must not authenticate legacy @app routes."""
-        raw_key, record = _make_api_key_record(user_id="user_scope")
-        _mock_api_key_auth(monkeypatch, record)
+    """API keys must not authenticate legacy @app routes."""
 
-        resp = client.get(
-            "/users/me/videos",
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
+    @pytest.mark.parametrize("method,path,payload", [
+        ("get", "/users/me/videos", None),
+        ("get", "/users/me/billing-summary", None),
+        ("post", "/billing/checkout", {"plan": "starter"}),
+        ("post", "/videos", {"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"}),
+    ])
+    def test_api_key_rejected_on_legacy_route(self, monkeypatch, method, path, payload):
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_scope")
+
+        kwargs: dict = {"headers": {"Authorization": f"Bearer {raw_key}"}}
+        if payload is not None:
+            kwargs["json"] = payload
+        resp = getattr(client, method)(path, **kwargs)
         assert resp.status_code == 401
         assert "not accepted" in resp.json()["detail"].lower()
-
-    def test_api_key_rejected_on_billing_summary(self, monkeypatch):
-        raw_key, record = _make_api_key_record(user_id="user_scope")
-        _mock_api_key_auth(monkeypatch, record)
-
-        resp = client.get(
-            "/users/me/billing-summary",
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 401
-
-    def test_api_key_rejected_on_billing_checkout(self, monkeypatch):
-        raw_key, record = _make_api_key_record(user_id="user_scope")
-        _mock_api_key_auth(monkeypatch, record)
-
-        resp = client.post(
-            "/billing/checkout",
-            json={"plan": "starter"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 401
-
-    def test_api_key_rejected_on_legacy_video_create(self, monkeypatch):
-        raw_key, record = _make_api_key_record(user_id="user_scope")
-        _mock_api_key_auth(monkeypatch, record)
-
-        resp = client.post(
-            "/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -199,11 +173,9 @@ class TestAuthIdentityAttribution:
         """verify_api_key must return AuthIdentity with api_key_id for attribution."""
         from src.api.auth import verify_api_key
 
-        raw_key, record = _make_api_key_record(
-            user_id="user_attr",
-            key_id="key-id-for-attribution",
+        raw_key, _ = _setup_api_key_auth(
+            monkeypatch, user_id="user_attr", key_id="key-id-for-attribution",
         )
-        _mock_api_key_auth(monkeypatch, record)
 
         identity = verify_api_key(raw_key)
         assert isinstance(identity, AuthIdentity)
@@ -234,8 +206,7 @@ class TestAuthIdentityAttribution:
 
 class TestApiKeyQuota:
     def test_api_key_auth_triggers_credit_check(self, monkeypatch):
-        raw_key, record = _make_api_key_record(user_id="user_quota")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_quota")
 
         # Simulate credit check failure (free tier, no credits).
         monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: False)
@@ -274,8 +245,7 @@ class TestRetryIdempotency:
     def test_youtube_retry_returns_existing_without_credit(self, monkeypatch):
         """Retrying a YouTube video submit must return the existing record
         without consuming another credit (atomic RPC-level dedup)."""
-        raw_key, record = _make_api_key_record(user_id="user_retry")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_retry")
 
         existing = _video_record("existing-vid-id", status="queued")
 
@@ -307,8 +277,7 @@ class TestRetryIdempotency:
 
     def test_youtube_new_url_creates_and_bills(self, monkeypatch):
         """A new YouTube URL inserts via RPC and consumes credit."""
-        raw_key, record = _make_api_key_record(user_id="user_new")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_new")
 
         created_video = _video_record("new-vid-id", status="queued")
 
@@ -334,8 +303,7 @@ class TestRetryIdempotency:
 
     def test_youtube_billing_failure_marks_video_failed(self, monkeypatch):
         """If billing fails after atomic insert, the video is marked failed."""
-        raw_key, record = _make_api_key_record(user_id="user_fail")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_fail")
 
         created_video = _video_record("fail-vid-id", status="queued")
         monkeypatch.setattr(
@@ -371,8 +339,7 @@ class TestRetryIdempotency:
     def test_youtube_enqueue_failure_preserves_dedupe_anchor(self, monkeypatch):
         """Enqueue failure must NOT mark the row failed, so retries still find
         the dedupe anchor and don't consume another credit."""
-        raw_key, record = _make_api_key_record(user_id="user_enq_fail")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_enq_fail")
 
         created_video = _video_record("enq-fail-vid", status="queued")
         monkeypatch.setattr(
@@ -408,8 +375,7 @@ class TestRetryIdempotency:
 
     def test_youtube_retry_re_enqueues_stranded_video(self, monkeypatch):
         """A retry that finds a queued video with no job row must re-enqueue it."""
-        raw_key, record = _make_api_key_record(user_id="user_strand")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_strand")
 
         stranded = _video_record("stranded-vid", status="queued")
 
@@ -438,8 +404,7 @@ class TestRetryIdempotency:
 
     def test_youtube_retry_returns_503_when_re_enqueue_fails(self, monkeypatch):
         """If a retry finds a stranded video and re-enqueue also fails, return 503."""
-        raw_key, record = _make_api_key_record(user_id="user_strand2")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_strand2")
 
         stranded = _video_record("stranded-vid-2", status="queued")
 
@@ -467,8 +432,7 @@ class TestRetryIdempotency:
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
         """Upload retry with same Idempotency-Key must return existing record
         without doing R2 upload or billing (fast-path early exit)."""
-        raw_key, record = _make_api_key_record(user_id="user_upload_retry")
-        _mock_api_key_auth(monkeypatch, record)
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_upload_retry")
 
         from uuid import uuid5, NAMESPACE_URL
 

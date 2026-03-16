@@ -88,12 +88,6 @@ def _mock_upload_duration_validation(monkeypatch) -> None:
     )
 
 
-def _mock_api_key_auth(monkeypatch, record: ApiKeyRecord) -> None:
-    """Monkeypatch API key DB lookups so the given record is found on auth."""
-    monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
-    monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
-
-
 def _make_api_key_record(
     user_id: str = "user_123",
     *,
@@ -113,4 +107,19 @@ def _make_api_key_record(
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
     )
+    return raw_key, record
+
+
+def _mock_api_key_auth(monkeypatch, record: ApiKeyRecord) -> None:
+    """Monkeypatch API key DB lookups so the given record is found on auth."""
+    monkeypatch.setattr("src.api.auth.get_api_key_by_hash", lambda h: record)
+    monkeypatch.setattr("src.api.auth.touch_api_key_last_used", lambda kid: None)
+
+
+def _setup_api_key_auth(
+    monkeypatch, user_id: str = "user_123", **kwargs,
+) -> tuple[str, ApiKeyRecord]:
+    """Create an API key record and wire up auth mocks in one call."""
+    raw_key, record = _make_api_key_record(user_id=user_id, **kwargs)
+    _mock_api_key_auth(monkeypatch, record)
     return raw_key, record

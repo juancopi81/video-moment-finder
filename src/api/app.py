@@ -942,13 +942,21 @@ def create_video(
     return _video_record_to_response(record)
 
 
-@app.post("/videos/upload", response_model=VideoResponse)
-def upload_video(
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-) -> VideoResponse:
-    """Upload a video file and enqueue durable processing job."""
-    _enforce_user_write_rate_limit(user_id)
+def _try_cleanup_r2(store: R2Store, key: str, user_id: str) -> None:
+    """Best-effort delete of an R2 object. Logs on failure, never raises."""
+    try:
+        store.delete_source_object(key)
+    except R2StorageError as exc:
+        logger.warning("Failed to cleanup R2 object for user_id=%s key=%s: %s", user_id, key, exc)
+
+
+def _validate_and_upload_file(
+    file: UploadFile, user_id: str, video_id: str,
+) -> tuple[R2Store, Any, str, bool]:
+    """Validate an uploaded file, store it in R2, and return context for billing.
+
+    Returns (store, upload_result, filename, requires_credit).
+    """
     if not file.filename and not file.content_type:
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
@@ -965,42 +973,39 @@ def upload_video(
         r2_config = R2Config.from_env()
     except StorageConfigError as exc:
         raise HTTPException(
-            status_code=503,
-            detail="Upload storage is not configured",
+            status_code=503, detail="Upload storage is not configured",
         ) from exc
 
-    video_id = str(uuid4())
     filename = _sanitize_filename(file.filename)
     store = R2Store(r2_config)
-
     try:
         upload_result = store.upload_source_video(
-            video_id=video_id,
-            filename=filename,
-            file_obj=file.file,
-            content_type=file.content_type,
+            video_id=video_id, filename=filename,
+            file_obj=file.file, content_type=file.content_type,
         )
     except R2StorageError as exc:
         logger.exception("Failed to upload source video: %s", exc)
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to store uploaded video",
-        ) from exc
+        raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+    return store, upload_result, filename, requires_credit
+
+
+@app.post("/videos/upload", response_model=VideoResponse)
+def upload_video(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
+    """Upload a video file and enqueue durable processing job."""
+    _enforce_user_write_rate_limit(user_id)
+    video_id = str(uuid4())
+    store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
 
     try:
         if requires_credit:
             _consume_processing_credit_or_raise(user_id)
     except HTTPException as exc:
         if exc.status_code == 402:
-            try:
-                store.delete_source_object(upload_result.key)
-            except R2StorageError as cleanup_exc:
-                logger.warning(
-                    "Failed to cleanup uploaded source video for user_id=%s key=%s: %s",
-                    user_id,
-                    upload_result.key,
-                    cleanup_exc,
-                )
+            _try_cleanup_r2(store, upload_result.key, user_id)
         raise
 
     record = db_create_uploaded_video(
@@ -1478,36 +1483,7 @@ def v1_upload_video(
         return _video_record_to_response(existing)
 
     _enforce_user_write_rate_limit(user_id)
-    if not file.filename and not file.content_type:
-        raise HTTPException(status_code=400, detail="No file uploaded")
-    if file.content_type and not file.content_type.startswith("video/"):
-        raise HTTPException(status_code=400, detail="Only video uploads are supported")
-    requires_credit = _precheck_video_processing_admission(user_id)
-    try:
-        _validate_upload_file_duration_or_raise(file)
-    except UploadDurationLimitExceededError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except UploadDurationProbeUnavailableError as exc:
-        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
-
-    try:
-        r2_config = R2Config.from_env()
-    except StorageConfigError as exc:
-        raise HTTPException(
-            status_code=503, detail="Upload storage is not configured",
-        ) from exc
-
-    filename = _sanitize_filename(file.filename)
-    store = R2Store(r2_config)
-
-    try:
-        upload_result = store.upload_source_video(
-            video_id=video_id, filename=filename,
-            file_obj=file.file, content_type=file.content_type,
-        )
-    except R2StorageError as exc:
-        logger.exception("Failed to upload source video: %s", exc)
-        raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+    store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
 
     # Atomic insert: PK constraint serializes concurrent retries.
     record, created = db_insert_uploaded_video_idempotent(
@@ -1515,10 +1491,7 @@ def v1_upload_video(
     )
     if not created:
         # Retry — clean up the orphaned R2 object and return existing record.
-        try:
-            store.delete_source_object(upload_result.key)
-        except R2StorageError:
-            logger.warning("Failed to cleanup duplicate R2 upload key=%s", upload_result.key)
+        _try_cleanup_r2(store, upload_result.key, user_id)
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 
@@ -1527,13 +1500,7 @@ def v1_upload_video(
             _consume_processing_credit_or_raise(user_id)
     except HTTPException as exc:
         if exc.status_code == 402:
-            try:
-                store.delete_source_object(upload_result.key)
-            except R2StorageError as cleanup_exc:
-                logger.warning(
-                    "Failed to cleanup uploaded source for user_id=%s key=%s: %s",
-                    user_id, upload_result.key, cleanup_exc,
-                )
+            _try_cleanup_r2(store, upload_result.key, user_id)
             update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
 
