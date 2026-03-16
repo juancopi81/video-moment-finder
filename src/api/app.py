@@ -1416,7 +1416,15 @@ def v1_create_video(
         update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
 
-    _enqueue_video_or_fail(record.id)
+    # Enqueue without marking the row failed on error: the row must stay
+    # non-failed so the dedupe index still covers it and a retry returns it
+    # instead of consuming another credit.
+    try:
+        enqueue_video_job(record.id)
+    except Exception as exc:
+        logger.exception("Failed to enqueue video_id=%s: %s", record.id, exc)
+        raise HTTPException(status_code=500, detail="Failed to enqueue processing job") from exc
+
     track("video_submitted", user_id=identity.user_id, metadata={"source_type": "youtube"})
     return _video_record_to_response(record)
 
@@ -1495,7 +1503,14 @@ def v1_upload_video(
             update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
 
-    _enqueue_video_or_fail(record.id)
+    # Same as YouTube path: don't mark the row failed on enqueue error
+    # so the dedupe anchor survives and retries don't double-bill.
+    try:
+        enqueue_video_job(record.id)
+    except Exception as exc:
+        logger.exception("Failed to enqueue video_id=%s: %s", record.id, exc)
+        raise HTTPException(status_code=500, detail="Failed to enqueue processing job") from exc
+
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
 

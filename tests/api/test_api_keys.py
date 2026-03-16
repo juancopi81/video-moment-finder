@@ -366,6 +366,44 @@ class TestRetryIdempotency:
         assert resp.status_code == 402
         assert ("fail-vid-id", "failed") in status_updates
 
+    def test_youtube_enqueue_failure_preserves_dedupe_anchor(self, monkeypatch):
+        """Enqueue failure must NOT mark the row failed, so retries still find
+        the dedupe anchor and don't consume another credit."""
+        raw_key, record = _make_api_key_record(user_id="user_enq_fail")
+        _mock_api_key_auth(monkeypatch, record)
+
+        created_video = _video_record("enq-fail-vid", status="queued")
+        monkeypatch.setattr(
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (created_video, True),
+        )
+        monkeypatch.setattr(
+            "src.api.app.fetch_video_metadata",
+            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
+        )
+        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
+
+        # Enqueue fails — should NOT mark row failed.
+        monkeypatch.setattr(
+            "src.api.app.enqueue_video_job",
+            lambda vid: (_ for _ in ()).throw(RuntimeError("queue down")),
+        )
+
+        status_updates: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "src.api.app.update_video_status",
+            lambda vid, status, error_message=None: status_updates.append((vid, status)),
+        )
+
+        resp = client.post(
+            f"{V1}/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 500
+        # Critical: the row must NOT be marked failed.
+        assert ("enq-fail-vid", "failed") not in status_updates
+
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
         """Upload retry with same Idempotency-Key must return existing record
         via atomic RPC — no double billing."""
