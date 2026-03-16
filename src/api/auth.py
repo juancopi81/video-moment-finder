@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated, Any, Literal
@@ -17,6 +18,10 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 AuthMethod = Literal["jwt", "api_key"]
+
+# Throttle last_used_at writes: at most one DB update per key per 60 s.
+_LAST_USED_WRITE_INTERVAL_S = 60
+_last_used_writes: dict[str, float] = {}
 
 
 class AuthConfigError(RuntimeError):
@@ -102,14 +107,23 @@ def verify_bearer_token(token: str) -> str:
     return user_id
 
 
+def hash_api_key(token: str) -> str:
+    """Return the SHA-256 hex digest of a raw API key."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def verify_api_key(token: str) -> AuthIdentity:
     """Verify an API key token and return an AuthIdentity with attribution."""
-    key_hash = hashlib.sha256(token.encode()).hexdigest()
+    key_hash = hash_api_key(token)
     record = get_api_key_by_hash(key_hash)
     if record is None:
         raise TokenVerificationError("Invalid authentication token")
 
-    touch_api_key_last_used(record.id)
+    now = time.monotonic()
+    if now - _last_used_writes.get(record.id, 0) >= _LAST_USED_WRITE_INTERVAL_S:
+        touch_api_key_last_used(record.id)
+        _last_used_writes[record.id] = now
+
     return AuthIdentity(
         user_id=record.user_id,
         auth_method="api_key",

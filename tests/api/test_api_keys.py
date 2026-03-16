@@ -406,7 +406,7 @@ class TestRetryIdempotency:
 
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
         """Upload retry with same Idempotency-Key must return existing record
-        via atomic RPC — no double billing."""
+        without doing R2 upload or billing (fast-path early exit)."""
         raw_key, record = _make_api_key_record(user_id="user_upload_retry")
         _mock_api_key_auth(monkeypatch, record)
 
@@ -415,23 +415,10 @@ class TestRetryIdempotency:
         expected_vid_id = str(uuid5(NAMESPACE_URL, "user_upload_retry:upload-key-1"))
         existing = _video_record(expected_vid_id, status="queued")
 
-        # Mock R2 upload (both concurrent requests upload, but only one gets billed).
-        class FakeUploadResult:
-            key = "source/fake/upload.mp4"
-
-        class FakeStore:
-            def upload_source_video(self, **kwargs):
-                return FakeUploadResult()
-            def delete_source_object(self, key):
-                pass
-
-        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
-        monkeypatch.setattr("src.api.app.R2Store", lambda cfg: FakeStore())
-
-        # RPC returns (existing_record, was_created=False) — simulates retry.
+        # Fast-path: db_get_video returns existing record before any heavy work.
         monkeypatch.setattr(
-            "src.api.app.db_insert_uploaded_video_idempotent",
-            lambda vid, uid, r2key, fname: (existing, False),
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: existing if vid == expected_vid_id else None,
         )
 
         import io

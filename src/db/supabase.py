@@ -299,6 +299,16 @@ def create_uploaded_video(
     return _row_to_video(result.data[0])
 
 
+def _call_idempotent_video_rpc(rpc_name: str, params: dict) -> tuple[VideoRecord, bool]:
+    """Call an idempotent insert-or-get RPC and return (record, was_created)."""
+    client = get_client()
+    result = client.rpc(rpc_name, params).execute()
+    if not result.data:
+        raise RuntimeError(f"{rpc_name} returned no data")
+    item = result.data[0]
+    return _row_to_video(item["row_data"]), item["was_created"]
+
+
 def insert_youtube_video_idempotent(
     youtube_url: str, user_id: str
 ) -> tuple[VideoRecord, bool]:
@@ -306,18 +316,11 @@ def insert_youtube_video_idempotent(
 
     Uses a Postgres RPC backed by a unique partial index on (user_id, youtube_url)
     so concurrent retries are serialized by the DB — only one INSERT wins.
-
-    Returns (record, was_created).
     """
-    client = get_client()
-    result = client.rpc(
+    return _call_idempotent_video_rpc(
         "insert_youtube_video_idempotent",
         {"p_youtube_url": youtube_url, "p_user_id": user_id},
-    ).execute()
-    if not result.data:
-        raise RuntimeError("insert_youtube_video_idempotent returned no data")
-    item = result.data[0]
-    return _row_to_video(item["row_data"]), item["was_created"]
+    )
 
 
 def insert_uploaded_video_idempotent(
@@ -330,11 +333,8 @@ def insert_uploaded_video_idempotent(
 
     The caller supplies a deterministic video_id (derived from Idempotency-Key)
     so concurrent retries collide on the PK and only one INSERT wins.
-
-    Returns (record, was_created).
     """
-    client = get_client()
-    result = client.rpc(
+    return _call_idempotent_video_rpc(
         "insert_uploaded_video_idempotent",
         {
             "p_video_id": video_id,
@@ -342,11 +342,7 @@ def insert_uploaded_video_idempotent(
             "p_source_r2_key": source_r2_key,
             "p_source_filename": source_filename,
         },
-    ).execute()
-    if not result.data:
-        raise RuntimeError("insert_uploaded_video_idempotent returned no data")
-    item = result.data[0]
-    return _row_to_video(item["row_data"]), item["was_created"]
+    )
 
 
 def get_video(video_id: str, user_id: str | None = None) -> VideoRecord | None:

@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.analytics.events import track
-from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id
+from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id, hash_api_key
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,
@@ -36,7 +36,6 @@ from src.billing.lemonsqueezy import (
 from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.db.supabase import (
-    ApiKeyRecord,
     VideoRecord,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
     consume_processing_credit as db_consume_processing_credit,
@@ -64,7 +63,7 @@ from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
 from src.video.metadata import VideoMetadataProbeError, max_video_duration_s, probe_video_duration_s
 from src.video.youtube import normalize_youtube_url
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 load_env()
 logger = get_logger(__name__)
@@ -782,25 +781,30 @@ def _get_idempotent_upload_record(
     return existing
 
 
-def _enqueue_video_or_fail(video_id: str) -> None:
-    """Enqueue a video processing job, marking the video as failed on error."""
+def _enqueue_or_raise(video_id: str) -> None:
+    """Enqueue a video processing job, raising 500 on failure.
+
+    Does NOT mark the video as failed — callers that need the row to
+    survive as a dedupe anchor (v1 idempotent paths) use this directly.
+    """
     try:
         enqueue_video_job(video_id)
     except Exception as exc:
-        logger.exception(
-            "Failed to enqueue processing job for video_id=%s: %s",
-            video_id,
-            exc,
-        )
+        logger.exception("Failed to enqueue video_id=%s: %s", video_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to enqueue processing job") from exc
+
+
+def _enqueue_video_or_fail(video_id: str) -> None:
+    """Enqueue a video processing job, marking the video as failed on error."""
+    try:
+        _enqueue_or_raise(video_id)
+    except HTTPException:
         update_video_status(
             video_id,
             "failed",
-            error_message=f"Failed to enqueue processing job: {exc}",
+            error_message="Failed to enqueue processing job",
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to enqueue processing job",
-        ) from exc
+        raise
 
 
 def _get_ready_video_for_search(video_id: str, user_id: str) -> VideoRecord:
@@ -1353,7 +1357,7 @@ def create_api_key(
 ) -> ApiKeyCreatedResponse:
     """Create a new API key. The raw key is returned once and never stored."""
     raw_key = "vmf_" + secrets.token_hex(16)
-    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_hash = hash_api_key(raw_key)
     key_prefix = "vmf_" + raw_key[4:8]
 
     try:
@@ -1362,7 +1366,11 @@ def create_api_key(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return ApiKeyCreatedResponse(
-        **ApiKeyResponse.model_validate(record).model_dump(),
+        id=record.id,
+        name=record.name,
+        key_prefix=record.key_prefix,
+        created_at=record.created_at,
+        last_used_at=record.last_used_at,
         key=raw_key,
     )
 
@@ -1416,15 +1424,7 @@ def v1_create_video(
         update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
 
-    # Enqueue without marking the row failed on error: the row must stay
-    # non-failed so the dedupe index still covers it and a retry returns it
-    # instead of consuming another credit.
-    try:
-        enqueue_video_job(record.id)
-    except Exception as exc:
-        logger.exception("Failed to enqueue video_id=%s: %s", record.id, exc)
-        raise HTTPException(status_code=500, detail="Failed to enqueue processing job") from exc
-
+    _enqueue_or_raise(record.id)
     track("video_submitted", user_id=identity.user_id, metadata={"source_type": "youtube"})
     return _video_record_to_response(record)
 
@@ -1439,10 +1439,14 @@ def v1_upload_video(
 
     # Idempotent upload: deterministic video_id from the key so concurrent
     # retries collide on PK.  DB insert happens BEFORE billing.
-    from uuid import uuid5, NAMESPACE_URL
-
     user_id = identity.user_id
     video_id = str(uuid5(NAMESPACE_URL, f"{user_id}:{idempotency_key}"))
+
+    # Fast path: if the record already exists, skip file validation, R2
+    # upload, and billing entirely.
+    existing = db_get_video(video_id, user_id=user_id)
+    if existing is not None:
+        return _video_record_to_response(existing)
 
     _enforce_user_write_rate_limit(user_id)
     if not file.filename and not file.content_type:
@@ -1503,14 +1507,7 @@ def v1_upload_video(
             update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
 
-    # Same as YouTube path: don't mark the row failed on enqueue error
-    # so the dedupe anchor survives and retries don't double-bill.
-    try:
-        enqueue_video_job(record.id)
-    except Exception as exc:
-        logger.exception("Failed to enqueue video_id=%s: %s", record.id, exc)
-        raise HTTPException(status_code=500, detail="Failed to enqueue processing job") from exc
-
+    _enqueue_or_raise(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
 
