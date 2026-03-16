@@ -294,6 +294,8 @@ class TestRetryIdempotency:
             "src.api.app.db_consume_processing_credit",
             lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
         )
+        # Job exists — normal retry, no re-enqueue needed.
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: object())
 
         resp = client.post(
             f"{V1}/videos",
@@ -404,6 +406,36 @@ class TestRetryIdempotency:
         # Critical: the row must NOT be marked failed.
         assert ("enq-fail-vid", "failed") not in status_updates
 
+    def test_youtube_retry_re_enqueues_stranded_video(self, monkeypatch):
+        """A retry that finds a queued video with no job row must re-enqueue it."""
+        raw_key, record = _make_api_key_record(user_id="user_strand")
+        _mock_api_key_auth(monkeypatch, record)
+
+        stranded = _video_record("stranded-vid", status="queued")
+
+        monkeypatch.setattr(
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (stranded, False),
+        )
+        monkeypatch.setattr(
+            "src.api.app.fetch_video_metadata",
+            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
+        )
+        # No existing job row — the original enqueue failed.
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: None)
+
+        enqueued: list[str] = []
+        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: enqueued.append(vid))
+
+        resp = client.post(
+            f"{V1}/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "stranded-vid"
+        assert "stranded-vid" in enqueued
+
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
         """Upload retry with same Idempotency-Key must return existing record
         without doing R2 upload or billing (fast-path early exit)."""
@@ -420,6 +452,8 @@ class TestRetryIdempotency:
             "src.api.app.db_get_video",
             lambda vid, user_id=None: existing if vid == expected_vid_id else None,
         )
+        # Job exists — normal retry, no re-enqueue needed.
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: object())
 
         import io
 

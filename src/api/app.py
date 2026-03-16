@@ -45,6 +45,7 @@ from src.db.supabase import (
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_credits as db_get_credits,
+    get_video_job as db_get_video_job,
     get_video as db_get_video,
     insert_uploaded_video_idempotent as db_insert_uploaded_video_idempotent,
     insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
@@ -781,6 +782,26 @@ def _get_idempotent_upload_record(
     return existing
 
 
+def _ensure_enqueued(record: VideoRecord) -> None:
+    """Re-enqueue a stranded video that was billed but never got a job row.
+
+    Called on the retry path when an existing dedupe record is found.
+    If the video is still ``queued`` and has no ``video_jobs`` entry, an
+    enqueue failure on the original request left it stranded — try again.
+    Failures here are logged but swallowed so the retry still returns the
+    record (the video is already billed; a background recovery can retry).
+    """
+    if record.status != "queued":
+        return
+    if db_get_video_job(record.id) is not None:
+        return
+    try:
+        enqueue_video_job(record.id)
+        logger.info("Re-enqueued stranded video_id=%s on retry", record.id)
+    except Exception:
+        logger.exception("Failed to re-enqueue stranded video_id=%s", record.id)
+
+
 def _enqueue_or_raise(video_id: str) -> None:
     """Enqueue a video processing job, raising 500 on failure.
 
@@ -1416,6 +1437,7 @@ def v1_create_video(
         request.youtube_url, identity.user_id
     )
     if not created:
+        _ensure_enqueued(record)
         return _video_record_to_response(record)
 
     try:
@@ -1443,9 +1465,11 @@ def v1_upload_video(
     video_id = str(uuid5(NAMESPACE_URL, f"{user_id}:{idempotency_key}"))
 
     # Fast path: if the record already exists, skip file validation, R2
-    # upload, and billing entirely.
+    # upload, and billing entirely.  Re-enqueue if the original request
+    # failed after billing but before creating the job row.
     existing = db_get_video(video_id, user_id=user_id)
     if existing is not None:
+        _ensure_enqueued(existing)
         return _video_record_to_response(existing)
 
     _enforce_user_write_rate_limit(user_id)
@@ -1490,6 +1514,7 @@ def v1_upload_video(
             store.delete_source_object(upload_result.key)
         except R2StorageError:
             logger.warning("Failed to cleanup duplicate R2 upload key=%s", upload_result.key)
+        _ensure_enqueued(record)
         return _video_record_to_response(record)
 
     try:
