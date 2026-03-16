@@ -788,8 +788,9 @@ def _ensure_enqueued(record: VideoRecord) -> None:
     Called on the retry path when an existing dedupe record is found.
     If the video is still ``queued`` and has no ``video_jobs`` entry, an
     enqueue failure on the original request left it stranded — try again.
-    Failures here are logged but swallowed so the retry still returns the
-    record (the video is already billed; a background recovery can retry).
+
+    Raises 503 if the re-enqueue fails so the client knows the video is
+    not yet processing and can retry.
     """
     if record.status != "queued":
         return
@@ -798,8 +799,12 @@ def _ensure_enqueued(record: VideoRecord) -> None:
     try:
         enqueue_video_job(record.id)
         logger.info("Re-enqueued stranded video_id=%s on retry", record.id)
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to re-enqueue stranded video_id=%s", record.id)
+        raise HTTPException(
+            status_code=503,
+            detail="Video was created but processing could not be started. Please retry.",
+        ) from exc
 
 
 def _enqueue_or_raise(video_id: str) -> None:

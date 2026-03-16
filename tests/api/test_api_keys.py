@@ -436,6 +436,34 @@ class TestRetryIdempotency:
         assert resp.json()["id"] == "stranded-vid"
         assert "stranded-vid" in enqueued
 
+    def test_youtube_retry_returns_503_when_re_enqueue_fails(self, monkeypatch):
+        """If a retry finds a stranded video and re-enqueue also fails, return 503."""
+        raw_key, record = _make_api_key_record(user_id="user_strand2")
+        _mock_api_key_auth(monkeypatch, record)
+
+        stranded = _video_record("stranded-vid-2", status="queued")
+
+        monkeypatch.setattr(
+            "src.api.app.db_insert_youtube_video_idempotent",
+            lambda url, uid: (stranded, False),
+        )
+        monkeypatch.setattr(
+            "src.api.app.fetch_video_metadata",
+            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
+        )
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: None)
+        monkeypatch.setattr(
+            "src.api.app.enqueue_video_job",
+            lambda vid: (_ for _ in ()).throw(RuntimeError("queue down")),
+        )
+
+        resp = client.post(
+            f"{V1}/videos",
+            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+        assert resp.status_code == 503
+
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
         """Upload retry with same Idempotency-Key must return existing record
         without doing R2 upload or billing (fast-path early exit)."""
