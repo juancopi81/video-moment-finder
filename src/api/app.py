@@ -769,17 +769,31 @@ def _get_idempotent_upload_record(
     existing = db_get_video(video_id, user_id=user_id)
     if existing is None:
         return None
-    if existing.source_type != "upload":
+    return _require_matching_upload_record(
+        existing,
+        source_r2_key=source_r2_key,
+        source_filename=source_filename,
+    )
+
+
+def _require_matching_upload_record(
+    record: VideoRecord,
+    *,
+    source_r2_key: str,
+    source_filename: str,
+) -> VideoRecord:
+    """Require an upload record to match the caller's source metadata exactly."""
+    if record.source_type != "upload":
         raise HTTPException(
             status_code=409,
             detail="video_id already exists with a different source type",
         )
-    if existing.source_r2_key != source_r2_key or existing.source_filename != source_filename:
+    if record.source_r2_key != source_r2_key or record.source_filename != source_filename:
         raise HTTPException(
             status_code=409,
             detail="video_id already exists with different upload metadata",
         )
-    return existing
+    return record
 
 
 def _ensure_enqueued(record: VideoRecord) -> None:
@@ -1116,28 +1130,27 @@ def complete_upload(
     except UploadDurationProbeUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
-    if requires_credit:
-        _consume_processing_credit_or_raise(user_id)
+    record, created = db_insert_uploaded_video_idempotent(
+        request.video_id,
+        user_id,
+        key,
+        filename,
+    )
+    if not created:
+        record = _require_matching_upload_record(
+            record,
+            source_r2_key=key,
+            source_filename=filename,
+        )
+        return _video_record_to_response(record)
 
-    try:
-        record = db_create_uploaded_video(
-            video_id=request.video_id,
-            source_r2_key=key,
-            source_filename=filename,
-            user_id=user_id,
-            status="queued",
-        )
-    except Exception:
-        # Handle the create race where another request inserted this upload first.
-        existing = _get_idempotent_upload_record(
-            video_id=request.video_id,
-            user_id=user_id,
-            source_r2_key=key,
-            source_filename=filename,
-        )
-        if existing is not None:
-            return _video_record_to_response(existing)
-        raise
+    if requires_credit:
+        try:
+            _consume_processing_credit_or_raise(user_id)
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
 
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
@@ -1473,12 +1486,19 @@ def v1_upload_video(
     # retries collide on PK.  DB insert happens BEFORE billing.
     user_id = identity.user_id
     video_id = str(uuid5(NAMESPACE_URL, f"{user_id}:{idempotency_key}"))
+    filename = _sanitize_filename(file.filename)
+    expected_key = source_key(video_id, filename)
 
     # Fast path: if the record already exists, skip file validation, R2
     # upload, and billing entirely.  Re-enqueue if the original request
     # failed after billing but before creating the job row.
     existing = db_get_video(video_id, user_id=user_id)
     if existing is not None:
+        existing = _require_matching_upload_record(
+            existing,
+            source_r2_key=expected_key,
+            source_filename=filename,
+        )
         _ensure_enqueued(existing)
         return _video_record_to_response(existing)
 
@@ -1490,8 +1510,15 @@ def v1_upload_video(
         video_id, user_id, upload_result.key, filename
     )
     if not created:
-        # Retry — clean up the orphaned R2 object and return existing record.
-        _try_cleanup_r2(store, upload_result.key, user_id)
+        record = _require_matching_upload_record(
+            record,
+            source_r2_key=upload_result.key,
+            source_filename=filename,
+        )
+        # Only delete the loser-side object when it uses a different key.
+        # Same-key retries share the winner's object and must not delete it.
+        if upload_result.key != record.source_r2_key:
+            _try_cleanup_r2(store, upload_result.key, user_id)
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 

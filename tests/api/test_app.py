@@ -1185,7 +1185,7 @@ def test_complete_upload_rejects_when_no_paid_credits_after_free_limit(monkeypat
     )
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
+        "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("create should not run when credits are unavailable")
         ),
@@ -1233,7 +1233,7 @@ def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatc
         or ProcessingCreditConsumeResult(allowed=True, remaining_balance=0),
     )
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
+        "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: create_called.update(value=True),
     )
     monkeypatch.setattr(
@@ -1289,7 +1289,7 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
     _authenticate("user_123")
 
     enqueue_calls: list[str] = []
-    create_calls: list[tuple[str, str, str | None, str]] = []
+    insert_calls: list[tuple[str, str, str, str]] = []
 
     class FakeR2Store:
         def __init__(self, *_args, **_kwargs) -> None:
@@ -1298,18 +1298,17 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
         def source_exists(self, key: str) -> bool:
             return True
 
-    def fake_create_uploaded_video(
+    def fake_insert_uploaded_video(
         video_id: str,
+        user_id: str,
         source_r2_key: str,
-        source_filename: str | None = None,
-        user_id: str | None = None,
-        status: str = "queued",
-    ) -> VideoRecord:
-        create_calls.append((video_id, source_r2_key, source_filename, status))
+        source_filename: str,
+    ) -> tuple[VideoRecord, bool]:
+        insert_calls.append((video_id, user_id, source_r2_key, source_filename))
         return VideoRecord(
             id=video_id,
             youtube_url=None,
-            status=status,  # type: ignore[arg-type]
+            status="queued",
             user_id=user_id,
             error_message=None,
             source_type="upload",
@@ -1317,7 +1316,7 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
             source_filename=source_filename,
             created_at=datetime.now(timezone.utc).isoformat(),
             updated_at=datetime.now(timezone.utc).isoformat(),
-        )
+        ), True
 
     def fake_enqueue(video_id: str) -> object:
         enqueue_calls.append(video_id)
@@ -1326,7 +1325,7 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
-    monkeypatch.setattr("src.api.app.db_create_uploaded_video", fake_create_uploaded_video)
+    monkeypatch.setattr("src.api.app.db_insert_uploaded_video_idempotent", fake_insert_uploaded_video)
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
 
     response = client.post(
@@ -1340,7 +1339,7 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
     assert payload["source_type"] == "upload"
     assert payload["source_filename"] == "upload.mp4"
     assert enqueue_calls == [payload["id"]]
-    assert create_calls
+    assert insert_calls
 
 
 def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(monkeypatch) -> None:
@@ -1350,7 +1349,7 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
 
     enqueue_calls: list[str] = []
-    create_calls: list[tuple[str, str, str | None, str]] = []
+    insert_calls: list[tuple[str, str, str, str]] = []
     consume_calls: list[str] = []
 
     class FakeR2Store:
@@ -1367,18 +1366,17 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
             remaining_balance=0,
         )
 
-    def fake_create_uploaded_video(
+    def fake_insert_uploaded_video(
         video_id: str,
+        user_id: str,
         source_r2_key: str,
-        source_filename: str | None = None,
-        user_id: str | None = None,
-        status: str = "queued",
-    ) -> VideoRecord:
-        create_calls.append((video_id, source_r2_key, source_filename, status))
+        source_filename: str,
+    ) -> tuple[VideoRecord, bool]:
+        insert_calls.append((video_id, user_id, source_r2_key, source_filename))
         return VideoRecord(
             id=video_id,
             youtube_url=None,
-            status=status,  # type: ignore[arg-type]
+            status="queued",
             user_id=user_id,
             error_message=None,
             source_type="upload",
@@ -1386,7 +1384,7 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
             source_filename=source_filename,
             created_at=datetime.now(timezone.utc).isoformat(),
             updated_at=datetime.now(timezone.utc).isoformat(),
-        )
+        ), True
 
     def fake_enqueue(video_id: str) -> object:
         enqueue_calls.append(video_id)
@@ -1397,7 +1395,7 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: _credit_record(1))
     monkeypatch.setattr("src.api.app.db_consume_processing_credit", fake_consume)
-    monkeypatch.setattr("src.api.app.db_create_uploaded_video", fake_create_uploaded_video)
+    monkeypatch.setattr("src.api.app.db_insert_uploaded_video_idempotent", fake_insert_uploaded_video)
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
 
     response = client.post(
@@ -1410,7 +1408,7 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
     assert payload["status"] == "queued"
     assert consume_calls == ["user_123"]
     assert enqueue_calls == [payload["id"]]
-    assert create_calls
+    assert insert_calls
 
 
 def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
@@ -1447,7 +1445,7 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
+        "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("create should not run for matching retry")
         ),
@@ -1499,7 +1497,7 @@ def test_complete_upload_returns_409_for_mismatched_existing_upload(monkeypatch)
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
+        "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("create should not run for mismatched retry")
         ),
@@ -1520,7 +1518,7 @@ def test_complete_upload_returns_409_for_mismatched_existing_upload(monkeypatch)
     assert response.json()["detail"] == "video_id already exists with different upload metadata"
 
 
-def test_complete_upload_handles_create_race_as_idempotent_retry(monkeypatch) -> None:
+def test_complete_upload_handles_insert_race_as_idempotent_retry(monkeypatch) -> None:
     client = TestClient(app)
     _authenticate("user_123")
 
@@ -1536,8 +1534,6 @@ def test_complete_upload_handles_create_race_as_idempotent_retry(monkeypatch) ->
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
     )
-    get_calls = {"count": 0}
-
     class FakeR2Store:
         def __init__(self, *_args, **_kwargs) -> None:
             pass
@@ -1545,26 +1541,23 @@ def test_complete_upload_handles_create_race_as_idempotent_retry(monkeypatch) ->
         def source_exists(self, key: str) -> bool:
             return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
 
-    def fake_get_video(video_id: str, user_id: str | None = None) -> VideoRecord | None:
-        _ = video_id, user_id
-        get_calls["count"] += 1
-        if get_calls["count"] == 1:
-            return None
-        return existing
-
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
-    monkeypatch.setattr("src.api.app.db_get_video", fake_get_video)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            RuntimeError("duplicate key value violates unique constraint videos_pkey")
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda *args, **kwargs: (existing, False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("credit consume should not run when insert raced")
         ),
     )
     monkeypatch.setattr(
         "src.api.app.enqueue_video_job",
         lambda _video_id: (_ for _ in ()).throw(
-            AssertionError("enqueue should not run when create raced")
+            AssertionError("enqueue should not run when insert raced")
         ),
     )
 
@@ -1577,7 +1570,6 @@ def test_complete_upload_handles_create_race_as_idempotent_retry(monkeypatch) ->
     payload = response.json()
     assert payload["id"] == UPLOAD_VIDEO_ID
     assert payload["status"] == "queued"
-    assert get_calls["count"] == 2
 
 
 def test_upload_video_enqueues_job(monkeypatch) -> None:

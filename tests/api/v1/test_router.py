@@ -162,11 +162,11 @@ def test_v1_upload_complete(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
-        lambda video_id, source_r2_key, source_filename=None, user_id=None, status="queued": VideoRecord(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda video_id, user_id, source_r2_key, source_filename: (VideoRecord(
             id=video_id,
             youtube_url=None,
-            status=status,  # type: ignore[arg-type]
+            status="queued",
             user_id="user_123",
             error_message=None,
             source_type="upload",
@@ -174,7 +174,7 @@ def test_v1_upload_complete(monkeypatch) -> None:
             source_filename=source_filename,
             created_at=datetime.now(timezone.utc).isoformat(),
             updated_at=datetime.now(timezone.utc).isoformat(),
-        ),
+        ), True),
     )
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda video_id: object())
 

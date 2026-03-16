@@ -1,6 +1,9 @@
 """Tests for API key management and authentication."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import io
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -437,7 +440,18 @@ class TestRetryIdempotency:
         from uuid import uuid5, NAMESPACE_URL
 
         expected_vid_id = str(uuid5(NAMESPACE_URL, "user_upload_retry:upload-key-1"))
-        existing = _video_record(expected_vid_id, status="queued")
+        existing = VideoRecord(
+            id=expected_vid_id,
+            youtube_url=None,
+            status="queued",  # type: ignore[arg-type]
+            user_id="user_upload_retry",
+            error_message=None,
+            source_type="upload",
+            source_r2_key=f"source/{expected_vid_id}/test.mp4",
+            source_filename="test.mp4",
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
 
         # Fast-path: db_get_video returns existing record before any heavy work.
         monkeypatch.setattr(
@@ -446,8 +460,6 @@ class TestRetryIdempotency:
         )
         # Job exists — normal retry, no re-enqueue needed.
         monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: object())
-
-        import io
 
         fake_file = io.BytesIO(b"fake video data")
         resp = client.post(
@@ -460,3 +472,59 @@ class TestRetryIdempotency:
         )
         assert resp.status_code == 200
         assert resp.json()["id"] == expected_vid_id
+
+    def test_upload_insert_race_does_not_delete_shared_source_key(self, monkeypatch):
+        """Loser-side cleanup must not delete the winner's shared R2 object."""
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_upload_race")
+
+        from uuid import NAMESPACE_URL, uuid5
+
+        video_id = str(uuid5(NAMESPACE_URL, "user_upload_race:upload-key-race"))
+        source_r2_key = f"source/{video_id}/upload.mp4"
+        existing = VideoRecord(
+            id=video_id,
+            youtube_url=None,
+            status="queued",  # type: ignore[arg-type]
+            user_id="user_upload_race",
+            error_message=None,
+            source_type="upload",
+            source_r2_key=source_r2_key,
+            source_filename="upload.mp4",
+            created_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        cleanup_calls: list[str] = []
+
+        class FakeR2Store:
+            def __init__(self, *_args, **_kwargs) -> None:
+                pass
+
+            def upload_source_video(self, *args, **kwargs):
+                class Result:
+                    key = source_r2_key
+
+                return Result()
+
+            def delete_source_object(self, key: str) -> None:
+                cleanup_calls.append(key)
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+        monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda *args, **kwargs: (existing, False),
+        )
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: object())
+
+        resp = client.post(
+            f"{V1}/videos/upload",
+            files={"file": ("upload.mp4", io.BytesIO(b"fake video data"), "video/mp4")},
+            headers={
+                "Authorization": f"Bearer {raw_key}",
+                "Idempotency-Key": "upload-key-race",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["id"] == video_id
+        assert cleanup_calls == []
