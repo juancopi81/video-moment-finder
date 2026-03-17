@@ -7,6 +7,41 @@
 -- Uploads with Idempotency-Key: the existing PK on videos.id already
 -- serializes concurrent INSERTs when the caller supplies a deterministic UUID.
 
+-- Historical cleanup: before this migration, duplicate active YouTube rows
+-- could exist for the same authenticated user. Keep the "best" active row
+-- (ready > processing > queued, then newest) and mark the rest failed so the
+-- unique index can be created safely on existing databases.
+with ranked_active_youtube_rows as (
+  select
+    id,
+    row_number() over (
+      partition by user_id, youtube_url
+      order by
+        case status
+          when 'ready' then 0
+          when 'processing' then 1
+          when 'queued' then 2
+          else 3
+        end,
+        created_at desc,
+        id desc
+    ) as rn
+  from public.videos
+  where user_id is not null
+    and youtube_url is not null
+    and status != 'failed'
+)
+update public.videos v
+set status = 'failed',
+    error_message = case
+      when coalesce(v.error_message, '') = ''
+        then 'Deduplicated before videos_user_youtube_url_active_unique migration'
+      else v.error_message || E'\nDeduplicated before videos_user_youtube_url_active_unique migration'
+    end
+from ranked_active_youtube_rows r
+where v.id = r.id
+  and r.rn > 1;
+
 -- YouTube URL dedup index.
 create unique index if not exists videos_user_youtube_url_active_unique
   on public.videos (user_id, youtube_url)
