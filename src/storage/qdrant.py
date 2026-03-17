@@ -3,20 +3,28 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import NoReturn, Literal
 
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 from qdrant_client.http import models
 
 from src.storage.config import QdrantConfig
+from src.utils.logging import get_logger
 
 
 EMBEDDING_DIM = 2048  # Qwen3-VL-Embedding-2B
+QDRANT_UPSERT_BATCH_SIZE = 512
 NAMESPACE_UUID = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+logger = get_logger(__name__)
 
 
 class QdrantStorageError(RuntimeError):
     """Raised when Qdrant operations fail."""
+
+
+class QdrantPayloadTooLargeError(QdrantStorageError):
+    """Raised when a Qdrant request exceeds the upstream payload limit."""
 
 
 @dataclass(frozen=True)
@@ -94,6 +102,36 @@ def _video_filter(
     return models.Filter(must=must)
 
 
+def _unwrap_qdrant_error(exc: Exception) -> Exception:
+    if isinstance(exc, ResponseHandlingException):
+        return exc.source
+    return exc
+
+
+def _is_payload_too_large_error(exc: Exception) -> bool:
+    candidate = _unwrap_qdrant_error(exc)
+    if isinstance(candidate, UnexpectedResponse):
+        if candidate.status_code != 400:
+            return False
+        try:
+            structured = candidate.structured()
+            error = structured.get("status", {}).get("error", "")
+        except Exception:
+            error = candidate.content.decode("utf-8", errors="ignore")
+        message = str(error).casefold()
+        return "payload error" in message and "larger than allowed" in message
+
+    message = str(candidate).casefold()
+    return "payload error" in message and "larger than allowed" in message
+
+
+def _raise_upsert_error(kind: str, exc: Exception) -> NoReturn:
+    error_cls = (
+        QdrantPayloadTooLargeError if _is_payload_too_large_error(exc) else QdrantStorageError
+    )
+    raise error_cls(f"Failed to upsert {kind}: {exc}") from exc
+
+
 class QdrantStore:
     """Qdrant vector storage for frame embeddings."""
 
@@ -143,11 +181,40 @@ class QdrantStore:
         except Exception as exc:
             raise QdrantStorageError(f"Failed to ensure payload index for source: {exc}") from exc
 
-    def upsert_frames(self, frames: list[FrameVector]) -> int:
-        """Upsert frame vectors to Qdrant. Returns count of upserted points."""
-        if not frames:
+    def _upsert_points(
+        self,
+        *,
+        kind: str,
+        points: list[models.PointStruct],
+    ) -> int:
+        if not points:
             return 0
 
+        batch_count = (len(points) + QDRANT_UPSERT_BATCH_SIZE - 1) // QDRANT_UPSERT_BATCH_SIZE
+        logger.info(
+            "Upserting %d %s vectors to Qdrant in %d batches (batch_size=%d)",
+            len(points),
+            kind,
+            batch_count,
+            QDRANT_UPSERT_BATCH_SIZE,
+        )
+
+        # Multi-request upserts are not atomic across batches. We intentionally rely on
+        # deterministic UUID5 point ids so retries overwrite any partial prior write
+        # instead of creating duplicates.
+        try:
+            for start in range(0, len(points), QDRANT_UPSERT_BATCH_SIZE):
+                self._client.upsert(
+                    collection_name=self._config.collection_name,
+                    points=points[start : start + QDRANT_UPSERT_BATCH_SIZE],
+                )
+        except Exception as exc:
+            _raise_upsert_error(kind, exc)
+
+        return len(points)
+
+    def upsert_frames(self, frames: list[FrameVector]) -> int:
+        """Upsert frame vectors to Qdrant. Returns count of upserted points."""
         points = [
             models.PointStruct(
                 id=generate_point_id(frame.video_id, frame.frame_index),
@@ -162,22 +229,10 @@ class QdrantStore:
             )
             for frame in frames
         ]
-
-        try:
-            self._client.upsert(
-                collection_name=self._config.collection_name,
-                points=points,
-            )
-        except Exception as exc:
-            raise QdrantStorageError(f"Failed to upsert frames: {exc}") from exc
-
-        return len(points)
+        return self._upsert_points(kind="frame", points=points)
 
     def upsert_transcripts(self, transcripts: list[TranscriptVector]) -> int:
         """Upsert transcript vectors to Qdrant. Returns count of upserted points."""
-        if not transcripts:
-            return 0
-
         points = [
             models.PointStruct(
                 id=generate_transcript_point_id(transcript.video_id, transcript.segment_index),
@@ -196,16 +251,7 @@ class QdrantStore:
             )
             for transcript in transcripts
         ]
-
-        try:
-            self._client.upsert(
-                collection_name=self._config.collection_name,
-                points=points,
-            )
-        except Exception as exc:
-            raise QdrantStorageError(f"Failed to upsert transcripts: {exc}") from exc
-
-        return len(points)
+        return self._upsert_points(kind="transcript", points=points)
 
     def replace_transcripts(
         self,

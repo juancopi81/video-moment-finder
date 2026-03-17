@@ -8,6 +8,8 @@ import pytest
 from src.api import processing as processing_module
 from src.db.supabase import TranscriptSegmentRecord, VideoRecord
 from src.pipeline.orchestrator import ProcessingResult
+from src.storage.qdrant import QdrantPayloadTooLargeError
+from src.video.frames import FrameInfo
 from src.video.transcripts import TranscriptDownloadError, TranscriptSegment
 
 
@@ -737,3 +739,61 @@ def test_process_video_visual_branch_failure_remains_fatal(
 
     with pytest.raises(processing_module.VideoProcessingError, match="visual boom"):
         processing_module.process_video(_video("video_123"))
+
+
+def test_process_visual_branch_maps_qdrant_payload_limit_to_non_retriable(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    frame_path = tmp_path / "frame_00000.jpg"
+    frame_path.write_bytes(b"frame")
+    thumb_path = tmp_path / "thumb_00000.jpg"
+    thumb_path.write_bytes(b"thumb")
+
+    class _FakeEmbedFn:
+        def remote(self, frame_bytes, batch_size):
+            assert len(frame_bytes) == 1
+            return [[0.1, 0.2]]
+
+    class _FakePipeline:
+        def __init__(self, qdrant_config, r2_config) -> None:
+            self.qdrant_config = qdrant_config
+            self.r2_config = r2_config
+
+        def process_video(self, video_id, frames, embeddings):
+            raise QdrantPayloadTooLargeError(
+                "Failed to upsert frames: Payload error: JSON payload "
+                "(58419779 bytes) is larger than allowed (limit: 33554432 bytes)."
+            )
+
+    monkeypatch.setattr(
+        processing_module,
+        "extract_frames",
+        lambda *args, **kwargs: [
+            FrameInfo(
+                index=0,
+                timestamp_s=0.0,
+                path=frame_path,
+                thumbnail_path=thumb_path,
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        processing_module,
+        "get_embedding_modal_function",
+        lambda function_name: _FakeEmbedFn(),
+    )
+    monkeypatch.setattr(processing_module, "StoragePipeline", _FakePipeline)
+
+    with pytest.raises(
+        processing_module.NonRetriableVideoProcessingError,
+        match="larger than allowed",
+    ):
+        processing_module._process_visual_branch(
+            video_id="video_123",
+            video_path=tmp_path / "video.mp4",
+            frames_dir=tmp_path / "frames",
+            thumbnails_dir=tmp_path / "thumbs",
+            qdrant_config=object(),
+            r2_config=None,
+        )

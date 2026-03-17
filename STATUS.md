@@ -52,6 +52,7 @@ Authoring rules:
 | 2026-03-10 | Phase 5 | Semantic transcript retrieval                         | Done        | Added Qdrant transcript embeddings for captioned videos and kept Supabase transcript search as fallback. |
 | 2026-03-12 | Phase 5 | Parallel transcript and visual processing             | Done        | Parallelized independent worker branches, validated captioned YouTube retrieval end to end locally, and kept the search response contract unchanged. |
 | 2026-03-12 | Phase 5 | Upload ASR-backed spoken retrieval                    | Done        | Added Whisper large-v3-turbo via faster-whisper for direct uploads, reused the transcript storage/indexing path, and kept the public search response schema unchanged. |
+| 2026-03-17 | Phase 5 | Qdrant visual upsert batching                         | Done        | Batched frame-vector writes to stay under Qdrant payload limits, marked payload-limit failures terminal, and attached richer worker Sentry context. |
 
 ## Blockers
 
