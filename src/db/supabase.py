@@ -305,8 +305,16 @@ def _call_idempotent_video_rpc(rpc_name: str, params: dict) -> tuple[VideoRecord
     result = client.rpc(rpc_name, params).execute()
     if not result.data:
         raise RuntimeError(f"{rpc_name} returned no data")
-    item = result.data[0]
-    return _row_to_video(item["row_data"]), item["was_created"]
+    item = _rpc_first_item(result.data)
+    if not isinstance(item, dict):
+        raise RuntimeError(f"{rpc_name} returned unexpected data shape")
+
+    row_data = item.get("row_data")
+    was_created = item.get("was_created")
+    if not isinstance(row_data, dict) or not isinstance(was_created, bool):
+        raise RuntimeError(f"{rpc_name} returned unexpected payload")
+
+    return _row_to_video(row_data), was_created
 
 
 def insert_youtube_video_idempotent(

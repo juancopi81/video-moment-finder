@@ -20,6 +20,8 @@ from src.db.supabase import (
     create_video,
     get_video,
     has_unlimited_video_access,
+    insert_uploaded_video_idempotent,
+    insert_youtube_video_idempotent,
     replace_video_transcript_segments,
     reset_client,
     search_video_transcript_segments,
@@ -114,6 +116,73 @@ def test_create_video_returns_record(mock_get_client: MagicMock) -> None:
     assert video.id == "new-video-id"
     assert video.status == "processing"
     mock_client.table.assert_called_with("videos")
+
+
+@patch("src.db.supabase.get_client")
+def test_insert_youtube_video_idempotent_handles_list_wrapped_rpc_output(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = [
+        {
+            "row_data": {
+                "id": "video-list-shape",
+                "youtube_url": "https://youtube.com/watch?v=abc",
+                "status": "queued",
+                "user_id": "user_123",
+                "error_message": None,
+                "source_type": "youtube",
+                "source_r2_key": None,
+                "source_filename": None,
+                "created_at": "2026-03-17T00:00:00Z",
+                "updated_at": "2026-03-17T00:00:00Z",
+            },
+            "was_created": True,
+        }
+    ]
+
+    record, was_created = insert_youtube_video_idempotent(
+        "https://youtube.com/watch?v=abc",
+        "user_123",
+    )
+
+    assert record.id == "video-list-shape"
+    assert was_created is True
+
+
+@patch("src.db.supabase.get_client")
+def test_insert_uploaded_video_idempotent_handles_dict_rpc_output(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = {
+        "row_data": {
+            "id": "video-dict-shape",
+            "youtube_url": None,
+            "status": "queued",
+            "user_id": "user_123",
+            "error_message": None,
+            "source_type": "upload",
+            "source_r2_key": "source/video-dict-shape/upload.mp4",
+            "source_filename": "upload.mp4",
+            "created_at": "2026-03-17T00:00:00Z",
+            "updated_at": "2026-03-17T00:00:00Z",
+        },
+        "was_created": False,
+    }
+
+    record, was_created = insert_uploaded_video_idempotent(
+        "video-dict-shape",
+        "user_123",
+        "source/video-dict-shape/upload.mp4",
+        "upload.mp4",
+    )
+
+    assert record.id == "video-dict-shape"
+    assert record.source_type == "upload"
+    assert was_created is False
 
 
 @patch("src.db.supabase.get_client")
