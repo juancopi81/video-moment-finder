@@ -184,8 +184,7 @@ class QdrantStore:
     def _upsert_points(
         self,
         *,
-        error_kind: str,
-        log_kind: str,
+        kind: str,
         points: list[models.PointStruct],
     ) -> int:
         if not points:
@@ -195,7 +194,7 @@ class QdrantStore:
         logger.info(
             "Upserting %d %s vectors to Qdrant in %d batches (batch_size=%d)",
             len(points),
-            log_kind,
+            kind,
             batch_count,
             QDRANT_UPSERT_BATCH_SIZE,
         )
@@ -210,15 +209,12 @@ class QdrantStore:
                     points=points[start : start + QDRANT_UPSERT_BATCH_SIZE],
                 )
         except Exception as exc:
-            _raise_upsert_error(error_kind, exc)
+            _raise_upsert_error(kind, exc)
 
         return len(points)
 
     def upsert_frames(self, frames: list[FrameVector]) -> int:
         """Upsert frame vectors to Qdrant. Returns count of upserted points."""
-        if not frames:
-            return 0
-
         points = [
             models.PointStruct(
                 id=generate_point_id(frame.video_id, frame.frame_index),
@@ -233,17 +229,10 @@ class QdrantStore:
             )
             for frame in frames
         ]
-        return self._upsert_points(
-            error_kind="frames",
-            log_kind="visual frame",
-            points=points,
-        )
+        return self._upsert_points(kind="frame", points=points)
 
     def upsert_transcripts(self, transcripts: list[TranscriptVector]) -> int:
         """Upsert transcript vectors to Qdrant. Returns count of upserted points."""
-        if not transcripts:
-            return 0
-
         points = [
             models.PointStruct(
                 id=generate_transcript_point_id(transcript.video_id, transcript.segment_index),
@@ -262,12 +251,7 @@ class QdrantStore:
             )
             for transcript in transcripts
         ]
-
-        return self._upsert_points(
-            error_kind="transcripts",
-            log_kind="transcript",
-            points=points,
-        )
+        return self._upsert_points(kind="transcript", points=points)
 
     def replace_transcripts(
         self,
