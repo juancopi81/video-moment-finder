@@ -25,14 +25,15 @@ def test_v1_submit_video(monkeypatch) -> None:
     _authenticate("user_123")
 
     monkeypatch.setattr(
-        "src.api.app.db_create_video",
-        lambda youtube_url, user_id=None, status="queued": _video_record("vid_1", status=status),
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda url, uid: (_video_record("vid_1", status="queued"), True),
     )
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda video_id: object())
     monkeypatch.setattr(
         "src.api.app.fetch_video_metadata",
         lambda _: VideoMetadata(duration_s=120.0, is_live=False),
     )
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
 
     response = client.post(
         "/api/v1/videos",
@@ -161,11 +162,11 @@ def test_v1_upload_complete(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr(
-        "src.api.app.db_create_uploaded_video",
-        lambda video_id, source_r2_key, source_filename=None, user_id=None, status="queued": VideoRecord(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda video_id, user_id, source_r2_key, source_filename: (VideoRecord(
             id=video_id,
             youtube_url=None,
-            status=status,  # type: ignore[arg-type]
+            status="queued",
             user_id="user_123",
             error_message=None,
             source_type="upload",
@@ -173,7 +174,7 @@ def test_v1_upload_complete(monkeypatch) -> None:
             source_filename=source_filename,
             created_at=datetime.now(timezone.utc).isoformat(),
             updated_at=datetime.now(timezone.utc).isoformat(),
-        ),
+        ), True),
     )
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda video_id: object())
 
@@ -226,21 +227,22 @@ def test_v1_end_to_end_happy_path(monkeypatch) -> None:
 
     video_state: dict[str, str] = {}
 
-    def fake_create_video(youtube_url, user_id=None, status="queued"):
-        record = _video_record("e2e_vid", status=status)
-        video_state["e2e_vid"] = status
-        return record
+    def fake_insert_idempotent(url, uid):
+        record = _video_record("e2e_vid", status="queued")
+        video_state["e2e_vid"] = "queued"
+        return record, True
 
     def fake_get_video(video_id, user_id=None):
         current_status = video_state.get(video_id, "ready")
         return _video_record(video_id, status=current_status)
 
-    monkeypatch.setattr("src.api.app.db_create_video", fake_create_video)
+    monkeypatch.setattr("src.api.app.db_insert_youtube_video_idempotent", fake_insert_idempotent)
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda video_id: object())
     monkeypatch.setattr(
         "src.api.app.fetch_video_metadata",
         lambda _: VideoMetadata(duration_s=60.0, is_live=False),
     )
+    monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
     monkeypatch.setattr("src.api.app.db_get_video", fake_get_video)
     monkeypatch.setattr(
         "src.api.app.search_video_by_text_service",

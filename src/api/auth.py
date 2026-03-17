@@ -1,18 +1,27 @@
 """Authentication utilities for API endpoints."""
 from __future__ import annotations
 
+import hashlib
 import os
+import time
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import jwt
 from fastapi import Header, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from src.db.supabase import get_api_key_by_hash, touch_api_key_last_used
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+AuthMethod = Literal["jwt", "api_key"]
+
+# Throttle last_used_at writes: at most one DB update per key per 60 s.
+_LAST_USED_WRITE_INTERVAL_S = 60
+_last_used_writes: dict[str, float] = {}
 
 
 class AuthConfigError(RuntimeError):
@@ -21,6 +30,15 @@ class AuthConfigError(RuntimeError):
 
 class TokenVerificationError(RuntimeError):
     """Raised when a bearer token cannot be verified."""
+
+
+@dataclass(frozen=True)
+class AuthIdentity:
+    """Authenticated caller identity with attribution metadata."""
+
+    user_id: str
+    auth_method: AuthMethod
+    api_key_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,7 +107,63 @@ def verify_bearer_token(token: str) -> str:
     return user_id
 
 
+def hash_api_key(token: str) -> str:
+    """Return the SHA-256 hex digest of a raw API key."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def verify_api_key(token: str) -> AuthIdentity:
+    """Verify an API key token and return an AuthIdentity with attribution."""
+    key_hash = hash_api_key(token)
+    record = get_api_key_by_hash(key_hash)
+    if record is None:
+        raise TokenVerificationError("Invalid authentication token")
+
+    now = time.monotonic()
+    if now - _last_used_writes.get(record.id, 0) >= _LAST_USED_WRITE_INTERVAL_S:
+        touch_api_key_last_used(record.id)
+        _last_used_writes[record.id] = now
+
+    return AuthIdentity(
+        user_id=record.user_id,
+        auth_method="api_key",
+        api_key_id=record.id,
+    )
+
+
+def _verify_token(token: str) -> AuthIdentity:
+    """Route token to API-key or JWT verification, returning full identity."""
+    if token.startswith("vmf_"):
+        return verify_api_key(token)
+    user_id = verify_bearer_token(token)
+    return AuthIdentity(user_id=user_id, auth_method="jwt")
+
+
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _run_auth(verify_fn, *args):
+    """Call a verification function, translating auth exceptions to HTTP errors."""
+    try:
+        return verify_fn(*args)
+    except AuthConfigError as exc:
+        logger.error("Auth configuration error: %s", exc)
+        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
+    except TokenVerificationError as exc:
+        raise _unauthorized(str(exc)) from exc
+
+
+def _extract_bearer_token(authorization: str) -> str:
+    """Parse raw Authorization header and return the bearer token."""
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise _unauthorized("Invalid Authorization header")
+    return token.strip()
+
+
+# ---------------------------------------------------------------------------
+# JWT-only dependencies (legacy / internal routes)
+# ---------------------------------------------------------------------------
 
 
 def get_current_user_id(
@@ -97,38 +171,54 @@ def get_current_user_id(
         HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
     ] = None,
 ) -> str:
-    """FastAPI dependency that returns the authenticated Clerk user id."""
+    """FastAPI dependency: JWT-only auth, returns user id.
+
+    Used by legacy and internal routes (billing, checkout, unversioned
+    handlers). API keys are rejected to limit key scope to /api/v1/.
+    """
     if credentials is None:
         raise _unauthorized("Missing Authorization header")
 
-    try:
-        return verify_bearer_token(credentials.credentials)
-    except AuthConfigError as exc:
-        logger.error("Auth configuration error: %s", exc)
-        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
-    except TokenVerificationError as exc:
-        raise _unauthorized(str(exc)) from exc
+    token = credentials.credentials
+    if token.startswith("vmf_"):
+        raise _unauthorized("API keys are not accepted on this endpoint")
+
+    return _run_auth(verify_bearer_token, token)
 
 
 def get_optional_user_id(
     authorization: Annotated[str | None, Header()] = None,
 ) -> str | None:
-    """FastAPI dependency: returns user id when token present, None when header absent.
+    """FastAPI dependency: JWT-only optional auth, returns user id or None.
 
-    Raises 401 if the header is present but the token is invalid (prevents
-    broken tokens from being silently treated as anonymous).
+    Raises 401 if the header is present but the token is invalid.
+    API keys are rejected to limit key scope to /api/v1/.
     """
     if authorization is None:
         return None
 
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise _unauthorized("Invalid Authorization header")
+    token = _extract_bearer_token(authorization)
+    if token.startswith("vmf_"):
+        raise _unauthorized("API keys are not accepted on this endpoint")
 
-    try:
-        return verify_bearer_token(token.strip())
-    except AuthConfigError as exc:
-        logger.error("Auth configuration error: %s", exc)
-        raise HTTPException(status_code=500, detail="Authentication is not configured") from exc
-    except TokenVerificationError as exc:
-        raise _unauthorized(str(exc)) from exc
+    return _run_auth(verify_bearer_token, token)
+
+
+# ---------------------------------------------------------------------------
+# JWT + API key dependencies (v1 external routes)
+# ---------------------------------------------------------------------------
+
+
+def get_current_user(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Security(_bearer_scheme)
+    ] = None,
+) -> AuthIdentity:
+    """FastAPI dependency: JWT or API key auth, returns full AuthIdentity.
+
+    Used by /api/v1/ routes where API keys are accepted.
+    """
+    if credentials is None:
+        raise _unauthorized("Missing Authorization header")
+
+    return _run_auth(_verify_token, credentials.credentials)

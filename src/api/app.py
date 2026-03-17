@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
+import secrets
 from math import ceil
 import os
 from pathlib import Path
@@ -15,12 +16,12 @@ import tempfile
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.analytics.events import track
-from src.api.auth import get_current_user_id, get_optional_user_id
+from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id, hash_api_key
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,
@@ -39,13 +40,19 @@ from src.db.supabase import (
     apply_billing_credit_grant as db_apply_billing_credit_grant,
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
+    create_api_key as db_create_api_key,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_credits as db_get_credits,
+    get_video_job as db_get_video_job,
     get_video as db_get_video,
+    insert_uploaded_video_idempotent as db_insert_uploaded_video_idempotent,
+    insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
     has_unlimited_video_access as db_has_unlimited_video_access,
+    list_api_keys as db_list_api_keys,
     list_videos as db_list_videos,
+    revoke_api_key as db_revoke_api_key,
     update_video_status,
 )
 from src.storage.config import R2Config, StorageConfigError
@@ -57,7 +64,7 @@ from src.utils.logging import get_logger
 from src.video.download import VideoMetadataError, fetch_video_metadata
 from src.video.metadata import VideoMetadataProbeError, max_video_duration_s, probe_video_duration_s
 from src.video.youtube import normalize_youtube_url
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 load_env()
 logger = get_logger(__name__)
@@ -762,38 +769,82 @@ def _get_idempotent_upload_record(
     existing = db_get_video(video_id, user_id=user_id)
     if existing is None:
         return None
-    if existing.source_type != "upload":
+    return _require_matching_upload_record(
+        existing,
+        source_r2_key=source_r2_key,
+        source_filename=source_filename,
+    )
+
+
+def _require_matching_upload_record(
+    record: VideoRecord,
+    *,
+    source_r2_key: str,
+    source_filename: str,
+) -> VideoRecord:
+    """Require an upload record to match the caller's source metadata exactly."""
+    if record.source_type != "upload":
         raise HTTPException(
             status_code=409,
             detail="video_id already exists with a different source type",
         )
-    if existing.source_r2_key != source_r2_key or existing.source_filename != source_filename:
+    if record.source_r2_key != source_r2_key or record.source_filename != source_filename:
         raise HTTPException(
             status_code=409,
             detail="video_id already exists with different upload metadata",
         )
-    return existing
+    return record
+
+
+def _ensure_enqueued(record: VideoRecord) -> None:
+    """Re-enqueue a stranded video that was billed but never got a job row.
+
+    Called on the retry path when an existing dedupe record is found.
+    If the video is still ``queued`` and has no ``video_jobs`` entry, an
+    enqueue failure on the original request left it stranded — try again.
+
+    Raises 503 if the re-enqueue fails so the client knows the video is
+    not yet processing and can retry.
+    """
+    if record.status != "queued":
+        return
+    if db_get_video_job(record.id) is not None:
+        return
+    try:
+        enqueue_video_job(record.id)
+        logger.info("Re-enqueued stranded video_id=%s on retry", record.id)
+    except Exception as exc:
+        logger.exception("Failed to re-enqueue stranded video_id=%s", record.id)
+        raise HTTPException(
+            status_code=503,
+            detail="Video was created but processing could not be started. Please retry.",
+        ) from exc
+
+
+def _enqueue_or_raise(video_id: str) -> None:
+    """Enqueue a video processing job, raising 500 on failure.
+
+    Does NOT mark the video as failed — callers that need the row to
+    survive as a dedupe anchor (v1 idempotent paths) use this directly.
+    """
+    try:
+        enqueue_video_job(video_id)
+    except Exception as exc:
+        logger.exception("Failed to enqueue video_id=%s: %s", video_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to enqueue processing job") from exc
 
 
 def _enqueue_video_or_fail(video_id: str) -> None:
     """Enqueue a video processing job, marking the video as failed on error."""
     try:
-        enqueue_video_job(video_id)
-    except Exception as exc:
-        logger.exception(
-            "Failed to enqueue processing job for video_id=%s: %s",
-            video_id,
-            exc,
-        )
+        _enqueue_or_raise(video_id)
+    except HTTPException:
         update_video_status(
             video_id,
             "failed",
-            error_message=f"Failed to enqueue processing job: {exc}",
+            error_message="Failed to enqueue processing job",
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to enqueue processing job",
-        ) from exc
+        raise
 
 
 def _get_ready_video_for_search(video_id: str, user_id: str) -> VideoRecord:
@@ -905,13 +956,21 @@ def create_video(
     return _video_record_to_response(record)
 
 
-@app.post("/videos/upload", response_model=VideoResponse)
-def upload_video(
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-) -> VideoResponse:
-    """Upload a video file and enqueue durable processing job."""
-    _enforce_user_write_rate_limit(user_id)
+def _try_cleanup_r2(store: R2Store, key: str, user_id: str) -> None:
+    """Best-effort delete of an R2 object. Logs on failure, never raises."""
+    try:
+        store.delete_source_object(key)
+    except R2StorageError as exc:
+        logger.warning("Failed to cleanup R2 object for user_id=%s key=%s: %s", user_id, key, exc)
+
+
+def _validate_and_upload_file(
+    file: UploadFile, user_id: str, video_id: str,
+) -> tuple[R2Store, Any, str, bool]:
+    """Validate an uploaded file, store it in R2, and return context for billing.
+
+    Returns (store, upload_result, filename, requires_credit).
+    """
     if not file.filename and not file.content_type:
         raise HTTPException(status_code=400, detail="No file uploaded")
     if file.content_type and not file.content_type.startswith("video/"):
@@ -928,42 +987,39 @@ def upload_video(
         r2_config = R2Config.from_env()
     except StorageConfigError as exc:
         raise HTTPException(
-            status_code=503,
-            detail="Upload storage is not configured",
+            status_code=503, detail="Upload storage is not configured",
         ) from exc
 
-    video_id = str(uuid4())
     filename = _sanitize_filename(file.filename)
     store = R2Store(r2_config)
-
     try:
         upload_result = store.upload_source_video(
-            video_id=video_id,
-            filename=filename,
-            file_obj=file.file,
-            content_type=file.content_type,
+            video_id=video_id, filename=filename,
+            file_obj=file.file, content_type=file.content_type,
         )
     except R2StorageError as exc:
         logger.exception("Failed to upload source video: %s", exc)
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to store uploaded video",
-        ) from exc
+        raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+    return store, upload_result, filename, requires_credit
+
+
+@app.post("/videos/upload", response_model=VideoResponse)
+def upload_video(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
+    """Upload a video file and enqueue durable processing job."""
+    _enforce_user_write_rate_limit(user_id)
+    video_id = str(uuid4())
+    store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
 
     try:
         if requires_credit:
             _consume_processing_credit_or_raise(user_id)
     except HTTPException as exc:
         if exc.status_code == 402:
-            try:
-                store.delete_source_object(upload_result.key)
-            except R2StorageError as cleanup_exc:
-                logger.warning(
-                    "Failed to cleanup uploaded source video for user_id=%s key=%s: %s",
-                    user_id,
-                    upload_result.key,
-                    cleanup_exc,
-                )
+            _try_cleanup_r2(store, upload_result.key, user_id)
         raise
 
     record = db_create_uploaded_video(
@@ -1074,28 +1130,27 @@ def complete_upload(
     except UploadDurationProbeUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
-    if requires_credit:
-        _consume_processing_credit_or_raise(user_id)
+    record, created = db_insert_uploaded_video_idempotent(
+        request.video_id,
+        user_id,
+        key,
+        filename,
+    )
+    if not created:
+        record = _require_matching_upload_record(
+            record,
+            source_r2_key=key,
+            source_filename=filename,
+        )
+        return _video_record_to_response(record)
 
-    try:
-        record = db_create_uploaded_video(
-            video_id=request.video_id,
-            source_r2_key=key,
-            source_filename=filename,
-            user_id=user_id,
-            status="queued",
-        )
-    except Exception:
-        # Handle the create race where another request inserted this upload first.
-        existing = _get_idempotent_upload_record(
-            video_id=request.video_id,
-            user_id=user_id,
-            source_r2_key=key,
-            source_filename=filename,
-        )
-        if existing is not None:
-            return _video_record_to_response(existing)
-        raise
+    if requires_credit:
+        try:
+            _consume_processing_credit_or_raise(user_id)
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
 
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
@@ -1318,19 +1373,219 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
 
 
 # ---------------------------------------------------------------------------
-# Versioned external API (v1)
+# API key management
 # ---------------------------------------------------------------------------
+
+
+class CreateApiKeyRequest(BaseModel):
+    name: str = ""
+
+
+class ApiKeyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    key_prefix: str
+    created_at: str | None = None
+    last_used_at: str | None = None
+
+
+class ApiKeyCreatedResponse(ApiKeyResponse):
+    key: str
+
+
+def create_api_key(
+    body: CreateApiKeyRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> ApiKeyCreatedResponse:
+    """Create a new API key. The raw key is returned once and never stored."""
+    raw_key = "vmf_" + secrets.token_hex(16)
+    key_hash = hash_api_key(raw_key)
+    key_prefix = "vmf_" + raw_key[4:8]
+
+    try:
+        record = db_create_api_key(identity.user_id, body.name, key_hash, key_prefix)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return ApiKeyCreatedResponse(
+        id=record.id,
+        name=record.name,
+        key_prefix=record.key_prefix,
+        created_at=record.created_at,
+        last_used_at=record.last_used_at,
+        key=raw_key,
+    )
+
+
+def list_api_keys(
+    identity: AuthIdentity = Depends(get_current_user),
+) -> list[ApiKeyResponse]:
+    """List the caller's active API keys."""
+    records = db_list_api_keys(identity.user_id)
+    return [ApiKeyResponse.model_validate(r) for r in records]
+
+
+def revoke_api_key(
+    key_id: str,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> None:
+    """Revoke an API key (soft delete)."""
+    revoked = db_revoke_api_key(key_id, identity.user_id)
+    if not revoked:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+
+# ---------------------------------------------------------------------------
+# Versioned external API (v1) — accepts both JWT and API key auth
+# ---------------------------------------------------------------------------
+
+# Thin v1 wrappers that accept API keys (via get_current_user) and delegate
+# to the shared business logic.  Legacy @app routes keep get_current_user_id
+# (JWT-only) so API keys are scoped to /api/v1/ only.
+
+
+def v1_create_video(
+    request: VideoCreateRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    _enforce_user_write_rate_limit(identity.user_id)
+    _validate_video_duration(request.youtube_url)
+
+    # Atomic insert: the unique partial index on (user_id, youtube_url) serializes
+    # concurrent retries at the DB level.  The record exists BEFORE billing so a
+    # racing retry sees it and short-circuits — no double charge.
+    record, created = db_insert_youtube_video_idempotent(
+        request.youtube_url, identity.user_id
+    )
+    if not created:
+        _ensure_enqueued(record)
+        return _video_record_to_response(record)
+
+    try:
+        _consume_and_admit_video_processing(identity.user_id)
+    except HTTPException:
+        update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
+
+    _enqueue_or_raise(record.id)
+    track("video_submitted", user_id=identity.user_id, metadata={"source_type": "youtube"})
+    return _video_record_to_response(record)
+
+
+def v1_upload_video(
+    file: UploadFile = File(...),
+    identity: AuthIdentity = Depends(get_current_user),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
+) -> VideoResponse:
+    if idempotency_key is None:
+        return upload_video(file, user_id=identity.user_id)
+
+    # Idempotent upload: deterministic video_id from the key so concurrent
+    # retries collide on PK.  DB insert happens BEFORE billing.
+    user_id = identity.user_id
+    video_id = str(uuid5(NAMESPACE_URL, f"{user_id}:{idempotency_key}"))
+    filename = _sanitize_filename(file.filename)
+    expected_key = source_key(video_id, filename)
+
+    # Fast path: if the record already exists, skip file validation, R2
+    # upload, and billing entirely.  Re-enqueue if the original request
+    # failed after billing but before creating the job row.
+    existing = db_get_video(video_id, user_id=user_id)
+    if existing is not None:
+        existing = _require_matching_upload_record(
+            existing,
+            source_r2_key=expected_key,
+            source_filename=filename,
+        )
+        _ensure_enqueued(existing)
+        return _video_record_to_response(existing)
+
+    _enforce_user_write_rate_limit(user_id)
+    store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
+
+    # Atomic insert: PK constraint serializes concurrent retries.
+    record, created = db_insert_uploaded_video_idempotent(
+        video_id, user_id, upload_result.key, filename
+    )
+    if not created:
+        record = _require_matching_upload_record(
+            record,
+            source_r2_key=upload_result.key,
+            source_filename=filename,
+        )
+        # Only delete the loser-side object when it uses a different key.
+        # Same-key retries share the winner's object and must not delete it.
+        if upload_result.key != record.source_r2_key:
+            _try_cleanup_r2(store, upload_result.key, user_id)
+        _ensure_enqueued(record)
+        return _video_record_to_response(record)
+
+    try:
+        if requires_credit:
+            _consume_processing_credit_or_raise(user_id)
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            _try_cleanup_r2(store, upload_result.key, user_id)
+            update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
+
+    _enqueue_or_raise(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+    return _video_record_to_response(record)
+
+
+def v1_init_upload(
+    request: UploadInitRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> UploadInitResponse:
+    return init_upload(request, user_id=identity.user_id)
+
+
+def v1_complete_upload(
+    request: UploadCompleteRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    return complete_upload(request, user_id=identity.user_id)
+
+
+def v1_get_video(
+    video_id: str,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoResponse:
+    return get_video(video_id, user_id=identity.user_id)
+
+
+def v1_list_my_videos(
+    identity: AuthIdentity = Depends(get_current_user),
+) -> list[VideoResponse]:
+    return list_my_videos(user_id=identity.user_id)
+
+
+def v1_search_video(
+    video_id: str,
+    request: VideoSearchRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoSearchResponse:
+    return search_video(video_id, request, user_id=identity.user_id)
+
 
 v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
 
+# Key management — static paths registered before parameterized /videos/{id}.
+v1_router.add_api_route("/keys", create_api_key, methods=["POST"], response_model=ApiKeyCreatedResponse, status_code=201)
+v1_router.add_api_route("/keys", list_api_keys, methods=["GET"], response_model=list[ApiKeyResponse])
+v1_router.add_api_route("/keys/{key_id}", revoke_api_key, methods=["DELETE"], status_code=204)
+
 # Static paths first (Starlette matches by registration order).
-v1_router.add_api_route("/videos/upload", upload_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/upload/init", init_upload, methods=["POST"], response_model=UploadInitResponse)
-v1_router.add_api_route("/videos/upload/complete", complete_upload, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/upload", v1_upload_video, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/upload/init", v1_init_upload, methods=["POST"], response_model=UploadInitResponse)
+v1_router.add_api_route("/videos/upload/complete", v1_complete_upload, methods=["POST"], response_model=VideoResponse)
 # Collection + parameterized paths.
-v1_router.add_api_route("/videos", create_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos", list_my_videos, methods=["GET"], response_model=list[VideoResponse])
-v1_router.add_api_route("/videos/{video_id}", get_video, methods=["GET"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/{video_id}/search", search_video, methods=["POST"], response_model=VideoSearchResponse)
+v1_router.add_api_route("/videos", v1_create_video, methods=["POST"], response_model=VideoResponse)
+v1_router.add_api_route("/videos", v1_list_my_videos, methods=["GET"], response_model=list[VideoResponse])
+v1_router.add_api_route("/videos/{video_id}", v1_get_video, methods=["GET"], response_model=VideoResponse)
+v1_router.add_api_route("/videos/{video_id}/search", v1_search_video, methods=["POST"], response_model=VideoSearchResponse)
 
 app.include_router(v1_router)

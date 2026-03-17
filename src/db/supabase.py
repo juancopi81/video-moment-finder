@@ -74,6 +74,21 @@ class ProcessingCreditConsumeResult:
 
 
 @dataclass
+class ApiKeyRecord:
+    """API key database record."""
+
+    id: str
+    user_id: str
+    name: str
+    key_hash: str
+    key_prefix: str
+    revoked_at: str | None = None
+    last_used_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
 class VideoJobRecord:
     """Video processing job record."""
 
@@ -282,6 +297,60 @@ def create_uploaded_video(
     if not result.data:
         raise RuntimeError("Failed to create video record")
     return _row_to_video(result.data[0])
+
+
+def _call_idempotent_video_rpc(rpc_name: str, params: dict) -> tuple[VideoRecord, bool]:
+    """Call an idempotent insert-or-get RPC and return (record, was_created)."""
+    client = get_client()
+    result = client.rpc(rpc_name, params).execute()
+    if not result.data:
+        raise RuntimeError(f"{rpc_name} returned no data")
+    item = _rpc_first_item(result.data)
+    if not isinstance(item, dict):
+        raise RuntimeError(f"{rpc_name} returned unexpected data shape")
+
+    row_data = item.get("row_data")
+    was_created = item.get("was_created")
+    if not isinstance(row_data, dict) or not isinstance(was_created, bool):
+        raise RuntimeError(f"{rpc_name} returned unexpected payload")
+
+    return _row_to_video(row_data), was_created
+
+
+def insert_youtube_video_idempotent(
+    youtube_url: str, user_id: str
+) -> tuple[VideoRecord, bool]:
+    """Atomically insert a YouTube video or return the existing non-failed record.
+
+    Uses a Postgres RPC backed by a unique partial index on (user_id, youtube_url)
+    so concurrent retries are serialized by the DB — only one INSERT wins.
+    """
+    return _call_idempotent_video_rpc(
+        "insert_youtube_video_idempotent",
+        {"p_youtube_url": youtube_url, "p_user_id": user_id},
+    )
+
+
+def insert_uploaded_video_idempotent(
+    video_id: str,
+    user_id: str,
+    source_r2_key: str,
+    source_filename: str,
+) -> tuple[VideoRecord, bool]:
+    """Atomically insert an uploaded video or return the existing record.
+
+    The caller supplies a deterministic video_id (derived from Idempotency-Key)
+    so concurrent retries collide on the PK and only one INSERT wins.
+    """
+    return _call_idempotent_video_rpc(
+        "insert_uploaded_video_idempotent",
+        {
+            "p_video_id": video_id,
+            "p_user_id": user_id,
+            "p_source_r2_key": source_r2_key,
+            "p_source_filename": source_filename,
+        },
+    )
 
 
 def get_video(video_id: str, user_id: str | None = None) -> VideoRecord | None:
@@ -732,3 +801,113 @@ def apply_billing_credit_grant(
     ).execute()
     applied = bool(_rpc_first_item(result.data))
     return BillingCreditGrantResult(applied=applied)
+
+
+# ---------------------------------------------------------------------------
+# API keys CRUD
+# ---------------------------------------------------------------------------
+
+MAX_API_KEYS_PER_USER = 10
+
+
+def _row_to_api_key(row: dict) -> ApiKeyRecord:
+    """Convert database row to ApiKeyRecord."""
+    return ApiKeyRecord(
+        id=row["id"],
+        user_id=row["user_id"],
+        name=row.get("name", ""),
+        key_hash=row["key_hash"],
+        key_prefix=row["key_prefix"],
+        revoked_at=row.get("revoked_at"),
+        last_used_at=row.get("last_used_at"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def create_api_key(
+    user_id: str, name: str, key_hash: str, key_prefix: str
+) -> ApiKeyRecord:
+    """Create a new API key record atomically with per-user cap."""
+    client = get_client()
+
+    try:
+        result = client.rpc(
+            "create_api_key_atomic",
+            {
+                "p_user_id": user_id,
+                "p_name": name,
+                "p_key_hash": key_hash,
+                "p_key_prefix": key_prefix,
+                "p_max_keys": MAX_API_KEYS_PER_USER,
+            },
+        ).execute()
+    except Exception as exc:
+        msg = str(exc)
+        if "Maximum of" in msg and "active API keys per user" in msg:
+            raise ValueError(
+                f"Maximum of {MAX_API_KEYS_PER_USER} active API keys per user"
+            ) from exc
+        raise
+
+    if not result.data:
+        raise RuntimeError("Failed to create API key record")
+    row = _rpc_first_item(result.data)
+    if not isinstance(row, dict):
+        raise RuntimeError("Failed to create API key record")
+    return _row_to_api_key(row)
+
+
+def get_api_key_by_hash(key_hash: str) -> ApiKeyRecord | None:
+    """Look up an active API key by its SHA-256 hash."""
+    client = get_client()
+    result = (
+        client.table("api_keys")
+        .select("*")
+        .eq("key_hash", key_hash)
+        .is_("revoked_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_api_key(result.data[0])
+
+
+def list_api_keys(user_id: str) -> list[ApiKeyRecord]:
+    """List active API keys for a user, newest first."""
+    client = get_client()
+    result = (
+        client.table("api_keys")
+        .select("*")
+        .eq("user_id", user_id)
+        .is_("revoked_at", "null")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return [_row_to_api_key(row) for row in result.data]
+
+
+def revoke_api_key(key_id: str, user_id: str) -> bool:
+    """Soft-revoke an API key. Returns True if a key was revoked."""
+    client = get_client()
+    result = (
+        client.table("api_keys")
+        .update({"revoked_at": _utc_now_iso()})
+        .eq("id", key_id)
+        .eq("user_id", user_id)
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return bool(result.data)
+
+
+def touch_api_key_last_used(key_id: str) -> None:
+    """Update last_used_at timestamp. Fire-and-forget — logs errors, never raises."""
+    try:
+        client = get_client()
+        client.table("api_keys").update(
+            {"last_used_at": _utc_now_iso()}
+        ).eq("id", key_id).execute()
+    except Exception as exc:
+        logger.debug("Failed to update api_key last_used_at: %s", exc, exc_info=True)
