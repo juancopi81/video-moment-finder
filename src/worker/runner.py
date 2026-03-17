@@ -186,6 +186,8 @@ def _process_claimed_job(
     try:
         process_video(video)
     except VideoValidationError as exc:
+        # Validation failures are expected user/input rejections, so we keep them
+        # out of Sentry and handle them as terminal queue outcomes only.
         error_message = str(exc)
         logger.warning(
             "Non-retriable validation failure job_id=%s video_id=%s: %s",

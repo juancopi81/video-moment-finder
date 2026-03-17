@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import pytest
+from httpx import Headers
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 from src.storage.config import QdrantConfig
 from src.storage.qdrant import (
     EMBEDDING_DIM,
-    FRAME_UPSERT_BATCH_SIZE,
     FrameVector,
+    QDRANT_UPSERT_BATCH_SIZE,
     QdrantPayloadTooLargeError,
     QdrantStore,
     generate_point_id,
@@ -275,13 +277,13 @@ def test_upsert_frames_batches_large_payloads(monkeypatch) -> None:
             timestamp_s=float(idx),
             vector=shared_vector,
         )
-        for idx in range(FRAME_UPSERT_BATCH_SIZE + 1)
+        for idx in range(QDRANT_UPSERT_BATCH_SIZE + 1)
     ]
 
     upserted = store.upsert_frames(frames)
 
-    assert upserted == FRAME_UPSERT_BATCH_SIZE + 1
-    assert call_sizes == [FRAME_UPSERT_BATCH_SIZE, 1]
+    assert upserted == QDRANT_UPSERT_BATCH_SIZE + 1
+    assert call_sizes == [QDRANT_UPSERT_BATCH_SIZE, 1]
 
 
 def test_upsert_frames_uses_single_call_below_batch_limit(monkeypatch) -> None:
@@ -320,12 +322,15 @@ def test_upsert_frames_raises_specific_error_for_payload_limit(monkeypatch) -> N
     store.ensure_collection()
 
     def raising_upsert(*args, **kwargs):
-        raise RuntimeError(
-            "Unexpected Response: 400 (Bad Request)\n"
-            "Raw response content:\n"
-            "b'{\"status\":{\"error\":\"Payload error: JSON payload "
-            "(58419779 bytes) is larger than allowed (limit: 33554432 bytes).\"},"
-            "\"time\":0.0}'"
+        raise UnexpectedResponse(
+            status_code=400,
+            reason_phrase="Bad Request",
+            content=(
+                b'{"status":{"error":"Payload error: JSON payload '
+                b'(58419779 bytes) is larger than allowed '
+                b'(limit: 33554432 bytes)."},"time":0.0}'
+            ),
+            headers=Headers(),
         )
 
     monkeypatch.setattr(store._client, "upsert", raising_upsert)
@@ -341,6 +346,40 @@ def test_upsert_frames_raises_specific_error_for_payload_limit(monkeypatch) -> N
                 )
             ]
         )
+
+
+def test_upsert_transcripts_batches_large_payloads(monkeypatch) -> None:
+    config = QdrantConfig.in_memory(collection_name="batched_transcripts")
+    store = QdrantStore(config)
+    store.ensure_collection()
+
+    call_sizes: list[int] = []
+    original_upsert = store._client.upsert
+    shared_vector = _vector(0.4)
+
+    def tracked_upsert(*args, **kwargs):
+        call_sizes.append(len(kwargs["points"]))
+        return original_upsert(*args, **kwargs)
+
+    monkeypatch.setattr(store._client, "upsert", tracked_upsert)
+
+    transcripts = [
+        TranscriptVector(
+            video_id="video_transcript_batch",
+            segment_index=idx,
+            timestamp_s=float(idx),
+            end_s=float(idx + 1),
+            vector=shared_vector,
+            text=f"segment {idx}",
+            language_code="en",
+        )
+        for idx in range(QDRANT_UPSERT_BATCH_SIZE + 1)
+    ]
+
+    upserted = store.upsert_transcripts(transcripts)
+
+    assert upserted == QDRANT_UPSERT_BATCH_SIZE + 1
+    assert call_sizes == [QDRANT_UPSERT_BATCH_SIZE, 1]
 
 
 def test_ensure_collection_creates_video_id_payload_index(monkeypatch) -> None:
