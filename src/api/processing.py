@@ -22,6 +22,7 @@ from src.db.supabase import (
 )
 from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
+from src.storage.qdrant import QdrantPayloadTooLargeError
 from src.storage.r2 import R2Store, R2StorageError
 from src.utils.logging import get_logger
 from src.video.audio import AudioExtractionError, extract_audio_track
@@ -49,6 +50,10 @@ class VideoProcessingError(RuntimeError):
 
 class VideoValidationError(VideoProcessingError):
     """Raised when input validation fails and retries should not continue."""
+
+
+class NonRetriableVideoProcessingError(VideoProcessingError):
+    """Raised when processing fails and retries should not continue."""
 
 
 class TranscriptionSegmentPayload(TypedDict):
@@ -137,7 +142,7 @@ def process_video(video: VideoRecord) -> ProcessingResult:
             logger.info("Video processing complete for video_id=%s", video.id)
             return result
 
-    except VideoValidationError:
+    except (VideoValidationError, NonRetriableVideoProcessingError):
         raise
     except Exception as exc:
         logger.exception("Failed to process video_id=%s: %s", video.id, exc)
@@ -209,7 +214,10 @@ def _process_visual_branch(
 
     logger.info("Storing embeddings and thumbnails for video_id=%s", video_id)
     pipeline = StoragePipeline(qdrant_config, r2_config)
-    return pipeline.process_video(video_id, frames, embeddings)
+    try:
+        return pipeline.process_video(video_id, frames, embeddings)
+    except QdrantPayloadTooLargeError as exc:
+        raise NonRetriableVideoProcessingError(str(exc)) from exc
 
 
 def _process_transcript_branch(

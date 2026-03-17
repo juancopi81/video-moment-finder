@@ -10,7 +10,11 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from src.analytics.events import track
-from src.api.processing import VideoValidationError, process_video
+from src.api.processing import (
+    NonRetriableVideoProcessingError,
+    VideoValidationError,
+    process_video,
+)
 from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.utils.datetime import parse_iso_datetime
@@ -50,6 +54,18 @@ def _log_worker_metric(event: str, **fields: object) -> None:
             continue
         parts.append(f"{key}={value}")
     logger.info("worker_metric %s", " ".join(parts))
+
+
+def _sentry_context(job: VideoJobRecord, video: VideoRecord) -> dict[str, object]:
+    context: dict[str, object] = {
+        "job_id": job.id,
+        "video_id": video.id,
+        "attempt_count": job.attempt_count,
+        "source_type": video.source_type,
+    }
+    if video.user_id is not None:
+        context["user_id"] = video.user_id
+    return context
 
 
 def _recover_stale_jobs(
@@ -189,8 +205,29 @@ def _process_claimed_job(
             reason="validation_failure",
         )
         return False
+    except NonRetriableVideoProcessingError as exc:
+        capture_exception(exc, context=_sentry_context(job, video))
+        error_message = str(exc)
+        logger.exception(
+            "Non-retriable processing failure job_id=%s video_id=%s: %s",
+            job.id,
+            video.id,
+            exc,
+        )
+        update_video_status(video.id, "failed", error_message=error_message)
+        complete_video_job(job.id, "failed", error_message=error_message)
+        _log_worker_metric(
+            "job_terminal_failure",
+            worker_id=worker_id,
+            job_id=job.id,
+            video_id=video.id,
+            attempt=job.attempt_count,
+            max_attempts=max_attempts,
+            reason="non_retriable_failure",
+        )
+        return False
     except Exception as exc:
-        capture_exception(exc)
+        capture_exception(exc, context=_sentry_context(job, video))
         error_message = str(exc)
         logger.exception("Job failed job_id=%s video_id=%s: %s", job.id, video.id, exc)
         if job.attempt_count < max_attempts:

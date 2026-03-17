@@ -9,14 +9,21 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 from src.storage.config import QdrantConfig
+from src.utils.logging import get_logger
 
 
 EMBEDDING_DIM = 2048  # Qwen3-VL-Embedding-2B
+FRAME_UPSERT_BATCH_SIZE = 512
 NAMESPACE_UUID = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+logger = get_logger(__name__)
 
 
 class QdrantStorageError(RuntimeError):
     """Raised when Qdrant operations fail."""
+
+
+class QdrantPayloadTooLargeError(QdrantStorageError):
+    """Raised when a Qdrant request exceeds the upstream payload limit."""
 
 
 @dataclass(frozen=True)
@@ -94,6 +101,16 @@ def _video_filter(
     return models.Filter(must=must)
 
 
+def _is_payload_too_large_error(exc: Exception) -> bool:
+    message = str(exc).casefold()
+    return "payload error" in message and "larger than allowed" in message
+
+
+def _raise_upsert_error(kind: str, exc: Exception) -> None:
+    error_cls = QdrantPayloadTooLargeError if _is_payload_too_large_error(exc) else QdrantStorageError
+    raise error_cls(f"Failed to upsert {kind}: {exc}") from exc
+
+
 class QdrantStore:
     """Qdrant vector storage for frame embeddings."""
 
@@ -162,14 +179,22 @@ class QdrantStore:
             )
             for frame in frames
         ]
+        batch_count = (len(points) + FRAME_UPSERT_BATCH_SIZE - 1) // FRAME_UPSERT_BATCH_SIZE
+        logger.info(
+            "Upserting %d visual frames to Qdrant in %d batches (batch_size=%d)",
+            len(points),
+            batch_count,
+            FRAME_UPSERT_BATCH_SIZE,
+        )
 
         try:
-            self._client.upsert(
-                collection_name=self._config.collection_name,
-                points=points,
-            )
+            for start in range(0, len(points), FRAME_UPSERT_BATCH_SIZE):
+                self._client.upsert(
+                    collection_name=self._config.collection_name,
+                    points=points[start : start + FRAME_UPSERT_BATCH_SIZE],
+                )
         except Exception as exc:
-            raise QdrantStorageError(f"Failed to upsert frames: {exc}") from exc
+            _raise_upsert_error("frames", exc)
 
         return len(points)
 
@@ -203,7 +228,7 @@ class QdrantStore:
                 points=points,
             )
         except Exception as exc:
-            raise QdrantStorageError(f"Failed to upsert transcripts: {exc}") from exc
+            _raise_upsert_error("transcripts", exc)
 
         return len(points)
 
