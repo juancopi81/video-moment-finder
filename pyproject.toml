@@ -18,6 +18,9 @@ dependencies = [
     "PyJWT[crypto]>=2.10.1",
 ]
 
+[project.scripts]
+vmf = "src.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
@@ -32,6 +35,9 @@ modal = [
     "torchvision",
     "opencv-python>=4.13.0.90",
 ]
+
+[tool.uv]
+package = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

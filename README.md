@@ -15,6 +15,7 @@ Process a video, run text or image queries, and jump to matching timestamps.
 - Runs text queries across visual retrieval and semantically indexed transcript retrieval.
 - Returns top timestamped matches for text or example-image queries, with thumbnails when visual matches are available.
 - For text queries, the `limit` applies per result group: up to `limit` visual matches and up to `limit` spoken matches.
+- Exposes the upload, poll, and text-search happy path through a thin CLI over `/api/v1`.
 
 Current transcript scope:
 
@@ -113,6 +114,7 @@ YouTube URL import remains best effort and may be blocked by server-side restric
 - [ROADMAP.md](./ROADMAP.md): future work only.
 - [STATUS.md](./STATUS.md): execution history only.
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
+- [docs/CLI_API_GUIDE.md](./docs/CLI_API_GUIDE.md): public CLI and external API happy-path guide.
 
 ## Deployment (At a Glance)
 
