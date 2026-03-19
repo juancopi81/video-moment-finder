@@ -70,6 +70,7 @@ def _checkout_payload(
     credits: int,
     redirect_url: str,
     test_mode: bool,
+    grant_target: str = "web",
 ) -> dict:
     return {
         "data": {
@@ -80,6 +81,7 @@ def _checkout_payload(
                         "user_id": user_id,
                         "credits": str(credits),
                         "plan": plan,
+                        "grant_target": grant_target,
                     }
                 },
                 "product_options": {
@@ -112,6 +114,7 @@ def create_checkout_session(
     credits: int,
     variant_id: str,
     timeout_s: float = 20.0,
+    grant_target: str = "web",
 ) -> LemonSqueezyCheckoutSession:
     """Create a Lemon Squeezy checkout and return its URL."""
     if not user_id.strip():
@@ -132,6 +135,7 @@ def create_checkout_session(
         credits=credits,
         redirect_url=settings.redirect_url,
         test_mode=settings.test_mode,
+        grant_target=grant_target,
     )
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     req = request.Request(

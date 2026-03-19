@@ -74,9 +74,10 @@
 
 ### 6.1 Agent-Enabled Integration Path
 
-- Provide authenticated REST access over the same core product capabilities.
-- Add per-user API keys, usage attribution, quotas, and key revocation.
-- Add CLI/MCP wrapper after API contracts are stable.
+- ~~Provide authenticated REST access over the same core product capabilities.~~
+- ~~Add per-user API keys, usage attribution, quotas, and key revocation.~~
+- ~~Add CLI/MCP wrapper after API contracts are stable.~~
+- ~~Add dashboard API access area, separated API billing, and public developer page.~~
 - Deliver Phase 6 as milestone-based PR work with review gates defined in [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
 
 ### 6.2 Environment and Cost Maturity

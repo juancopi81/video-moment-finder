@@ -27,6 +27,11 @@ export function Footer() {
                   Support
                 </Link>
               </li>
+              <li>
+                <Link href="/developers" className="hover:text-foreground">
+                  Developers
+                </Link>
+              </li>
             </ul>
           </div>
 

@@ -8,6 +8,7 @@ import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { PricingCard } from "@/components/pricing-card";
 import { useBillingSummary } from "@/hooks/useBillingSummary";
 import { API_URL, parseApiError } from "@/lib/api";
+import { startApiCheckout } from "@/lib/api-billing";
 
 type BillingPlan = "starter" | "pro";
 type TierId = "free" | BillingPlan;
@@ -87,6 +88,78 @@ function ctaLabel({
     return "Opening checkout...";
   }
   return "Buy credits";
+}
+
+function ApiPricingCard({
+  isSignedIn,
+  getToken,
+}: {
+  isSignedIn: boolean;
+  getToken: () => Promise<string | null>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleCheckout() {
+    setError(null);
+    const token = await getToken();
+    if (!token) {
+      setError("Please sign in to continue.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const url = await startApiCheckout(token);
+      window.location.assign(url);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start checkout.",
+      );
+      setLoading(false);
+    }
+  }
+
+  if (isSignedIn) {
+    return (
+      <>
+        <PricingCard
+          name="Developer Pack"
+          price="$20"
+          description="10,000 API units"
+          features={[
+            "500 units per indexed video",
+            "1 unit per text query (launch pricing)",
+            "Per-key usage dashboard",
+            "CLI access",
+          ]}
+          onCtaClick={handleCheckout}
+          ctaDisabled={loading}
+          ctaLabel={loading ? "Opening checkout..." : "Buy Developer Pack"}
+        />
+        {error && (
+          <p className="mt-2 text-center text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <PricingCard
+      name="Developer Pack"
+      price="$20"
+      description="10,000 API units"
+      features={[
+        "500 units per indexed video",
+        "1 unit per text query (launch pricing)",
+        "Per-key usage dashboard",
+        "CLI access",
+      ]}
+      ctaHref="/developers"
+      ctaLabel="Learn more"
+    />
+  );
 }
 
 function PricingPageContent() {
@@ -233,6 +306,21 @@ function PricingPageContent() {
             />
           );
         })}
+      </div>
+
+      <div className="mt-16 border-t border-zinc-200 pt-12 dark:border-zinc-800">
+        <h2 className="text-center font-heading text-2xl font-bold">
+          API Access
+        </h2>
+        <p className="mt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
+          Build on top of Video Moment Finder with our REST API and CLI.
+        </p>
+        <div className="mt-8 mx-auto max-w-sm">
+          <ApiPricingCard
+            isSignedIn={isSignedIn}
+            getToken={getToken}
+          />
+        </div>
       </div>
     </div>
   );

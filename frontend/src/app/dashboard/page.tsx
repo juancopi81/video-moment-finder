@@ -170,6 +170,17 @@ function DashboardPageContent() {
               {billingSummaryError}
             </p>
           )}
+          <Link
+            href="/dashboard/api"
+            className="mb-4 block rounded-xl border border-zinc-200 bg-surface-card px-4 py-3 text-sm transition hover:border-accent dark:border-zinc-800"
+          >
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              API Access
+            </span>
+            <span className="ml-2 text-zinc-600 dark:text-zinc-400">
+              Manage API keys and developer billing
+            </span>
+          </Link>
           {isLoading ? (
             <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />

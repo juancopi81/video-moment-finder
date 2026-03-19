@@ -37,13 +37,16 @@ from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.db.supabase import (
     VideoRecord,
+    apply_api_billing_credit_grant as db_apply_api_billing_credit_grant,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
+    consume_api_units as db_consume_api_units,
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
     create_api_key as db_create_api_key,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
+    get_api_credits as db_get_api_credits,
     get_credits as db_get_credits,
     get_video_job as db_get_video_job,
     get_video as db_get_video,
@@ -51,6 +54,7 @@ from src.db.supabase import (
     insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
     has_unlimited_video_access as db_has_unlimited_video_access,
     list_api_keys as db_list_api_keys,
+    list_api_usage_events as db_list_api_usage_events,
     list_videos as db_list_videos,
     revoke_api_key as db_revoke_api_key,
     update_video_status,
@@ -71,17 +75,22 @@ logger = get_logger(__name__)
 init_sentry(service="api")
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
-BillingPlanType = Literal["starter", "pro"]
+BillingPlanType = Literal["starter", "pro", "developer"]
 DEFAULT_MAX_FREE_VIDEOS = 1
 DEFAULT_BILLING_GRANT_EVENTS = {
     "order_created",
     "subscription_payment_success",
 }
 INSUFFICIENT_CREDITS_DETAIL = "Insufficient credits. Buy credits to process another video."
+INSUFFICIENT_API_UNITS_DETAIL = {
+    "code": "insufficient_api_units",
+    "message": "Insufficient API units. Purchase a Developer Pack to add units.",
+}
 DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
 DEFAULT_BILLING_PLAN_CREDITS: dict[BillingPlanType, int] = {
     "starter": 5,
     "pro": 20,
+    "developer": 10_000,
 }
 DEFAULT_RATE_LIMIT_WINDOW_S = 60
 DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW = 12
@@ -91,6 +100,7 @@ MAX_QUERY_IMAGE_BYTES = 10 * 1024 * 1024
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
     "pro": "LEMON_SQUEEZY_VARIANT_ID_PRO",
+    "developer": "LEMON_SQUEEZY_VARIANT_ID_DEVELOPER",
 }
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
@@ -334,6 +344,42 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
     _consume_processing_credit_or_raise(user_id)
 
 
+# ---------------------------------------------------------------------------
+# API unit billing helpers
+# ---------------------------------------------------------------------------
+
+
+def _api_unit_cost_index_video() -> int:
+    return get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
+
+
+def _api_unit_cost_text_query() -> int:
+    return get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
+
+
+def _consume_api_units_or_raise(
+    user_id: str,
+    api_key_id: str | None,
+    event_type: str,
+    units: int,
+    video_id: str | None = None,
+    request_id: str | None = None,
+) -> None:
+    result = db_consume_api_units(
+        user_id=user_id,
+        api_key_id=api_key_id,
+        event_type=event_type,
+        units=units,
+        video_id=video_id,
+        request_id=request_id,
+    )
+    if not result.allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=INSUFFICIENT_API_UNITS_DETAIL,
+        )
+
+
 def _source_url_ttl_s() -> int:
     return get_env_int("VIDEO_SOURCE_URL_TTL_S", 3600)
 
@@ -471,7 +517,8 @@ def _lemonsqueezy_event_id(
     return f"{event_name}:sha256:{hashlib.sha256(raw_body).hexdigest()}"
 
 
-def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int] | None:
+def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int, str] | None:
+    """Extract (user_id, credits, grant_target) from webhook payload."""
     if not payload.meta or not payload.meta.custom_data:
         return None
     cd = payload.meta.custom_data
@@ -483,7 +530,10 @@ def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int] | Non
         return None
     if credits <= 0:
         return None
-    return cd.user_id.strip(), credits
+    grant_target = "web"
+    if isinstance(cd.grant_target, str) and cd.grant_target.strip() in ("web", "api"):
+        grant_target = cd.grant_target.strip()
+    return cd.user_id.strip(), credits, grant_target
 
 
 def _parse_lemonsqueezy_payload(payload_dict: dict) -> LemonSqueezyPayload:
@@ -701,11 +751,33 @@ class BillingSummaryResponse(BaseModel):
     has_unlimited_access: bool
 
 
+class ApiBillingSummaryResponse(BaseModel):
+    api_units_balance: int
+    unit_cost_index_video: int
+    unit_cost_text_query: int
+    approx_videos: int
+    approx_queries: int
+
+
+class ApiUsageEventResponse(BaseModel):
+    id: str
+    api_key_id: str | None
+    event_type: str
+    units: int
+    video_id: str | None
+    created_at: str | None
+
+
+class ApiCheckoutRequest(BaseModel):
+    plan: Literal["developer"]
+
+
 class LemonSqueezyCustomData(BaseModel):
     model_config = ConfigDict(strict=True)
 
     user_id: str | None = None
     credits: Any = None
+    grant_target: str | None = None
 
 
 class LemonSqueezyMeta(BaseModel):
@@ -1343,19 +1415,42 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
             reason="No credit grant metadata found in meta.custom_data",
         )
 
-    user_id, credits = grant
+    user_id, credits, grant_target = grant
     event_id = _lemonsqueezy_event_id(payload, raw_body, event_name)
-    applied = db_apply_billing_credit_grant(
-        provider="lemonsqueezy",
-        event_id=event_id,
-        event_type=event_name,
-        user_id=user_id,
-        credits=credits,
-        payload=payload_dict,
-    ).applied
+
+    if grant_target == "api":
+        # Validate variant match when configured.
+        expected_variant_env = "LEMON_SQUEEZY_VARIANT_ID_DEVELOPER"
+        expected_variant = os.environ.get(expected_variant_env, "").strip()
+        if expected_variant and payload.data and payload.data.id is not None:
+            actual_id = str(payload.data.id).strip()
+            if actual_id and actual_id != expected_variant:
+                logger.warning(
+                    "API grant variant mismatch: expected=%s actual=%s event_id=%s",
+                    expected_variant,
+                    actual_id,
+                    event_id,
+                )
+        applied = db_apply_api_billing_credit_grant(
+            provider="lemonsqueezy",
+            event_id=event_id,
+            event_type=event_name,
+            user_id=user_id,
+            credits=credits,
+            payload=payload_dict,
+        ).applied
+    else:
+        applied = db_apply_billing_credit_grant(
+            provider="lemonsqueezy",
+            event_id=event_id,
+            event_type=event_name,
+            user_id=user_id,
+            credits=credits,
+            payload=payload_dict,
+        ).applied
 
     if applied:
-        track("checkout_success", user_id=user_id, metadata={"credits": credits})
+        track("checkout_success", user_id=user_id, metadata={"credits": credits, "grant_target": grant_target})
     logger.info(
         "Lemon webhook processed event=%s event_id=%s user_id=%s credits=%s applied=%s",
         event_name,
@@ -1464,7 +1559,16 @@ def v1_create_video(
         return _video_record_to_response(record)
 
     try:
-        _consume_and_admit_video_processing(identity.user_id)
+        if identity.auth_method == "api_key":
+            _consume_api_units_or_raise(
+                user_id=identity.user_id,
+                api_key_id=getattr(identity, "api_key_id", None),
+                event_type="index_video",
+                units=_api_unit_cost_index_video(),
+                video_id=record.id,
+            )
+        else:
+            _consume_and_admit_video_processing(identity.user_id)
     except HTTPException:
         update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
@@ -1523,7 +1627,15 @@ def v1_upload_video(
         return _video_record_to_response(record)
 
     try:
-        if requires_credit:
+        if identity.auth_method == "api_key":
+            _consume_api_units_or_raise(
+                user_id=user_id,
+                api_key_id=getattr(identity, "api_key_id", None),
+                event_type="index_video",
+                units=_api_unit_cost_index_video(),
+                video_id=video_id,
+            )
+        elif requires_credit:
             _consume_processing_credit_or_raise(user_id)
     except HTTPException as exc:
         if exc.status_code == 402:
@@ -1547,6 +1659,13 @@ def v1_complete_upload(
     request: UploadCompleteRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoResponse:
+    if identity.auth_method == "api_key":
+        _consume_api_units_or_raise(
+            user_id=identity.user_id,
+            api_key_id=getattr(identity, "api_key_id", None),
+            event_type="index_video",
+            units=_api_unit_cost_index_video(),
+        )
     return complete_upload(request, user_id=identity.user_id)
 
 
@@ -1568,10 +1687,108 @@ def v1_search_video(
     request: VideoSearchRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoSearchResponse:
+    if identity.auth_method == "api_key":
+        _consume_api_units_or_raise(
+            user_id=identity.user_id,
+            api_key_id=getattr(identity, "api_key_id", None),
+            event_type="text_query",
+            units=_api_unit_cost_text_query(),
+            video_id=video_id,
+        )
     return search_video(video_id, request, user_id=identity.user_id)
 
 
+# ---------------------------------------------------------------------------
+# API billing endpoints (v1)
+# ---------------------------------------------------------------------------
+
+
+def v1_api_billing_checkout(
+    body: ApiCheckoutRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> BillingCheckoutResponse:
+    """Create checkout session for Developer Pack (JWT-only)."""
+    _enforce_user_write_rate_limit(user_id)
+    credits = DEFAULT_BILLING_PLAN_CREDITS["developer"]
+    try:
+        session = create_checkout_session(
+            user_id=user_id,
+            plan="developer",
+            credits=credits,
+            variant_id=_billing_plan_variant_id("developer"),
+            grant_target="api",
+        )
+    except LemonSqueezyConfigError as exc:
+        logger.error("Lemon Squeezy checkout config error: %s", exc)
+        raise HTTPException(status_code=503, detail="Billing checkout is not configured") from exc
+    except LemonSqueezyProviderError as exc:
+        logger.exception(
+            "Lemon Squeezy checkout failed for user_id=%s plan=developer: %s",
+            user_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Billing checkout is temporarily unavailable",
+        ) from exc
+
+    track("checkout_started", user_id=user_id, metadata={"plan": "developer"})
+    return BillingCheckoutResponse(
+        provider="lemonsqueezy",
+        plan="developer",
+        credits=credits,
+        checkout_url=session.url,
+        test_mode=session.test_mode,
+    )
+
+
+def v1_api_billing_summary(
+    identity: AuthIdentity = Depends(get_current_user),
+) -> ApiBillingSummaryResponse:
+    """Return API unit balance and approximate equivalents."""
+    record = db_get_api_credits(identity.user_id)
+    balance = record.balance if record else 0
+    cost_video = _api_unit_cost_index_video()
+    cost_query = _api_unit_cost_text_query()
+    return ApiBillingSummaryResponse(
+        api_units_balance=balance,
+        unit_cost_index_video=cost_video,
+        unit_cost_text_query=cost_query,
+        approx_videos=balance // cost_video if cost_video > 0 else 0,
+        approx_queries=balance // cost_query if cost_query > 0 else 0,
+    )
+
+
+def v1_api_billing_usage(
+    identity: AuthIdentity = Depends(get_current_user),
+    api_key_id: str | None = None,
+    limit: int = 50,
+) -> list[ApiUsageEventResponse]:
+    """Return recent API usage events."""
+    events = db_list_api_usage_events(
+        user_id=identity.user_id,
+        api_key_id=api_key_id,
+        limit=min(limit, 200),
+    )
+    return [
+        ApiUsageEventResponse(
+            id=e.id,
+            api_key_id=e.api_key_id,
+            event_type=e.event_type,
+            units=e.units,
+            video_id=e.video_id,
+            created_at=e.created_at,
+        )
+        for e in events
+    ]
+
+
 v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+
+# Billing — static paths registered first.
+v1_router.add_api_route("/billing/checkout", v1_api_billing_checkout, methods=["POST"], response_model=BillingCheckoutResponse)
+v1_router.add_api_route("/billing/summary", v1_api_billing_summary, methods=["GET"], response_model=ApiBillingSummaryResponse)
+v1_router.add_api_route("/billing/usage", v1_api_billing_usage, methods=["GET"], response_model=list[ApiUsageEventResponse])
 
 # Key management — static paths registered before parameterized /videos/{id}.
 v1_router.add_api_route("/keys", create_api_key, methods=["POST"], response_model=ApiKeyCreatedResponse, status_code=201)
