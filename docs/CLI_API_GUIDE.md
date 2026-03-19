@@ -187,6 +187,8 @@ uv run vmf videos search 11111111-1111-4111-8111-111111111111 \
   --limit 3
 ```
 
+The CLI allows up to 120 seconds for a search request before timing out.
+
 Expected output:
 
 ```json
@@ -238,6 +240,8 @@ Authorization: Bearer <token>
   - The API could not confirm the uploaded object or inspect the uploaded video.
 - `HTTP 503: Search is temporarily unavailable. Please try again.`
   - The search backend is temporarily unavailable. Retry later.
+- `Request timed out after 120s`
+  - The first search against a cold backend can take longer than usual. Retry the request.
 - `API key created but failed to save config: ...`
   - The key was created successfully and is still printed to stdout. Save it manually with `vmf auth set`.
 
