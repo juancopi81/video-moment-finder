@@ -48,48 +48,44 @@ function ApiDashboardContent() {
   const [revoking, setRevoking] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
-  const loadKeys = useCallback(async () => {
+  const loadData = useCallback(async () => {
     const t = await getToken();
     if (!t) return;
     setToken(t);
     setKeysLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/keys`, {
-        headers: { Authorization: `Bearer ${t}` },
-      });
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, "Failed to load API keys."));
-      }
-      setKeys((await res.json()) as ApiKeyItem[]);
-      setKeysError(null);
-    } catch (err) {
-      setKeysError(
-        err instanceof Error ? err.message : "Failed to load API keys.",
-      );
-    } finally {
-      setKeysLoading(false);
-    }
-  }, [getToken]);
-
-  const loadUsage = useCallback(async () => {
-    const t = await getToken();
-    if (!t) return;
     setUsageLoading(true);
-    try {
-      const events = await fetchApiUsageEvents(t, { limit: 50 });
-      setUsageEvents(events);
-    } catch {
-      // Non-critical — silently ignore
-    } finally {
-      setUsageLoading(false);
-    }
+
+    const keysPromise = fetch(`${API_URL}/api/v1/keys`, {
+      headers: { Authorization: `Bearer ${t}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(await parseApiError(res, "Failed to load API keys."));
+        }
+        setKeys((await res.json()) as ApiKeyItem[]);
+        setKeysError(null);
+      })
+      .catch((err: unknown) => {
+        setKeysError(
+          err instanceof Error ? err.message : "Failed to load API keys.",
+        );
+      })
+      .finally(() => setKeysLoading(false));
+
+    const usagePromise = fetchApiUsageEvents(t, { limit: 50 })
+      .then((events) => setUsageEvents(events))
+      .catch(() => {
+        // Non-critical — silently ignore
+      })
+      .finally(() => setUsageLoading(false));
+
+    await Promise.all([keysPromise, usagePromise]);
   }, [getToken]);
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
-    void loadKeys();
-    void loadUsage();
-  }, [isLoaded, userId, loadKeys, loadUsage]);
+    void loadData();
+  }, [isLoaded, userId, loadData]);
 
   async function handleCheckout() {
     setCheckoutError(null);
@@ -349,7 +345,7 @@ function ApiDashboardContent() {
       {showCreateModal && token && (
         <ApiKeyCreateModal
           token={token}
-          onCreated={() => void loadKeys()}
+          onCreated={() => void loadData()}
           onClose={() => setShowCreateModal(false)}
         />
       )}

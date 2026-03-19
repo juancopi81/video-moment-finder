@@ -90,6 +90,18 @@ function ctaLabel({
   return "Buy credits";
 }
 
+const API_CARD = {
+  name: "Developer Pack",
+  price: "$20",
+  description: "10,000 API units",
+  features: [
+    "500 units per indexed video",
+    "1 unit per text query (launch pricing)",
+    "Per-key usage dashboard",
+    "CLI access",
+  ],
+};
+
 function ApiPricingCard({
   isSignedIn,
   getToken,
@@ -123,15 +135,7 @@ function ApiPricingCard({
     return (
       <>
         <PricingCard
-          name="Developer Pack"
-          price="$20"
-          description="10,000 API units"
-          features={[
-            "500 units per indexed video",
-            "1 unit per text query (launch pricing)",
-            "Per-key usage dashboard",
-            "CLI access",
-          ]}
+          {...API_CARD}
           onCtaClick={handleCheckout}
           ctaDisabled={loading}
           ctaLabel={loading ? "Opening checkout..." : "Buy Developer Pack"}
@@ -147,15 +151,7 @@ function ApiPricingCard({
 
   return (
     <PricingCard
-      name="Developer Pack"
-      price="$20"
-      description="10,000 API units"
-      features={[
-        "500 units per indexed video",
-        "1 unit per text query (launch pricing)",
-        "Per-key usage dashboard",
-        "CLI access",
-      ]}
+      {...API_CARD}
       ctaHref="/developers"
       ctaLabel="Learn more"
     />

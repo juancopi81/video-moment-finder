@@ -349,12 +349,8 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _api_unit_cost_index_video() -> int:
-    return get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
-
-
-def _api_unit_cost_text_query() -> int:
-    return get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
+API_UNIT_COST_INDEX_VIDEO = get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
+API_UNIT_COST_TEXT_QUERY = get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
 
 
 def _consume_api_units_or_raise(
@@ -1562,9 +1558,9 @@ def v1_create_video(
         if identity.auth_method == "api_key":
             _consume_api_units_or_raise(
                 user_id=identity.user_id,
-                api_key_id=getattr(identity, "api_key_id", None),
+                api_key_id=identity.api_key_id,
                 event_type="index_video",
-                units=_api_unit_cost_index_video(),
+                units=API_UNIT_COST_INDEX_VIDEO,
                 video_id=record.id,
             )
         else:
@@ -1630,9 +1626,9 @@ def v1_upload_video(
         if identity.auth_method == "api_key":
             _consume_api_units_or_raise(
                 user_id=user_id,
-                api_key_id=getattr(identity, "api_key_id", None),
+                api_key_id=identity.api_key_id,
                 event_type="index_video",
-                units=_api_unit_cost_index_video(),
+                units=API_UNIT_COST_INDEX_VIDEO,
                 video_id=video_id,
             )
         elif requires_credit:
@@ -1662,9 +1658,9 @@ def v1_complete_upload(
     if identity.auth_method == "api_key":
         _consume_api_units_or_raise(
             user_id=identity.user_id,
-            api_key_id=getattr(identity, "api_key_id", None),
+            api_key_id=identity.api_key_id,
             event_type="index_video",
-            units=_api_unit_cost_index_video(),
+            units=API_UNIT_COST_INDEX_VIDEO,
         )
     return complete_upload(request, user_id=identity.user_id)
 
@@ -1690,9 +1686,9 @@ def v1_search_video(
     if identity.auth_method == "api_key":
         _consume_api_units_or_raise(
             user_id=identity.user_id,
-            api_key_id=getattr(identity, "api_key_id", None),
+            api_key_id=identity.api_key_id,
             event_type="text_query",
-            units=_api_unit_cost_text_query(),
+            units=API_UNIT_COST_TEXT_QUERY,
             video_id=video_id,
         )
     return search_video(video_id, request, user_id=identity.user_id)
@@ -1748,8 +1744,8 @@ def v1_api_billing_summary(
     """Return API unit balance and approximate equivalents."""
     record = db_get_api_credits(identity.user_id)
     balance = record.balance if record else 0
-    cost_video = _api_unit_cost_index_video()
-    cost_query = _api_unit_cost_text_query()
+    cost_video = API_UNIT_COST_INDEX_VIDEO
+    cost_query = API_UNIT_COST_TEXT_QUERY
     return ApiBillingSummaryResponse(
         api_units_balance=balance,
         unit_cost_index_video=cost_video,

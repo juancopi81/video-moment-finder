@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { API_URL, parseApiError } from "@/lib/api";
 
 type ApiKeyCreateModalProps = {
@@ -49,12 +49,17 @@ export function ApiKeyCreateModal({
     }
   }
 
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(id);
+  }, [copied]);
+
   async function handleCopy() {
     if (!createdKey) return;
     try {
       await navigator.clipboard.writeText(createdKey);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API may fail in some contexts — ignore
     }
