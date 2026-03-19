@@ -33,7 +33,7 @@ Suggested milestone gates:
 
 - Expose authenticated REST access for the same core capabilities.
 - Add account-scoped API keys, usage attribution, quotas, and revocation.
-- Keep room for separate API pricing and usage accounting if later usage patterns justify a different billing model.
+- Keep room for a separate API pricing track and usage ledger instead of coupling long-term API billing to the web app's creator-facing credit packs.
 - Add a thin CLI over the external API only after the API surface is stable enough to wrap cleanly.
 - Add an agent-readable markdown usage guide only after the CLI and API happy path are stable enough to describe clearly.
 
@@ -90,6 +90,28 @@ For YouTube videos, caption fetch also runs in parallel as a simple network call
 
 At search time: embed query once → single Qdrant search returns both visual and transcript matches. Supabase FTS stays as an optional keyword boost.
 
+## Phase 6 Product Direction
+
+### API Billing Direction
+
+The current web billing model is intentionally simple:
+
+- creator-facing credit packs bought on the pricing page
+- `1 credit = 1 processed video` up to the current duration limit
+- search on already-processed videos is part of the product, not a separate billable event
+
+That model works for the web app, but it is not the right long-term product shape for the public API.
+
+API billing should differ in these ways:
+
+- **Separate product track**: API access should not be sold as just "the same web credits through a different auth method." It should become a developer-facing offer with its own packaging and messaging.
+- **Separate accounting**: API usage should be attributed to a distinct API usage ledger, even if the same account owns both web and API access. This keeps creator usage and automation usage from being mixed into one opaque balance.
+- **Key-aware attribution**: usage reporting should roll up by account and by API key so teams can understand which integration is consuming spend.
+- **Different packaging**: the web app can keep simple credit packs for creators, while the API can move toward a more developer-friendly model such as larger prepaid API bundles or usage-based billing once real demand is understood.
+- **Separate UX**: dashboard copy, limits, and billing summaries for API users should read like a developer product, not like the current creator upload workflow.
+
+This document deliberately does **not** pick final API price numbers yet. The goal for the next PR is to separate the product and accounting model clearly enough that pricing can change later without rewriting the onboarding story again.
+
 ## Suggested PR Sequence
 
 The intent is that a developer can work in order, with each PR ending at a reviewable boundary and each commit still mapping cleanly to milestone progress.
@@ -132,3 +154,14 @@ Suggested PR title: `feat(cli): add agent CLI and usage guide`
 2. Cover the supported CLI happy path with smoke checks, including image search only if the API contract is stable enough to expose it cleanly.
 3. Add a public agent-readable markdown guide for the CLI and API happy path.
    Review gate: the CLI can authenticate, submit or complete uploads, poll status, and run supported search flows without diverging from API behavior, and the markdown guide is sufficient for an agent to use the product without reading implementation code.
+
+### Phase 6 PR 4: Dashboard API Access and Billing Split
+
+Suggested branch: `codex/feat-phase6-api-access-billing`
+Suggested PR title: `feat(api): add dashboard API access and billing separation`
+
+1. Add a dashboard API access area where a signed-in user can create, list, and revoke API keys without needing to understand Clerk bearer tokens.
+2. Add product-grade onboarding for CLI users: website copy should explain where to get a key, how CLI install works, and how API usage differs from the main web app flow.
+3. Separate API billing presentation from the current web credit packs: keep creator credits as-is for the web product, but introduce a distinct API balance or API entitlement view and API usage reporting.
+4. Prepare the system for different API pricing later by keeping API usage accounting and dashboard summaries separate from the current web-credit UX, even if checkout fulfillment still reuses the existing billing provider in the short term.
+   Review gate: a signed-in user can buy or hold API capacity, create a key from the dashboard, follow the documented CLI install path, and complete a first upload and search flow without raw tokens or implementation-level knowledge.

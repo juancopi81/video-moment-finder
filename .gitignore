@@ -1,21 +1,31 @@
-# Python-generated files
+# Python build artifacts
 __pycache__/
 *.py[oc]
+*.egg-info/
 build/
 dist/
 wheels/
-*.egg-info
 
-# Virtual environments
-.venv
+# Python environments and caches
+.venv/
 .uv-cache/
-test_video*
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-# Environment variables
+# Local environment and smoke-test artifacts
 .env
 .env.local
+.tmp/
+test_video*
 
+# OS files
 .DS_Store
+
+# Repository-local tooling state
 supabase/.temp/
 supabase/.branches
 .claude/worktrees/
