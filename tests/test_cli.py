@@ -317,10 +317,12 @@ def test_videos_wait_timeout_returns_payload_and_nonzero(monkeypatch, capsys) ->
 
 
 def test_videos_search_returns_api_response(monkeypatch, capsys) -> None:
+    seen_timeout: list[float] = []
+
     monkeypatch.setattr(
         cli,
         "_json_request",
-        lambda *args, **kwargs: {
+        lambda *args, **kwargs: seen_timeout.append(kwargs["timeout_s"]) or {
             "video_id": "vid_123",
             "status": "ready",
             "results": [{"timestamp_s": 12.5, "score": 0.91, "source": "visual"}],
@@ -344,6 +346,7 @@ def test_videos_search_returns_api_response(monkeypatch, capsys) -> None:
     assert rc == 0
     payload = _read_stdout_json(capsys)
     assert payload["results"][0]["timestamp_s"] == 12.5
+    assert seen_timeout == [cli.DEFAULT_SEARCH_TIMEOUT_S]
 
 
 def test_json_request_formats_http_error_detail(monkeypatch) -> None:
@@ -359,6 +362,16 @@ def test_json_request_formats_http_error_detail(monkeypatch) -> None:
     monkeypatch.setattr(cli.urllib_request, "urlopen", fake_urlopen)
 
     with pytest.raises(cli.CliError, match="HTTP 401: Invalid authentication token"):
+        cli._json_request("GET", "https://api.example.com/api/v1/videos/vid_123")
+
+
+def test_json_request_formats_timeout_error(monkeypatch) -> None:
+    def fake_urlopen(req, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(cli.urllib_request, "urlopen", fake_urlopen)
+
+    with pytest.raises(cli.CliError, match=r"Request timed out after 30s"):
         cli._json_request("GET", "https://api.example.com/api/v1/videos/vid_123")
 
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Any, Callable
+from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 from urllib.parse import quote, urlsplit
@@ -22,6 +22,7 @@ ENV_BEARER_TOKEN = "VMF_BEARER_TOKEN"
 ENV_CONFIG_PATH = "VMF_CONFIG_PATH"
 
 DEFAULT_API_TIMEOUT_S = 30.0
+DEFAULT_SEARCH_TIMEOUT_S = 120.0
 DEFAULT_UPLOAD_TIMEOUT_S = 300.0
 DEFAULT_WAIT_INTERVAL_S = 2.0
 DEFAULT_WAIT_TIMEOUT_S = 1200.0
@@ -48,10 +49,6 @@ class LocalConfig:
 class ResolvedValue:
     value: str | None
     source: str
-
-
-JsonRequestFn = Callable[..., Any]
-UploadFn = Callable[..., None]
 
 
 def _json_request(
@@ -81,6 +78,8 @@ def _json_request(
     try:
         with urllib_request.urlopen(req, timeout=timeout_s) as response:
             raw = response.read()
+    except TimeoutError as exc:
+        raise CliError(f"Request timed out after {timeout_s:g}s") from exc
     except urllib_error.HTTPError as exc:
         detail = _extract_http_error_detail(exc)
         raise CliError(f"HTTP {exc.code}: {detail}") from exc
@@ -286,7 +285,11 @@ def _normalize_api_key(value: str) -> str:
     return cleaned
 
 
-def _resolve_api_base_url(cli_value: str | None) -> ResolvedValue:
+def _resolve_api_base_url(
+    cli_value: str | None,
+    *,
+    config: LocalConfig | None = None,
+) -> ResolvedValue:
     if cli_value:
         return ResolvedValue(_normalize_api_base_url(cli_value), "flag")
 
@@ -294,14 +297,18 @@ def _resolve_api_base_url(cli_value: str | None) -> ResolvedValue:
     if env_value:
         return ResolvedValue(_normalize_api_base_url(env_value), "env")
 
-    config_value = _load_local_config().api_base_url
+    config_value = (config or _load_local_config()).api_base_url
     if config_value:
         return ResolvedValue(_normalize_api_base_url(config_value), "config")
 
     return ResolvedValue(None, "missing")
 
 
-def _resolve_api_key(cli_value: str | None) -> ResolvedValue:
+def _resolve_api_key(
+    cli_value: str | None,
+    *,
+    config: LocalConfig | None = None,
+) -> ResolvedValue:
     if cli_value:
         return ResolvedValue(_normalize_api_key(cli_value), "flag")
 
@@ -309,7 +316,7 @@ def _resolve_api_key(cli_value: str | None) -> ResolvedValue:
     if env_value:
         return ResolvedValue(_normalize_api_key(env_value), "env")
 
-    config_value = _load_local_config().api_key
+    config_value = (config or _load_local_config()).api_key
     if config_value:
         return ResolvedValue(_normalize_api_key(config_value), "config")
 
@@ -327,6 +334,17 @@ def _resolve_bearer_token(cli_value: str | None) -> ResolvedValue:
     return ResolvedValue(None, "missing")
 
 
+def _resolve_api_credentials(
+    cli_base_url: str | None,
+    cli_api_key: str | None,
+) -> tuple[ResolvedValue, ResolvedValue]:
+    config = _load_local_config()
+    return (
+        _resolve_api_base_url(cli_base_url, config=config),
+        _resolve_api_key(cli_api_key, config=config),
+    )
+
+
 def _require_api_base_url(cli_value: str | None) -> str:
     resolved = _resolve_api_base_url(cli_value)
     if resolved.value is None:
@@ -337,14 +355,22 @@ def _require_api_base_url(cli_value: str | None) -> str:
     return resolved.value
 
 
-def _require_api_key(cli_value: str | None) -> str:
-    resolved = _resolve_api_key(cli_value)
-    if resolved.value is None:
+def _require_api_credentials(
+    cli_base_url: str | None,
+    cli_api_key: str | None,
+) -> tuple[str, str]:
+    base_url, api_key = _resolve_api_credentials(cli_base_url, cli_api_key)
+    if base_url.value is None:
+        raise CliError(
+            f"Missing API base URL. Provide --api-base-url, {ENV_API_BASE_URL}, or run `vmf auth set`.",
+            exit_code=2,
+        )
+    if api_key.value is None:
         raise CliError(
             f"Missing API key. Provide --api-key, {ENV_API_KEY}, or run `vmf auth set`.",
             exit_code=2,
         )
-    return resolved.value
+    return base_url.value, api_key.value
 
 
 def _require_bearer_token(cli_value: str | None) -> str:
@@ -403,11 +429,6 @@ def _quote_path_value(value: str) -> str:
     return quote(value, safe="")
 
 
-def _maybe_print_payload_before_error(payload: Any, message: str) -> None:
-    _print_json(payload)
-    raise CliError(message)
-
-
 def _cmd_auth_set(args: argparse.Namespace) -> Any:
     api_base_url = _normalize_api_base_url(args.api_base_url)
     api_key = _normalize_api_key(args.api_key)
@@ -422,8 +443,7 @@ def _cmd_auth_set(args: argparse.Namespace) -> Any:
 
 def _cmd_auth_status(args: argparse.Namespace) -> Any:
     config_path = _config_path()
-    base_url = _resolve_api_base_url(args.api_base_url)
-    api_key = _resolve_api_key(args.api_key)
+    base_url, api_key = _resolve_api_credentials(args.api_base_url, args.api_key)
     return {
         "config_path": str(config_path),
         "config_exists": config_path.exists(),
@@ -443,15 +463,10 @@ def _cmd_auth_clear(_args: argparse.Namespace) -> Any:
     }
 
 
-def _cmd_keys_create(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-) -> Any:
-    request_json = request_json or _json_request
+def _cmd_keys_create(args: argparse.Namespace) -> Any:
     base_url = _require_api_base_url(args.api_base_url)
     bearer_token = _require_bearer_token(args.bearer_token)
-    response = request_json(
+    response = _json_request(
         "POST",
         _api_v1_url(base_url, "/keys"),
         headers=_authorization_headers(bearer_token),
@@ -473,38 +488,26 @@ def _cmd_keys_create(
             )
         )
     except CliError as exc:
-        _maybe_print_payload_before_error(
-            data,
-            f"API key created but failed to save config: {exc}",
-        )
+        _print_json(data)
+        raise CliError(f"API key created but failed to save config: {exc}") from exc
 
     return data
 
 
-def _cmd_keys_list(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-) -> Any:
-    request_json = request_json or _json_request
+def _cmd_keys_list(args: argparse.Namespace) -> Any:
     base_url = _require_api_base_url(args.api_base_url)
     bearer_token = _require_bearer_token(args.bearer_token)
-    return request_json(
+    return _json_request(
         "GET",
         _api_v1_url(base_url, "/keys"),
         headers=_authorization_headers(bearer_token),
     )
 
 
-def _cmd_keys_revoke(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-) -> Any:
-    request_json = request_json or _json_request
+def _cmd_keys_revoke(args: argparse.Namespace) -> Any:
     base_url = _require_api_base_url(args.api_base_url)
     bearer_token = _require_bearer_token(args.bearer_token)
-    request_json(
+    _json_request(
         "DELETE",
         _api_v1_url(base_url, f"/keys/{_quote_path_value(args.key_id)}"),
         headers=_authorization_headers(bearer_token),
@@ -515,16 +518,8 @@ def _cmd_keys_revoke(
     }
 
 
-def _cmd_videos_upload(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-    upload_put: UploadFn | None = None,
-) -> Any:
-    request_json = request_json or _json_request
-    upload_put = upload_put or _stream_upload_put
-    base_url = _require_api_base_url(args.api_base_url)
-    api_key = _require_api_key(args.api_key)
+def _cmd_videos_upload(args: argparse.Namespace) -> Any:
+    base_url, api_key = _require_api_credentials(args.api_base_url, args.api_key)
     file_path = _ensure_file(args.file_path)
     content_type = _guess_video_content_type(file_path)
 
@@ -532,7 +527,7 @@ def _cmd_videos_upload(
     if content_type is not None:
         init_payload["content_type"] = content_type
 
-    init_response = request_json(
+    init_response = _json_request(
         "POST",
         _api_v1_url(base_url, "/videos/upload/init"),
         headers=_authorization_headers(api_key),
@@ -546,13 +541,13 @@ def _cmd_videos_upload(
     if not isinstance(upload_url, str) or not upload_url:
         raise CliError("Upload init response missing upload_url")
 
-    upload_put(
+    _stream_upload_put(
         upload_url,
         file_path,
         content_type=content_type,
     )
 
-    complete_response = request_json(
+    complete_response = _json_request(
         "POST",
         _api_v1_url(base_url, "/videos/upload/complete"),
         headers=_authorization_headers(api_key),
@@ -569,10 +564,8 @@ def _get_video_response(
     *,
     api_base_url: str,
     api_key: str,
-    request_json: JsonRequestFn | None = None,
 ) -> dict[str, Any]:
-    request_json = request_json or _json_request
-    response = request_json(
+    response = _json_request(
         "GET",
         _api_v1_url(api_base_url, f"/videos/{_quote_path_value(video_id)}"),
         headers=_authorization_headers(api_key),
@@ -580,65 +573,40 @@ def _get_video_response(
     return _ensure_dict(response, context="Get video")
 
 
-def _cmd_videos_get(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-) -> Any:
-    request_json = request_json or _json_request
-    base_url = _require_api_base_url(args.api_base_url)
-    api_key = _require_api_key(args.api_key)
+def _cmd_videos_get(args: argparse.Namespace) -> Any:
+    base_url, api_key = _require_api_credentials(args.api_base_url, args.api_key)
     return _get_video_response(
         args.video_id,
         api_base_url=base_url,
         api_key=api_key,
-        request_json=request_json,
     )
 
 
-def _cmd_videos_wait(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-    sleep_fn: Callable[[float], None] | None = None,
-    monotonic_fn: Callable[[], float] | None = None,
-) -> Any:
-    request_json = request_json or _json_request
-    sleep_fn = sleep_fn or time.sleep
-    monotonic_fn = monotonic_fn or time.monotonic
-    base_url = _require_api_base_url(args.api_base_url)
-    api_key = _require_api_key(args.api_key)
-    deadline = monotonic_fn() + args.timeout_seconds
+def _cmd_videos_wait(args: argparse.Namespace) -> Any:
+    base_url, api_key = _require_api_credentials(args.api_base_url, args.api_key)
+    deadline = time.monotonic() + args.timeout_seconds
 
     while True:
         response = _get_video_response(
             args.video_id,
             api_base_url=base_url,
             api_key=api_key,
-            request_json=request_json,
         )
         status = response.get("status")
         if status == "ready":
             return response
         if status == "failed":
-            _maybe_print_payload_before_error(response, "Video processing failed")
-        if monotonic_fn() >= deadline:
-            _maybe_print_payload_before_error(
-                response,
-                f"Timed out waiting for video {args.video_id}",
-            )
-        sleep_fn(args.interval_seconds)
+            _print_json(response)
+            raise CliError("Video processing failed")
+        if time.monotonic() >= deadline:
+            _print_json(response)
+            raise CliError(f"Timed out waiting for video {args.video_id}")
+        time.sleep(args.interval_seconds)
 
 
-def _cmd_videos_search(
-    args: argparse.Namespace,
-    *,
-    request_json: JsonRequestFn | None = None,
-) -> Any:
-    request_json = request_json or _json_request
-    base_url = _require_api_base_url(args.api_base_url)
-    api_key = _require_api_key(args.api_key)
-    return request_json(
+def _cmd_videos_search(args: argparse.Namespace) -> Any:
+    base_url, api_key = _require_api_credentials(args.api_base_url, args.api_key)
+    return _json_request(
         "POST",
         _api_v1_url(base_url, f"/videos/{_quote_path_value(args.video_id)}/search"),
         headers=_authorization_headers(api_key),
@@ -646,6 +614,7 @@ def _cmd_videos_search(
             "query_text": args.query_text,
             "limit": args.limit,
         },
+        timeout_s=DEFAULT_SEARCH_TIMEOUT_S,
     )
 
 
@@ -669,18 +638,6 @@ def _search_limit(value: str) -> int:
     return parsed
 
 
-def _add_api_base_url_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--api-base-url", help="Override the API base URL")
-
-
-def _add_api_key_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--api-key", help="Override the stored API key")
-
-
-def _add_bearer_token_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
-
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Video Moment Finder CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -694,8 +651,8 @@ def _build_parser() -> argparse.ArgumentParser:
     auth_set.set_defaults(func=_cmd_auth_set)
 
     auth_status = auth_subparsers.add_parser("status", help="Show resolved auth settings")
-    _add_api_base_url_arg(auth_status)
-    _add_api_key_arg(auth_status)
+    auth_status.add_argument("--api-base-url", help="Override the API base URL")
+    auth_status.add_argument("--api-key", help="Override the stored API key")
     auth_status.set_defaults(func=_cmd_auth_status)
 
     auth_clear = auth_subparsers.add_parser("clear", help="Remove local CLI auth config")
@@ -705,20 +662,20 @@ def _build_parser() -> argparse.ArgumentParser:
     keys_subparsers = keys_parser.add_subparsers(dest="keys_command", required=True)
 
     keys_create = keys_subparsers.add_parser("create", help="Create an API key")
-    _add_api_base_url_arg(keys_create)
-    _add_bearer_token_arg(keys_create)
+    keys_create.add_argument("--api-base-url", help="Override the API base URL")
+    keys_create.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
     keys_create.add_argument("--name", default="")
     keys_create.add_argument("--no-save", action="store_true")
     keys_create.set_defaults(func=_cmd_keys_create)
 
     keys_list = keys_subparsers.add_parser("list", help="List API keys")
-    _add_api_base_url_arg(keys_list)
-    _add_bearer_token_arg(keys_list)
+    keys_list.add_argument("--api-base-url", help="Override the API base URL")
+    keys_list.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
     keys_list.set_defaults(func=_cmd_keys_list)
 
     keys_revoke = keys_subparsers.add_parser("revoke", help="Revoke an API key")
-    _add_api_base_url_arg(keys_revoke)
-    _add_bearer_token_arg(keys_revoke)
+    keys_revoke.add_argument("--api-base-url", help="Override the API base URL")
+    keys_revoke.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
     keys_revoke.add_argument("key_id")
     keys_revoke.set_defaults(func=_cmd_keys_revoke)
 
@@ -726,20 +683,20 @@ def _build_parser() -> argparse.ArgumentParser:
     videos_subparsers = videos_parser.add_subparsers(dest="videos_command", required=True)
 
     videos_upload = videos_subparsers.add_parser("upload", help="Upload a video via the direct-upload API flow")
-    _add_api_base_url_arg(videos_upload)
-    _add_api_key_arg(videos_upload)
+    videos_upload.add_argument("--api-base-url", help="Override the API base URL")
+    videos_upload.add_argument("--api-key", help="Override the stored API key")
     videos_upload.add_argument("file_path")
     videos_upload.set_defaults(func=_cmd_videos_upload)
 
     videos_get = videos_subparsers.add_parser("get", help="Fetch video status")
-    _add_api_base_url_arg(videos_get)
-    _add_api_key_arg(videos_get)
+    videos_get.add_argument("--api-base-url", help="Override the API base URL")
+    videos_get.add_argument("--api-key", help="Override the stored API key")
     videos_get.add_argument("video_id")
     videos_get.set_defaults(func=_cmd_videos_get)
 
     videos_wait = videos_subparsers.add_parser("wait", help="Poll until a video is ready")
-    _add_api_base_url_arg(videos_wait)
-    _add_api_key_arg(videos_wait)
+    videos_wait.add_argument("--api-base-url", help="Override the API base URL")
+    videos_wait.add_argument("--api-key", help="Override the stored API key")
     videos_wait.add_argument("video_id")
     videos_wait.add_argument(
         "--interval-seconds",
@@ -754,8 +711,8 @@ def _build_parser() -> argparse.ArgumentParser:
     videos_wait.set_defaults(func=_cmd_videos_wait)
 
     videos_search = videos_subparsers.add_parser("search", help="Run text search on a ready video")
-    _add_api_base_url_arg(videos_search)
-    _add_api_key_arg(videos_search)
+    videos_search.add_argument("--api-base-url", help="Override the API base URL")
+    videos_search.add_argument("--api-key", help="Override the stored API key")
     videos_search.add_argument("video_id")
     videos_search.add_argument("--query-text", required=True)
     videos_search.add_argument("--limit", type=_search_limit, default=5)
