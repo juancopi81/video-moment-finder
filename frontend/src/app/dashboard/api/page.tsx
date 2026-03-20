@@ -147,9 +147,9 @@ function ApiDashboardContent() {
       </div>
 
       {checkoutError && (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
           {checkoutError}
-        </p>
+        </div>
       )}
 
       {isRefreshingBalance && (
@@ -159,12 +159,19 @@ function ApiDashboardContent() {
       )}
 
       {apiBillingSummaryError && (
-        <p className="mt-4 text-sm text-red-600 dark:text-red-400">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
           {apiBillingSummaryError}
-        </p>
+        </div>
       )}
 
       <div className="mt-8 space-y-6">
+        {keysLoading && (
+          <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
+            Loading API dashboard...
+          </div>
+        )}
+
         {/* State 1: No balance — get started */}
         {!hasBalance && !keysLoading && (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-surface-card p-8 text-center dark:border-zinc-700">
@@ -311,7 +318,7 @@ function ApiDashboardContent() {
                       className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"
                     >
                       <td className="px-4 py-2 capitalize">
-                        {evt.event_type.replace("_", " ")}
+                        {evt.event_type.replaceAll("_", " ")}
                       </td>
                       <td className="px-4 py-2">
                         {evt.units > 0 ? `-${evt.units}` : `+${Math.abs(evt.units)}`}

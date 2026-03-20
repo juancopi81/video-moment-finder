@@ -20,6 +20,14 @@ export function ApiKeyCreateModal({
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   async function handleCreate() {
     setError(null);
     setIsCreating(true);
@@ -66,8 +74,12 @@ export function ApiKeyCreateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-xl border border-zinc-200 bg-background p-6 shadow-xl dark:border-zinc-800">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="presentation"
+    >
+      <div className="mx-4 w-full max-w-md animate-fade-in-up rounded-xl border border-zinc-200 bg-background p-6 shadow-xl dark:border-zinc-800">
         {createdKey ? (
           <>
             <h2 className="font-heading text-lg font-bold">

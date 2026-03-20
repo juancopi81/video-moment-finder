@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function DevelopersPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16">
-      <h1 className="font-heading text-4xl font-bold">
+      <h1 className="font-heading text-4xl font-bold animate-fade-in-up">
         Build with Video Moment Finder
       </h1>
       <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
@@ -12,36 +12,51 @@ export default function DevelopersPage() {
 
       <section className="mt-12">
         <h2 className="font-heading text-2xl font-bold">What the API does</h2>
-        <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-          <li>
-            <strong>Index videos</strong> &mdash; upload a video file and the
-            platform extracts frames, generates embeddings, and transcribes
-            spoken content.
-          </li>
-          <li>
-            <strong>Search by text</strong> &mdash; query indexed videos with
-            natural language and get timestamped results ranked by relevance.
-          </li>
-        </ul>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-zinc-200 bg-surface-card p-5 dark:border-zinc-800">
+            <p className="font-medium text-zinc-900 dark:text-zinc-100">
+              Index videos
+            </p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Upload a video file and the platform extracts frames, generates
+              embeddings, and transcribes spoken content.
+            </p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-surface-card p-5 dark:border-zinc-800">
+            <p className="font-medium text-zinc-900 dark:text-zinc-100">
+              Search by text
+            </p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Query indexed videos with natural language and get timestamped
+              results ranked by relevance.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="mt-12">
         <h2 className="font-heading text-2xl font-bold">Quick start</h2>
-        <div className="mt-4 space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-sm font-medium">1. Install the CLI</p>
-          <pre className="overflow-x-auto rounded bg-zinc-100 p-2 text-xs dark:bg-zinc-800">
-            <code>uv sync</code>
-          </pre>
-          <p className="text-sm font-medium">2. Save your API key</p>
-          <pre className="overflow-x-auto rounded bg-zinc-100 p-2 text-xs dark:bg-zinc-800">
-            <code>uv run vmf auth set --api-base-url https://api.videomomentfinder.com --api-key vmf_YOUR_KEY</code>
-          </pre>
-          <p className="text-sm font-medium">3. Upload and search</p>
-          <pre className="overflow-x-auto rounded bg-zinc-100 p-2 text-xs dark:bg-zinc-800">
-            <code>{`uv run vmf videos upload ./sample.mp4
+        <div className="mt-4 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div>
+            <p className="text-sm font-medium">1. Install the CLI</p>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-800">
+              <code>uv sync</code>
+            </pre>
+          </div>
+          <div>
+            <p className="text-sm font-medium">2. Save your API key</p>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-800">
+              <code>uv run vmf auth set --api-base-url https://api.videomomentfinder.com --api-key vmf_YOUR_KEY</code>
+            </pre>
+          </div>
+          <div>
+            <p className="text-sm font-medium">3. Upload and search</p>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-800">
+              <code>{`uv run vmf videos upload ./sample.mp4
 uv run vmf videos wait <video_id>
 uv run vmf videos search <video_id> --query-text "when do they explain the model?"`}</code>
-          </pre>
+            </pre>
+          </div>
         </div>
       </section>
 
@@ -72,7 +87,7 @@ uv run vmf videos search <video_id> --query-text "when do they explain the model
             >
               /dashboard/api
             </Link>{" "}
-            or via <code className="text-xs">uv run vmf keys create</code>.
+            or via <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">uv run vmf keys create</code>.
           </li>
         </ol>
       </section>
@@ -88,6 +103,12 @@ uv run vmf videos search <video_id> --query-text "when do they explain the model
             <li>500 units per indexed video</li>
             <li>1 unit per text query (launch pricing)</li>
           </ul>
+          <Link
+            href="/dashboard/api"
+            className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
+          >
+            Get started
+          </Link>
         </div>
       </section>
 
