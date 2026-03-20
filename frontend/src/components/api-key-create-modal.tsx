@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { API_URL, parseApiError } from "@/lib/api";
 
 type ApiKeyCreateModalProps = {
-  token: string;
+  getToken: () => Promise<string | null>;
   onCreated: () => void;
   onClose: () => void;
 };
 
 export function ApiKeyCreateModal({
-  token,
+  getToken,
   onCreated,
   onClose,
 }: ApiKeyCreateModalProps) {
@@ -32,6 +32,10 @@ export function ApiKeyCreateModal({
     setError(null);
     setIsCreating(true);
     try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Please sign in to continue.");
+      }
       const response = await fetch(`${API_URL}/api/v1/keys`, {
         method: "POST",
         headers: {
