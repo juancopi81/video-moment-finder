@@ -46,12 +46,10 @@ function ApiDashboardContent() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     const t = await getToken();
     if (!t) return;
-    setToken(t);
     setKeysLoading(true);
     setUsageLoading(true);
 
@@ -349,9 +347,9 @@ function ApiDashboardContent() {
         )}
       </div>
 
-      {showCreateModal && token && (
+      {showCreateModal && (
         <ApiKeyCreateModal
-          token={token}
+          getToken={getToken}
           onCreated={() => void loadData()}
           onClose={() => setShowCreateModal(false)}
         />
