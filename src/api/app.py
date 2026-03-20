@@ -1653,6 +1653,66 @@ def v1_upload_video(
         return _video_record_to_response(existing)
 
     _enforce_user_write_rate_limit(user_id)
+
+    if identity.auth_method == "api_key":
+        # API-key idempotent upload: inline file validation to skip web
+        # admission (_precheck_video_processing_admission).
+        if not file.filename and not file.content_type:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        if file.content_type and not file.content_type.startswith("video/"):
+            raise HTTPException(status_code=400, detail="Only video uploads are supported")
+        try:
+            _validate_upload_file_duration_or_raise(file)
+        except UploadDurationLimitExceededError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except UploadDurationProbeUnavailableError as exc:
+            raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+        try:
+            r2_config = R2Config.from_env()
+        except StorageConfigError as exc:
+            raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+        store = R2Store(r2_config)
+        upload_filename = _sanitize_filename(file.filename)
+        try:
+            upload_result = store.upload_source_video(
+                video_id=video_id, filename=upload_filename,
+                file_obj=file.file, content_type=file.content_type,
+            )
+        except R2StorageError as exc:
+            logger.exception("Failed to upload source video: %s", exc)
+            raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+        record, created = db_insert_uploaded_video_idempotent(
+            video_id, user_id, upload_result.key, upload_filename,
+        )
+        if not created:
+            record = _require_matching_upload_record(
+                record, source_r2_key=upload_result.key, source_filename=upload_filename,
+            )
+            if upload_result.key != record.source_r2_key:
+                _try_cleanup_r2(store, upload_result.key, user_id)
+            _ensure_enqueued(record)
+            return _video_record_to_response(record)
+
+        try:
+            _consume_api_units_or_raise(
+                user_id=user_id, api_key_id=identity.api_key_id,
+                event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+                video_id=video_id,
+            )
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                _try_cleanup_r2(store, upload_result.key, user_id)
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
+
+        _enqueue_or_raise(record.id)
+        track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+        return _video_record_to_response(record)
+
+    # JWT idempotent upload: uses web-credit admission via _validate_and_upload_file
     store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
 
     # Atomic insert: PK constraint serializes concurrent retries.
@@ -1672,22 +1732,14 @@ def v1_upload_video(
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 
-    try:
-        if identity.auth_method == "api_key":
-            _consume_api_units_or_raise(
-                user_id=user_id,
-                api_key_id=identity.api_key_id,
-                event_type="index_video",
-                units=API_UNIT_COST_INDEX_VIDEO,
-                video_id=video_id,
-            )
-        elif requires_credit:
+    if requires_credit:
+        try:
             _consume_processing_credit_or_raise(user_id)
-    except HTTPException as exc:
-        if exc.status_code == 402:
-            _try_cleanup_r2(store, upload_result.key, user_id)
-            update_video_status(record.id, "failed", error_message="Insufficient credits")
-        raise
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                _try_cleanup_r2(store, upload_result.key, user_id)
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
 
     _enqueue_or_raise(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
@@ -1817,20 +1869,34 @@ def v1_search_video(
     request: VideoSearchRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoSearchResponse:
-    if identity.auth_method == "api_key":
-        # Validate before billing to avoid charging for bad requests
-        _enforce_search_rate_limit(identity.user_id)
-        if not request.query_text:
-            raise HTTPException(status_code=400, detail="Provide query_text")
-        _get_ready_video_for_search(video_id, identity.user_id)
-        _consume_api_units_or_raise(
-            user_id=identity.user_id,
-            api_key_id=identity.api_key_id,
-            event_type="text_query",
-            units=API_UNIT_COST_TEXT_QUERY,
+    if identity.auth_method != "api_key":
+        return search_video(video_id, request, user_id=identity.user_id)
+
+    # API-key path: validate, bill, then search (rate limiter runs once)
+    user_id = identity.user_id
+    _enforce_search_rate_limit(user_id)
+    if not request.query_text:
+        raise HTTPException(status_code=400, detail="Provide query_text")
+    record = _get_ready_video_for_search(video_id, user_id)
+    _consume_api_units_or_raise(
+        user_id=user_id,
+        api_key_id=identity.api_key_id,
+        event_type="text_query",
+        units=API_UNIT_COST_TEXT_QUERY,
+        video_id=video_id,
+    )
+    track("search_run", user_id=user_id, metadata={"video_id": video_id, "mode": "text"})
+    try:
+        results = search_video_by_text_service(
             video_id=video_id,
+            query_text=request.query_text,
+            limit=request.limit,
         )
-    return search_video(video_id, request, user_id=identity.user_id)
+    except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        _raise_search_backend_unavailable(video_id, exc)
+
+    track("search_success", user_id=user_id, metadata={"video_id": video_id, "mode": "text", "result_count": len(results)})
+    return _build_video_search_response(record, results)
 
 
 # ---------------------------------------------------------------------------
