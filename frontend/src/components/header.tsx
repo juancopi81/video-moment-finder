@@ -7,6 +7,7 @@ import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 const navLinks = [
   { href: "/pricing", label: "Pricing" },
+  { href: "/developers", label: "Developers" },
   { href: "/support", label: "Support" },
 ];
 

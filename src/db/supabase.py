@@ -74,6 +74,46 @@ class ProcessingCreditConsumeResult:
 
 
 @dataclass
+class ApiCreditRecord:
+    """API credit balance record."""
+
+    user_id: str
+    balance: int
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ApiUnitConsumeResult:
+    """Result of consuming API units."""
+
+    allowed: bool
+    remaining_balance: int
+
+
+@dataclass
+class ApiBillingCreditGrantResult:
+    """Result of applying an API billing credit grant."""
+
+    applied: bool
+
+
+@dataclass
+class ApiUsageEventRecord:
+    """API usage event ledger entry."""
+
+    id: str
+    user_id: str
+    api_key_id: str | None
+    event_type: str
+    units: int
+    video_id: str | None
+    request_id: str | None
+    metadata: dict | None = None
+    created_at: str | None = None
+
+
+@dataclass
 class ApiKeyRecord:
     """API key database record."""
 
@@ -911,3 +951,173 @@ def touch_api_key_last_used(key_id: str) -> None:
         ).eq("id", key_id).execute()
     except Exception as exc:
         logger.debug("Failed to update api_key last_used_at: %s", exc, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# API billing CRUD
+# ---------------------------------------------------------------------------
+
+
+def _row_to_api_credit(row: dict) -> ApiCreditRecord:
+    return ApiCreditRecord(
+        user_id=row["user_id"],
+        balance=row.get("balance", 0),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _row_to_api_usage_event(row: dict) -> ApiUsageEventRecord:
+    return ApiUsageEventRecord(
+        id=row["id"],
+        user_id=row["user_id"],
+        api_key_id=row.get("api_key_id"),
+        event_type=row["event_type"],
+        units=row["units"],
+        video_id=row.get("video_id"),
+        request_id=row.get("request_id"),
+        metadata=row.get("metadata"),
+        created_at=row.get("created_at"),
+    )
+
+
+def get_api_credits(user_id: str) -> ApiCreditRecord | None:
+    """Get API credit record for a user."""
+    client = get_client()
+    result = client.table("api_credits").select("*").eq("user_id", user_id).execute()
+    if not result.data:
+        return None
+    return _row_to_api_credit(result.data[0])
+
+
+def apply_api_billing_credit_grant(
+    *,
+    provider: str,
+    event_id: str,
+    event_type: str,
+    user_id: str,
+    credits: int,
+    payload: dict | None = None,
+) -> ApiBillingCreditGrantResult:
+    """Apply API billing credit grants atomically and idempotently."""
+    if not provider.strip():
+        raise ValueError("provider must be non-empty")
+    if not event_id.strip():
+        raise ValueError("event_id must be non-empty")
+    if not event_type.strip():
+        raise ValueError("event_type must be non-empty")
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+    if credits <= 0:
+        raise ValueError("credits must be > 0")
+
+    client = get_client()
+    result = client.rpc(
+        "apply_api_credit_grant",
+        {
+            "p_provider": provider,
+            "p_event_id": event_id,
+            "p_event_type": event_type,
+            "p_user_id": user_id,
+            "p_credits": credits,
+            "p_payload": payload or {},
+        },
+    ).execute()
+    applied = bool(_rpc_first_item(result.data))
+    return ApiBillingCreditGrantResult(applied=applied)
+
+
+def consume_api_units(
+    user_id: str,
+    api_key_id: str | None,
+    event_type: str,
+    units: int,
+    video_id: str | None = None,
+    request_id: str | None = None,
+    metadata: dict | None = None,
+) -> ApiUnitConsumeResult:
+    """Consume API units atomically with optional idempotency."""
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+    if units <= 0:
+        raise ValueError("units must be > 0")
+
+    client = get_client()
+    result = client.rpc(
+        "consume_api_units",
+        {
+            "p_user_id": user_id,
+            "p_api_key_id": api_key_id,
+            "p_event_type": event_type,
+            "p_units": units,
+            "p_video_id": video_id,
+            "p_request_id": request_id,
+            "p_metadata": metadata or {},
+        },
+    ).execute()
+    first_item = _rpc_first_item(result.data)
+    if isinstance(first_item, dict):
+        row = first_item
+    else:
+        logger.warning(
+            "Unexpected consume_api_units RPC response shape: %s",
+            type(first_item).__name__,
+        )
+        row = {}
+
+    remaining_raw = row.get("remaining_balance", 0)
+    try:
+        remaining = int(remaining_raw)
+    except (TypeError, ValueError):
+        remaining = 0
+
+    return ApiUnitConsumeResult(
+        allowed=bool(row.get("allowed")),
+        remaining_balance=remaining,
+    )
+
+
+def compensate_api_units(
+    user_id: str,
+    units: int,
+    video_id: str | None = None,
+    request_id: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """Compensate (refund) API units. Idempotent on request_id."""
+    if not user_id.strip():
+        raise ValueError("user_id must be non-empty")
+    if units <= 0:
+        raise ValueError("units must be > 0")
+
+    client = get_client()
+    client.rpc(
+        "compensate_api_units",
+        {
+            "p_user_id": user_id,
+            "p_units": units,
+            "p_video_id": video_id,
+            "p_request_id": request_id,
+            "p_metadata": metadata or {},
+        },
+    ).execute()
+
+
+def list_api_usage_events(
+    user_id: str,
+    api_key_id: str | None = None,
+    limit: int = 50,
+) -> list[ApiUsageEventRecord]:
+    """List API usage events for a user, newest first."""
+    client = get_client()
+    query = (
+        client.table("api_usage_events")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
+    if api_key_id is not None:
+        query = query.eq("api_key_id", api_key_id)
+    result = query.execute()
+    return [_row_to_api_usage_event(row) for row in result.data]

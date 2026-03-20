@@ -9,7 +9,12 @@ import pytest
 from src.api.app import app
 from src.api.auth import AuthIdentity, get_current_user, get_current_user_id
 from src.api.rate_limit import SlidingWindowRateLimiter
-from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult, VideoRecord
+from src.db.supabase import (
+    ApiKeyRecord,
+    ApiUnitConsumeResult,
+    ProcessingCreditConsumeResult,
+    VideoRecord,
+)
 
 UPLOAD_VIDEO_ID = "00000000-0000-4000-8000-000000000123"
 
@@ -73,6 +78,19 @@ def _mock_free_video_count(monkeypatch) -> None:
             allowed=False,
             remaining_balance=0,
         ),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _mock_api_billing(monkeypatch) -> None:
+    monkeypatch.setattr("src.api.app.db_get_api_credits", lambda _uid: None)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_api_units",
+        lambda **kwargs: ApiUnitConsumeResult(allowed=False, remaining_balance=0),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_list_api_usage_events",
+        lambda **kwargs: [],
     )
 
 

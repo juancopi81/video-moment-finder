@@ -245,6 +245,21 @@ Authorization: Bearer <token>
 - `API key created but failed to save config: ...`
   - The key was created successfully and is still printed to stdout. Save it manually with `vmf auth set`.
 
+## API Billing
+
+API usage is billed in units, separate from web credits:
+
+- **500 units** per indexed video
+- **1 unit** per text query (launch pricing, configurable via `API_UNIT_COST_INDEX_VIDEO` / `API_UNIT_COST_TEXT_QUERY`)
+
+Purchase a Developer Pack ($20, 10,000 units) from `/dashboard/api` or `/pricing`.
+
+When API units are insufficient, requests return `HTTP 402` with `{"code": "insufficient_api_units", ...}`.
+
+## Data Retention
+
+Source video uploads are temporary and may be auto-deleted after processing. Indexed search data (embeddings, transcripts, thumbnails) remains available while your account is active.
+
 ## Notes for Agents
 
 - Commands write JSON to stdout on success.

@@ -56,6 +56,7 @@ Authoring rules:
 | 2026-03-14 | Phase 6 | API keys and usage controls                            | Done        | Added vmf_ API key auth, key management endpoints, and quota enforcement. |
 | 2026-03-17 | Phase 5 | Qdrant visual upsert batching                         | Done        | Batched frame-vector writes to stay under Qdrant payload limits, marked payload-limit failures terminal, and attached richer worker Sentry context. |
 | 2026-03-17 | Phase 6 | Agent CLI and public guide                            | Done        | Added the stdlib `vmf` CLI over `/api/v1` for upload, poll, key bootstrap, and text search, plus a public usage guide. |
+| 2026-03-18 | Phase 6 | Dashboard API access and billing separation            | Done        | Added /dashboard/api, separated API billing with unit-based model, /developers page, API section on pricing page. |
 
 ## Blockers
 

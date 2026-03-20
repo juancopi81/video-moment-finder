@@ -280,6 +280,7 @@ class TestRetryIdempotency:
 
     def test_youtube_new_url_creates_and_bills(self, monkeypatch):
         """A new YouTube URL inserts via RPC and consumes credit."""
+        from src.db.supabase import ApiUnitConsumeResult
         raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_new")
 
         created_video = _video_record("new-vid-id", status="queued")
@@ -295,6 +296,10 @@ class TestRetryIdempotency:
         )
         monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: None)
         monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
+        monkeypatch.setattr(
+            "src.api.app.db_consume_api_units",
+            lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=9500),
+        )
 
         resp = client.post(
             f"{V1}/videos",
@@ -342,6 +347,7 @@ class TestRetryIdempotency:
     def test_youtube_enqueue_failure_preserves_dedupe_anchor(self, monkeypatch):
         """Enqueue failure must NOT mark the row failed, so retries still find
         the dedupe anchor and don't consume another credit."""
+        from src.db.supabase import ApiUnitConsumeResult
         raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_enq_fail")
 
         created_video = _video_record("enq-fail-vid", status="queued")
@@ -354,6 +360,10 @@ class TestRetryIdempotency:
             lambda _: VideoMetadata(duration_s=60.0, is_live=False),
         )
         monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
+        monkeypatch.setattr(
+            "src.api.app.db_consume_api_units",
+            lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=9500),
+        )
 
         # Enqueue fails — should NOT mark row failed.
         monkeypatch.setattr(

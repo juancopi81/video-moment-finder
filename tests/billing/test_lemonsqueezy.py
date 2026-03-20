@@ -100,6 +100,7 @@ def test_create_checkout_session_builds_expected_payload(
         "user_id": "user_abc",
         "credits": str(credits),
         "plan": plan,
+        "grant_target": "web",
     }
     assert (
         payload["data"]["attributes"]["product_options"]["redirect_url"]

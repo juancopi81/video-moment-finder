@@ -37,13 +37,16 @@ from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.db.supabase import (
     VideoRecord,
+    apply_api_billing_credit_grant as db_apply_api_billing_credit_grant,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
+    consume_api_units as db_consume_api_units,
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
     create_api_key as db_create_api_key,
     create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
+    get_api_credits as db_get_api_credits,
     get_credits as db_get_credits,
     get_video_job as db_get_video_job,
     get_video as db_get_video,
@@ -51,6 +54,7 @@ from src.db.supabase import (
     insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
     has_unlimited_video_access as db_has_unlimited_video_access,
     list_api_keys as db_list_api_keys,
+    list_api_usage_events as db_list_api_usage_events,
     list_videos as db_list_videos,
     revoke_api_key as db_revoke_api_key,
     update_video_status,
@@ -71,17 +75,22 @@ logger = get_logger(__name__)
 init_sentry(service="api")
 
 StatusType = Literal["queued", "processing", "ready", "failed"]
-BillingPlanType = Literal["starter", "pro"]
+BillingPlanType = Literal["starter", "pro", "developer"]
 DEFAULT_MAX_FREE_VIDEOS = 1
 DEFAULT_BILLING_GRANT_EVENTS = {
     "order_created",
     "subscription_payment_success",
 }
 INSUFFICIENT_CREDITS_DETAIL = "Insufficient credits. Buy credits to process another video."
+INSUFFICIENT_API_UNITS_DETAIL = {
+    "code": "insufficient_api_units",
+    "message": "Insufficient API units. Purchase a Developer Pack to add units.",
+}
 DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
 DEFAULT_BILLING_PLAN_CREDITS: dict[BillingPlanType, int] = {
     "starter": 5,
     "pro": 20,
+    "developer": 10_000,
 }
 DEFAULT_RATE_LIMIT_WINDOW_S = 60
 DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW = 12
@@ -91,6 +100,7 @@ MAX_QUERY_IMAGE_BYTES = 10 * 1024 * 1024
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
     "pro": "LEMON_SQUEEZY_VARIANT_ID_PRO",
+    "developer": "LEMON_SQUEEZY_VARIANT_ID_DEVELOPER",
 }
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
@@ -334,6 +344,38 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
     _consume_processing_credit_or_raise(user_id)
 
 
+# ---------------------------------------------------------------------------
+# API unit billing helpers
+# ---------------------------------------------------------------------------
+
+
+API_UNIT_COST_INDEX_VIDEO = get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
+API_UNIT_COST_TEXT_QUERY = get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
+
+
+def _consume_api_units_or_raise(
+    user_id: str,
+    api_key_id: str | None,
+    event_type: str,
+    units: int,
+    video_id: str | None = None,
+    request_id: str | None = None,
+) -> None:
+    result = db_consume_api_units(
+        user_id=user_id,
+        api_key_id=api_key_id,
+        event_type=event_type,
+        units=units,
+        video_id=video_id,
+        request_id=request_id,
+    )
+    if not result.allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=INSUFFICIENT_API_UNITS_DETAIL,
+        )
+
+
 def _source_url_ttl_s() -> int:
     return get_env_int("VIDEO_SOURCE_URL_TTL_S", 3600)
 
@@ -471,7 +513,8 @@ def _lemonsqueezy_event_id(
     return f"{event_name}:sha256:{hashlib.sha256(raw_body).hexdigest()}"
 
 
-def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int] | None:
+def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int, str] | None:
+    """Extract (user_id, credits, grant_target) from webhook payload."""
     if not payload.meta or not payload.meta.custom_data:
         return None
     cd = payload.meta.custom_data
@@ -483,7 +526,10 @@ def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int] | Non
         return None
     if credits <= 0:
         return None
-    return cd.user_id.strip(), credits
+    grant_target = "web"
+    if isinstance(cd.grant_target, str) and cd.grant_target.strip() in ("web", "api"):
+        grant_target = cd.grant_target.strip()
+    return cd.user_id.strip(), credits, grant_target
 
 
 def _parse_lemonsqueezy_payload(payload_dict: dict) -> LemonSqueezyPayload:
@@ -701,11 +747,33 @@ class BillingSummaryResponse(BaseModel):
     has_unlimited_access: bool
 
 
+class ApiBillingSummaryResponse(BaseModel):
+    api_units_balance: int
+    unit_cost_index_video: int
+    unit_cost_text_query: int
+    approx_videos: int
+    approx_queries: int
+
+
+class ApiUsageEventResponse(BaseModel):
+    id: str
+    api_key_id: str | None
+    event_type: str
+    units: int
+    video_id: str | None
+    created_at: str | None
+
+
+class ApiCheckoutRequest(BaseModel):
+    plan: Literal["developer"]
+
+
 class LemonSqueezyCustomData(BaseModel):
     model_config = ConfigDict(strict=True)
 
     user_id: str | None = None
     credits: Any = None
+    grant_target: str | None = None
 
 
 class LemonSqueezyMeta(BaseModel):
@@ -1343,19 +1411,42 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
             reason="No credit grant metadata found in meta.custom_data",
         )
 
-    user_id, credits = grant
+    user_id, credits, grant_target = grant
     event_id = _lemonsqueezy_event_id(payload, raw_body, event_name)
-    applied = db_apply_billing_credit_grant(
-        provider="lemonsqueezy",
-        event_id=event_id,
-        event_type=event_name,
-        user_id=user_id,
-        credits=credits,
-        payload=payload_dict,
-    ).applied
+
+    if grant_target == "api":
+        # Validate variant match when configured.
+        expected_variant_env = "LEMON_SQUEEZY_VARIANT_ID_DEVELOPER"
+        expected_variant = os.environ.get(expected_variant_env, "").strip()
+        if expected_variant and payload.data and payload.data.id is not None:
+            actual_id = str(payload.data.id).strip()
+            if actual_id and actual_id != expected_variant:
+                logger.warning(
+                    "API grant variant mismatch: expected=%s actual=%s event_id=%s",
+                    expected_variant,
+                    actual_id,
+                    event_id,
+                )
+        applied = db_apply_api_billing_credit_grant(
+            provider="lemonsqueezy",
+            event_id=event_id,
+            event_type=event_name,
+            user_id=user_id,
+            credits=credits,
+            payload=payload_dict,
+        ).applied
+    else:
+        applied = db_apply_billing_credit_grant(
+            provider="lemonsqueezy",
+            event_id=event_id,
+            event_type=event_name,
+            user_id=user_id,
+            credits=credits,
+            payload=payload_dict,
+        ).applied
 
     if applied:
-        track("checkout_success", user_id=user_id, metadata={"credits": credits})
+        track("checkout_success", user_id=user_id, metadata={"credits": credits, "grant_target": grant_target})
     logger.info(
         "Lemon webhook processed event=%s event_id=%s user_id=%s credits=%s applied=%s",
         event_name,
@@ -1464,7 +1555,16 @@ def v1_create_video(
         return _video_record_to_response(record)
 
     try:
-        _consume_and_admit_video_processing(identity.user_id)
+        if identity.auth_method == "api_key":
+            _consume_api_units_or_raise(
+                user_id=identity.user_id,
+                api_key_id=identity.api_key_id,
+                event_type="index_video",
+                units=API_UNIT_COST_INDEX_VIDEO,
+                video_id=record.id,
+            )
+        else:
+            _consume_and_admit_video_processing(identity.user_id)
     except HTTPException:
         update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
@@ -1480,6 +1580,56 @@ def v1_upload_video(
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> VideoResponse:
     if idempotency_key is None:
+        if identity.auth_method == "api_key":
+            # API-key upload: same flow as upload_video but with API unit billing
+            # instead of web credit admission.
+            user_id = identity.user_id
+            _enforce_user_write_rate_limit(user_id)
+            if not file.filename and not file.content_type:
+                raise HTTPException(status_code=400, detail="No file uploaded")
+            if file.content_type and not file.content_type.startswith("video/"):
+                raise HTTPException(status_code=400, detail="Only video uploads are supported")
+            try:
+                _validate_upload_file_duration_or_raise(file)
+            except UploadDurationLimitExceededError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except UploadDurationProbeUnavailableError as exc:
+                raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+            video_id = str(uuid4())
+            try:
+                r2_config = R2Config.from_env()
+            except StorageConfigError as exc:
+                raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+            filename = _sanitize_filename(file.filename)
+            store = R2Store(r2_config)
+            try:
+                upload_result = store.upload_source_video(
+                    video_id=video_id, filename=filename,
+                    file_obj=file.file, content_type=file.content_type,
+                )
+            except R2StorageError as exc:
+                logger.exception("Failed to upload source video: %s", exc)
+                raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+            try:
+                _consume_api_units_or_raise(
+                    user_id=user_id, api_key_id=identity.api_key_id,
+                    event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+                )
+            except HTTPException as exc:
+                if exc.status_code == 402:
+                    _try_cleanup_r2(store, upload_result.key, user_id)
+                raise
+
+            record = db_create_uploaded_video(
+                video_id=video_id, source_r2_key=upload_result.key,
+                source_filename=filename, user_id=user_id, status="queued",
+            )
+            _enqueue_video_or_fail(record.id)
+            track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+            return _video_record_to_response(record)
         return upload_video(file, user_id=identity.user_id)
 
     # Idempotent upload: deterministic video_id from the key so concurrent
@@ -1503,6 +1653,66 @@ def v1_upload_video(
         return _video_record_to_response(existing)
 
     _enforce_user_write_rate_limit(user_id)
+
+    if identity.auth_method == "api_key":
+        # API-key idempotent upload: inline file validation to skip web
+        # admission (_precheck_video_processing_admission).
+        if not file.filename and not file.content_type:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        if file.content_type and not file.content_type.startswith("video/"):
+            raise HTTPException(status_code=400, detail="Only video uploads are supported")
+        try:
+            _validate_upload_file_duration_or_raise(file)
+        except UploadDurationLimitExceededError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except UploadDurationProbeUnavailableError as exc:
+            raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+        try:
+            r2_config = R2Config.from_env()
+        except StorageConfigError as exc:
+            raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+        store = R2Store(r2_config)
+        upload_filename = _sanitize_filename(file.filename)
+        try:
+            upload_result = store.upload_source_video(
+                video_id=video_id, filename=upload_filename,
+                file_obj=file.file, content_type=file.content_type,
+            )
+        except R2StorageError as exc:
+            logger.exception("Failed to upload source video: %s", exc)
+            raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+        record, created = db_insert_uploaded_video_idempotent(
+            video_id, user_id, upload_result.key, upload_filename,
+        )
+        if not created:
+            record = _require_matching_upload_record(
+                record, source_r2_key=upload_result.key, source_filename=upload_filename,
+            )
+            if upload_result.key != record.source_r2_key:
+                _try_cleanup_r2(store, upload_result.key, user_id)
+            _ensure_enqueued(record)
+            return _video_record_to_response(record)
+
+        try:
+            _consume_api_units_or_raise(
+                user_id=user_id, api_key_id=identity.api_key_id,
+                event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+                video_id=video_id,
+            )
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                _try_cleanup_r2(store, upload_result.key, user_id)
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
+
+        _enqueue_or_raise(record.id)
+        track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+        return _video_record_to_response(record)
+
+    # JWT idempotent upload: uses web-credit admission via _validate_and_upload_file
     store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
 
     # Atomic insert: PK constraint serializes concurrent retries.
@@ -1522,14 +1732,14 @@ def v1_upload_video(
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 
-    try:
-        if requires_credit:
+    if requires_credit:
+        try:
             _consume_processing_credit_or_raise(user_id)
-    except HTTPException as exc:
-        if exc.status_code == 402:
-            _try_cleanup_r2(store, upload_result.key, user_id)
-            update_video_status(record.id, "failed", error_message="Insufficient credits")
-        raise
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                _try_cleanup_r2(store, upload_result.key, user_id)
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
 
     _enqueue_or_raise(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
@@ -1540,14 +1750,105 @@ def v1_init_upload(
     request: UploadInitRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> UploadInitResponse:
-    return init_upload(request, user_id=identity.user_id)
+    if identity.auth_method != "api_key":
+        return init_upload(request, user_id=identity.user_id)
+
+    # API-key path: soft-check API balance, skip web admission
+    user_id = identity.user_id
+    _enforce_user_write_rate_limit(user_id)
+    if request.content_type and not request.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Only video uploads are supported")
+
+    api_credits = db_get_api_credits(user_id)
+    if api_credits is None or api_credits.balance < API_UNIT_COST_INDEX_VIDEO:
+        raise HTTPException(status_code=402, detail=INSUFFICIENT_API_UNITS_DETAIL)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+    video_id = str(uuid4())
+    filename = _sanitize_filename(request.filename)
+    key = source_key(video_id, filename)
+    expires_in = _upload_url_ttl_s()
+    store = R2Store(r2_config)
+
+    try:
+        upload_url = store.generate_presigned_upload_url(
+            key, content_type=request.content_type, expires_in=expires_in,
+        )
+    except R2StorageError as exc:
+        logger.exception("Failed to generate upload URL: %s", exc)
+        raise HTTPException(status_code=503, detail="Failed to prepare upload") from exc
+
+    return UploadInitResponse(video_id=video_id, key=key, upload_url=upload_url, expires_in=expires_in)
 
 
 def v1_complete_upload(
     request: UploadCompleteRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoResponse:
-    return complete_upload(request, user_id=identity.user_id)
+    if identity.auth_method != "api_key":
+        return complete_upload(request, user_id=identity.user_id)
+
+    # API-key path: inline complete_upload logic with API billing instead of web credits
+    user_id = identity.user_id
+    _enforce_user_write_rate_limit(user_id)
+    filename = _sanitize_filename(request.filename)
+    key = source_key(request.video_id, filename)
+
+    existing = _get_idempotent_upload_record(
+        video_id=request.video_id, user_id=user_id,
+        source_r2_key=key, source_filename=filename,
+    )
+    if existing is not None:
+        return _video_record_to_response(existing)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+    store = R2Store(r2_config)
+
+    try:
+        if not store.source_exists(key):
+            raise HTTPException(status_code=400, detail="Uploaded source not found")
+    except R2StorageError as exc:
+        logger.exception("Failed to check uploaded source: %s", exc)
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+    try:
+        _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
+    except UploadDurationLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadDurationProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+    record, created = db_insert_uploaded_video_idempotent(
+        request.video_id, user_id, key, filename,
+    )
+    if not created:
+        record = _require_matching_upload_record(
+            record, source_r2_key=key, source_filename=filename,
+        )
+        return _video_record_to_response(record)
+
+    try:
+        _consume_api_units_or_raise(
+            user_id=user_id, api_key_id=identity.api_key_id,
+            event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+            video_id=request.video_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
+
+    _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+    return _video_record_to_response(record)
 
 
 def v1_get_video(
@@ -1568,10 +1869,127 @@ def v1_search_video(
     request: VideoSearchRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoSearchResponse:
-    return search_video(video_id, request, user_id=identity.user_id)
+    if identity.auth_method != "api_key":
+        return search_video(video_id, request, user_id=identity.user_id)
+
+    # API-key path: validate, bill, then search (rate limiter runs once)
+    user_id = identity.user_id
+    _enforce_search_rate_limit(user_id)
+    if not request.query_text:
+        raise HTTPException(status_code=400, detail="Provide query_text")
+    record = _get_ready_video_for_search(video_id, user_id)
+    _consume_api_units_or_raise(
+        user_id=user_id,
+        api_key_id=identity.api_key_id,
+        event_type="text_query",
+        units=API_UNIT_COST_TEXT_QUERY,
+        video_id=video_id,
+    )
+    track("search_run", user_id=user_id, metadata={"video_id": video_id, "mode": "text"})
+    try:
+        results = search_video_by_text_service(
+            video_id=video_id,
+            query_text=request.query_text,
+            limit=request.limit,
+        )
+    except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        _raise_search_backend_unavailable(video_id, exc)
+
+    track("search_success", user_id=user_id, metadata={"video_id": video_id, "mode": "text", "result_count": len(results)})
+    return _build_video_search_response(record, results)
+
+
+# ---------------------------------------------------------------------------
+# API billing endpoints (v1)
+# ---------------------------------------------------------------------------
+
+
+def v1_api_billing_checkout(
+    body: ApiCheckoutRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> BillingCheckoutResponse:
+    """Create checkout session for Developer Pack (JWT-only)."""
+    _enforce_user_write_rate_limit(user_id)
+    credits = DEFAULT_BILLING_PLAN_CREDITS["developer"]
+    try:
+        session = create_checkout_session(
+            user_id=user_id,
+            plan="developer",
+            credits=credits,
+            variant_id=_billing_plan_variant_id("developer"),
+            grant_target="api",
+        )
+    except LemonSqueezyConfigError as exc:
+        logger.error("Lemon Squeezy checkout config error: %s", exc)
+        raise HTTPException(status_code=503, detail="Billing checkout is not configured") from exc
+    except LemonSqueezyProviderError as exc:
+        logger.exception(
+            "Lemon Squeezy checkout failed for user_id=%s plan=developer: %s",
+            user_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Billing checkout is temporarily unavailable",
+        ) from exc
+
+    track("checkout_started", user_id=user_id, metadata={"plan": "developer"})
+    return BillingCheckoutResponse(
+        provider="lemonsqueezy",
+        plan="developer",
+        credits=credits,
+        checkout_url=session.url,
+        test_mode=session.test_mode,
+    )
+
+
+def v1_api_billing_summary(
+    identity: AuthIdentity = Depends(get_current_user),
+) -> ApiBillingSummaryResponse:
+    """Return API unit balance and approximate equivalents."""
+    record = db_get_api_credits(identity.user_id)
+    balance = record.balance if record else 0
+    cost_video = API_UNIT_COST_INDEX_VIDEO
+    cost_query = API_UNIT_COST_TEXT_QUERY
+    return ApiBillingSummaryResponse(
+        api_units_balance=balance,
+        unit_cost_index_video=cost_video,
+        unit_cost_text_query=cost_query,
+        approx_videos=balance // cost_video if cost_video > 0 else 0,
+        approx_queries=balance // cost_query if cost_query > 0 else 0,
+    )
+
+
+def v1_api_billing_usage(
+    identity: AuthIdentity = Depends(get_current_user),
+    api_key_id: str | None = None,
+    limit: int = 50,
+) -> list[ApiUsageEventResponse]:
+    """Return recent API usage events."""
+    events = db_list_api_usage_events(
+        user_id=identity.user_id,
+        api_key_id=api_key_id,
+        limit=min(limit, 200),
+    )
+    return [
+        ApiUsageEventResponse(
+            id=e.id,
+            api_key_id=e.api_key_id,
+            event_type=e.event_type,
+            units=e.units,
+            video_id=e.video_id,
+            created_at=e.created_at,
+        )
+        for e in events
+    ]
 
 
 v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+
+# Billing — static paths registered first.
+v1_router.add_api_route("/billing/checkout", v1_api_billing_checkout, methods=["POST"], response_model=BillingCheckoutResponse)
+v1_router.add_api_route("/billing/summary", v1_api_billing_summary, methods=["GET"], response_model=ApiBillingSummaryResponse)
+v1_router.add_api_route("/billing/usage", v1_api_billing_usage, methods=["GET"], response_model=list[ApiUsageEventResponse])
 
 # Key management — static paths registered before parameterized /videos/{id}.
 v1_router.add_api_route("/keys", create_api_key, methods=["POST"], response_model=ApiKeyCreatedResponse, status_code=201)
