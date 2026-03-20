@@ -20,7 +20,7 @@ Use those files as the canonical variable list and defaults. This document expla
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Optional | Optional | - | Runtime monitoring for API and worker. |
 | `CLERK_ISSUER`, `CLERK_AUDIENCE`, `CLERK_JWKS_URL` | Required | - | - | API JWT verification only. |
 | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEX` | Required | - | - | API CORS policy only. |
-| `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`, `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`, `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`, `LEMON_SQUEEZY_WEBHOOK_SECRET`, `BILLING_GRANT_EVENT_NAMES` | Required | - | - | API billing checkout and webhook handling. |
+| `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`, `LEMON_SQUEEZY_VARIANT_ID_DEVELOPER`, `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`, `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`, `LEMON_SQUEEZY_WEBHOOK_SECRET`, `BILLING_GRANT_EVENT_NAMES`, `API_UNIT_COST_INDEX_VIDEO`, `API_UNIT_COST_TEXT_QUERY` | Required | - | - | API billing checkout, webhook handling, and API unit pricing. |
 | `RATE_LIMIT_*` | Optional | - | - | API rate limit tuning. |
 | `VIDEO_MAX_FREE_VIDEOS`, `VIDEO_UPLOAD_URL_TTL_S`, `VIDEO_SOURCE_URL_TTL_S` | Optional | - | - | API admission and signed URL behavior. |
 | `VIDEO_MAX_DURATION_S` | Optional | Optional | - | Duration checks are used in API admission and processing path validation. |
