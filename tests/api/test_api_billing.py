@@ -22,6 +22,7 @@ from src.db.supabase import (
 from tests.api.conftest import (
     _authenticate,
     _setup_api_key_auth,
+    _upload_video_record,
     _video_record,
 )
 
@@ -324,6 +325,10 @@ class TestApiSearchBilling:
             "src.api.app.db_consume_api_units",
             lambda **kwargs: ApiUnitConsumeResult(allowed=False, remaining_balance=0),
         )
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="ready"),
+        )
 
         response = client.post(
             "/api/v1/videos/test-vid/search",
@@ -487,3 +492,281 @@ class TestApiCompensation:
 
         with pytest.raises(ValueError, match="user_id"):
             compensate_api_units(user_id="", units=100)
+
+
+# ---------------------------------------------------------------------------
+# TestApiKeyUploadBilling
+# ---------------------------------------------------------------------------
+
+
+class TestApiKeyUploadBilling:
+    """Verify that init/complete/simple upload paths use API billing for API-key users."""
+
+    def test_api_key_init_upload_succeeds_without_web_credits(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+
+        monkeypatch.setattr(
+            "src.api.app.db_get_api_credits",
+            lambda uid: ApiCreditRecord(
+                user_id=uid, balance=10_000, created_at=None, updated_at=None,
+            ),
+        )
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def generate_presigned_upload_url(self, key, **kwargs):
+                return "https://r2.example.com/presigned"
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+        response = client.post(
+            "/api/v1/videos/upload/init",
+            json={"filename": "test.mp4", "content_type": "video/mp4"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["upload_url"] == "https://r2.example.com/presigned"
+        assert "video_id" in data
+
+    def test_api_key_init_upload_rejects_insufficient_api_balance(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+
+        # db_get_api_credits returns None (no API credits) via conftest default
+
+        response = client.post(
+            "/api/v1/videos/upload/init",
+            json={"filename": "test.mp4", "content_type": "video/mp4"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 402
+        assert response.json()["detail"]["code"] == "insufficient_api_units"
+
+    def test_api_key_complete_upload_deducts_api_units(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            assert kwargs["event_type"] == "index_video"
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def source_exists(self, key):
+                return True
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+        )
+        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
+
+        response = client.post(
+            "/api/v1/videos/upload/complete",
+            json={"video_id": "00000000-0000-4000-8000-000000000c01", "filename": "test.mp4"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 200
+        assert consumed["called"] is True
+
+    def test_api_key_complete_upload_insufficient_units_returns_402(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+
+        monkeypatch.setattr(
+            "src.api.app.db_consume_api_units",
+            lambda **kwargs: ApiUnitConsumeResult(allowed=False, remaining_balance=0),
+        )
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def source_exists(self, key):
+                return True
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+        status_updates = []
+
+        def mock_update_status(vid, status, **kw):
+            status_updates.append((vid, status))
+
+        monkeypatch.setattr("src.api.app.update_video_status", mock_update_status)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+        )
+
+        response = client.post(
+            "/api/v1/videos/upload/complete",
+            json={"video_id": "00000000-0000-4000-8000-000000000c02", "filename": "test.mp4"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 402
+        assert any(s == "failed" for _, s in status_updates)
+
+    def test_api_key_simple_upload_deducts_api_units(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            assert kwargs["event_type"] == "index_video"
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def upload_source_video(self, **kwargs):
+                class Result:
+                    key = "source/vid_s1/test.mp4"
+                return Result()
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+        monkeypatch.setattr(
+            "src.api.app.db_create_uploaded_video",
+            lambda **kwargs: _upload_video_record(kwargs["video_id"], status="queued"),
+        )
+        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
+
+        import io
+
+        response = client.post(
+            "/api/v1/videos/upload",
+            files={"file": ("test.mp4", io.BytesIO(b"fake"), "video/mp4")},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 200
+        assert consumed["called"] is True
+
+    def test_jwt_upload_paths_unchanged(self, monkeypatch) -> None:
+        _authenticate("user_123")
+
+        # init_upload delegates to legacy handler which checks web admission.
+        # With default conftest (0 videos used), free tier passes.
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def generate_presigned_upload_url(self, key, **kwargs):
+                return "https://r2.example.com/presigned"
+
+            def source_exists(self, key):
+                return True
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+
+        # init
+        resp_init = client.post(
+            "/api/v1/videos/upload/init",
+            json={"filename": "test.mp4", "content_type": "video/mp4"},
+        )
+        assert resp_init.status_code == 200
+
+        # complete
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+        )
+        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
+
+        resp_complete = client.post(
+            "/api/v1/videos/upload/complete",
+            json={"video_id": "00000000-0000-4000-8000-00000000abc0", "filename": "test.mp4"},
+        )
+        assert resp_complete.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# TestApiKeySearchValidation
+# ---------------------------------------------------------------------------
+
+
+class TestApiKeySearchValidation:
+    """Verify that invalid search requests don't consume API units."""
+
+    def test_api_key_search_invalid_query_no_billing(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9999)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+        response = client.post(
+            "/api/v1/videos/test-vid/search",
+            json={"query_text": ""},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 400
+        assert consumed["called"] is False
+
+    def test_api_key_search_nonexistent_video_no_billing(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9999)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
+
+        response = client.post(
+            "/api/v1/videos/nonexistent/search",
+            json={"query_text": "hello"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 404
+        assert consumed["called"] is False
+
+    def test_api_key_search_non_ready_video_no_billing(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9999)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="processing"),
+        )
+
+        response = client.post(
+            "/api/v1/videos/test-vid/search",
+            json={"query_text": "hello"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 400
+        assert consumed["called"] is False

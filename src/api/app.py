@@ -1580,6 +1580,56 @@ def v1_upload_video(
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> VideoResponse:
     if idempotency_key is None:
+        if identity.auth_method == "api_key":
+            # API-key upload: same flow as upload_video but with API unit billing
+            # instead of web credit admission.
+            user_id = identity.user_id
+            _enforce_user_write_rate_limit(user_id)
+            if not file.filename and not file.content_type:
+                raise HTTPException(status_code=400, detail="No file uploaded")
+            if file.content_type and not file.content_type.startswith("video/"):
+                raise HTTPException(status_code=400, detail="Only video uploads are supported")
+            try:
+                _validate_upload_file_duration_or_raise(file)
+            except UploadDurationLimitExceededError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except UploadDurationProbeUnavailableError as exc:
+                raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+            video_id = str(uuid4())
+            try:
+                r2_config = R2Config.from_env()
+            except StorageConfigError as exc:
+                raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+            filename = _sanitize_filename(file.filename)
+            store = R2Store(r2_config)
+            try:
+                upload_result = store.upload_source_video(
+                    video_id=video_id, filename=filename,
+                    file_obj=file.file, content_type=file.content_type,
+                )
+            except R2StorageError as exc:
+                logger.exception("Failed to upload source video: %s", exc)
+                raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
+
+            try:
+                _consume_api_units_or_raise(
+                    user_id=user_id, api_key_id=identity.api_key_id,
+                    event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+                )
+            except HTTPException as exc:
+                if exc.status_code == 402:
+                    _try_cleanup_r2(store, upload_result.key, user_id)
+                raise
+
+            record = db_create_uploaded_video(
+                video_id=video_id, source_r2_key=upload_result.key,
+                source_filename=filename, user_id=user_id, status="queued",
+            )
+            _enqueue_video_or_fail(record.id)
+            track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+            return _video_record_to_response(record)
         return upload_video(file, user_id=identity.user_id)
 
     # Idempotent upload: deterministic video_id from the key so concurrent
@@ -1648,21 +1698,105 @@ def v1_init_upload(
     request: UploadInitRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> UploadInitResponse:
-    return init_upload(request, user_id=identity.user_id)
+    if identity.auth_method != "api_key":
+        return init_upload(request, user_id=identity.user_id)
+
+    # API-key path: soft-check API balance, skip web admission
+    user_id = identity.user_id
+    _enforce_user_write_rate_limit(user_id)
+    if request.content_type and not request.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Only video uploads are supported")
+
+    api_credits = db_get_api_credits(user_id)
+    if api_credits is None or api_credits.balance < API_UNIT_COST_INDEX_VIDEO:
+        raise HTTPException(status_code=402, detail=INSUFFICIENT_API_UNITS_DETAIL)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+    video_id = str(uuid4())
+    filename = _sanitize_filename(request.filename)
+    key = source_key(video_id, filename)
+    expires_in = _upload_url_ttl_s()
+    store = R2Store(r2_config)
+
+    try:
+        upload_url = store.generate_presigned_upload_url(
+            key, content_type=request.content_type, expires_in=expires_in,
+        )
+    except R2StorageError as exc:
+        logger.exception("Failed to generate upload URL: %s", exc)
+        raise HTTPException(status_code=503, detail="Failed to prepare upload") from exc
+
+    return UploadInitResponse(video_id=video_id, key=key, upload_url=upload_url, expires_in=expires_in)
 
 
 def v1_complete_upload(
     request: UploadCompleteRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoResponse:
-    if identity.auth_method == "api_key":
-        _consume_api_units_or_raise(
-            user_id=identity.user_id,
-            api_key_id=identity.api_key_id,
-            event_type="index_video",
-            units=API_UNIT_COST_INDEX_VIDEO,
+    if identity.auth_method != "api_key":
+        return complete_upload(request, user_id=identity.user_id)
+
+    # API-key path: inline complete_upload logic with API billing instead of web credits
+    user_id = identity.user_id
+    _enforce_user_write_rate_limit(user_id)
+    filename = _sanitize_filename(request.filename)
+    key = source_key(request.video_id, filename)
+
+    existing = _get_idempotent_upload_record(
+        video_id=request.video_id, user_id=user_id,
+        source_r2_key=key, source_filename=filename,
+    )
+    if existing is not None:
+        return _video_record_to_response(existing)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
+
+    store = R2Store(r2_config)
+
+    try:
+        if not store.source_exists(key):
+            raise HTTPException(status_code=400, detail="Uploaded source not found")
+    except R2StorageError as exc:
+        logger.exception("Failed to check uploaded source: %s", exc)
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+    try:
+        _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
+    except UploadDurationLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadDurationProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+
+    record, created = db_insert_uploaded_video_idempotent(
+        request.video_id, user_id, key, filename,
+    )
+    if not created:
+        record = _require_matching_upload_record(
+            record, source_r2_key=key, source_filename=filename,
         )
-    return complete_upload(request, user_id=identity.user_id)
+        return _video_record_to_response(record)
+
+    try:
+        _consume_api_units_or_raise(
+            user_id=user_id, api_key_id=identity.api_key_id,
+            event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+            video_id=request.video_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 402:
+            update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
+
+    _enqueue_video_or_fail(record.id)
+    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
+    return _video_record_to_response(record)
 
 
 def v1_get_video(
@@ -1684,6 +1818,11 @@ def v1_search_video(
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoSearchResponse:
     if identity.auth_method == "api_key":
+        # Validate before billing to avoid charging for bad requests
+        _enforce_search_rate_limit(identity.user_id)
+        if not request.query_text:
+            raise HTTPException(status_code=400, detail="Provide query_text")
+        _get_ready_video_for_search(video_id, identity.user_id)
         _consume_api_units_or_raise(
             user_id=identity.user_id,
             api_key_id=identity.api_key_id,
