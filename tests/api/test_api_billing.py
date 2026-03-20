@@ -661,6 +661,58 @@ class TestApiKeyUploadBilling:
         assert response.status_code == 200
         assert consumed["called"] is True
 
+    def test_api_key_idempotent_upload_succeeds_without_web_credits(self, monkeypatch) -> None:
+        """Regression: API-key idempotent upload must not hit web admission.
+
+        Forces free tier exhausted + no web credits — would 402 if the code
+        path still called _precheck_video_processing_admission.
+        """
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+        # Exhaust free tier and remove web credits
+        monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 999)
+        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: False)
+        monkeypatch.setattr("src.api.app.db_get_credits", lambda _uid: None)
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def upload_source_video(self, **kwargs):
+                class Result:
+                    key = "source/vid_idem/test.mp4"
+                return Result()
+
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+        )
+        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
+
+        import io
+
+        response = client.post(
+            "/api/v1/videos/upload",
+            files={"file": ("test.mp4", io.BytesIO(b"fake"), "video/mp4")},
+            headers={
+                "Authorization": f"Bearer {raw_key}",
+                "Idempotency-Key": "test-idem-key-1",
+            },
+        )
+
+        assert response.status_code == 200
+        assert consumed["called"] is True
+
     def test_jwt_upload_paths_unchanged(self, monkeypatch) -> None:
         _authenticate("user_123")
 
