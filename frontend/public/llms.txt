@@ -2,12 +2,17 @@
 
 > Video Moment Finder is a SaaS tool that lets you process videos and find specific moments using semantic search. Upload a video or paste a YouTube URL, then search by text description or example image to jump straight to matching timestamps.
 
-- Search modalities: natural-language text queries and image-based similarity search
-- Supports YouTube URLs and direct video uploads
+- Public API and CLI for indexing videos and searching them by text
+- Primary documented agent flow: direct upload plus text search
+- Additional product capabilities include YouTube ingestion and image-based search
 
 ## Links
 
 - [Homepage](https://videomomentfinder.com/): Product landing page with feature overview and demo
+- [Skill File](https://videomomentfinder.com/skill.md): Canonical public agent bootstrap for auth rules, supported flow, and API references
+- [Developers](https://videomomentfinder.com/developers): Human-readable API and CLI overview
+- [OpenAPI Schema](https://api.videomomentfinder.com/openapi.json): Machine-readable API contract
+- [Swagger UI](https://api.videomomentfinder.com/docs): Interactive API reference
 - [Pricing](https://videomomentfinder.com/pricing): Credit-based pricing tiers and free starter plan
 - [Support](https://videomomentfinder.com/support): FAQ and contact information
 

@@ -11,6 +11,37 @@ export default function DevelopersPage() {
       </p>
 
       <section className="mt-12">
+        <h2 className="font-heading text-2xl font-bold">Agent bootstrap</h2>
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            For agents and coding assistants, start with the public skill file.
+            It defines the canonical URLs, security rules, and the supported
+            upload -&gt; wait -&gt; search flow.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3 text-sm">
+            <Link
+              href="/skill.md"
+              className="rounded-lg bg-accent px-4 py-2 font-medium text-white"
+            >
+              Read /skill.md
+            </Link>
+            <a
+              href="https://api.videomomentfinder.com/openapi.json"
+              className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900"
+            >
+              OpenAPI schema
+            </a>
+            <a
+              href="https://api.videomomentfinder.com/docs"
+              className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900"
+            >
+              Swagger UI
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-12">
         <h2 className="font-heading text-2xl font-bold">What the API does</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-zinc-200 bg-surface-card p-5 dark:border-zinc-800">
@@ -36,9 +67,13 @@ export default function DevelopersPage() {
 
       <section className="mt-12">
         <h2 className="font-heading text-2xl font-bold">Quick start</h2>
+        <p className="mt-4 text-sm text-zinc-700 dark:text-zinc-300">
+          The CLI path below assumes you already cloned this repository. For raw
+          HTTP usage or autonomous agents, start with <Link href="/skill.md" className="text-accent hover:underline">/skill.md</Link>.
+        </p>
         <div className="mt-4 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <div>
-            <p className="text-sm font-medium">1. Install the CLI</p>
+            <p className="text-sm font-medium">1. If you cloned the repo, install the CLI</p>
             <pre className="mt-2 overflow-x-auto rounded-lg bg-zinc-100 p-3 text-xs dark:bg-zinc-800">
               <code>uv sync</code>
             </pre>
@@ -122,9 +157,14 @@ uv run vmf videos search <video_id> --query-text "when do they explain the model
       </section>
 
       <div className="mt-12 text-sm text-zinc-600 dark:text-zinc-400">
-        <Link href="/dashboard/api" className="text-accent hover:underline">
-          Go to API dashboard
-        </Link>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          <Link href="/dashboard/api" className="text-accent hover:underline">
+            Go to API dashboard
+          </Link>
+          <Link href="/skill.md" className="text-accent hover:underline">
+            Read /skill.md
+          </Link>
+        </div>
       </div>
     </div>
   );
