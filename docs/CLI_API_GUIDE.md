@@ -1,5 +1,8 @@
 # CLI and API Guide
 
+Need a one-link public entrypoint for agents? Start with `https://www.videomomentfinder.com/skill.md`.
+This guide remains the detailed reference for the same happy path.
+
 This guide covers the supported external happy path for Video Moment Finder:
 
 - create or manage API keys with a temporary Clerk bearer token
