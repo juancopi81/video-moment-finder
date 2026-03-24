@@ -27,6 +27,7 @@ export default function HomeContent() {
   const router = useRouter();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const posthog = usePostHog();
+  const trackCta = (cta: string) => () => posthog?.capture("cta_click", { cta });
   const [mode, setMode] = useState<SubmitMode>("upload");
   const [url, setUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -238,14 +239,14 @@ export default function HomeContent() {
           <SignedOut>
             <a
               href="#tool"
-              onClick={() => posthog?.capture("cta_click", { cta: "hero_free_upload" })}
+              onClick={trackCta("hero_free_upload")}
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
               Try 1 free upload
             </a>
             <Link
               href="/pricing"
-              onClick={() => posthog?.capture("cta_click", { cta: "hero_see_pricing" })}
+              onClick={trackCta("hero_see_pricing")}
               className="text-sm font-medium text-zinc-600 transition-colors hover:text-accent dark:text-zinc-400"
             >
               See pricing
@@ -254,7 +255,7 @@ export default function HomeContent() {
           <SignedIn>
             <a
               href="#tool"
-              onClick={() => posthog?.capture("cta_click", { cta: "hero_upload_video" })}
+              onClick={trackCta("hero_upload_video")}
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
               Upload a video
@@ -272,7 +273,7 @@ export default function HomeContent() {
             </p>
             <SignInButton mode="modal">
               <button
-                onClick={() => posthog?.capture("cta_click", { cta: "tool_sign_in" })}
+                onClick={trackCta("tool_sign_in")}
                 className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white"
               >
                 Sign In
@@ -504,7 +505,7 @@ export default function HomeContent() {
           </p>
           <a
             href="#tool"
-            onClick={() => posthog?.capture("cta_click", { cta: "banner_free_upload" })}
+            onClick={trackCta("banner_free_upload")}
             className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
           >
             Try 1 free upload

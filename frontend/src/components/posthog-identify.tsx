@@ -8,19 +8,22 @@ export function PostHogIdentify() {
   const { userId, isSignedIn, isLoaded } = useAuth();
   const posthog = usePostHog();
   const wasSignedIn = useRef(false);
+  const identifiedUserId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!posthog || !isLoaded) return;
 
     if (isSignedIn && userId) {
-      posthog.identify(userId);
+      if (identifiedUserId.current !== userId) {
+        posthog.identify(userId);
+        identifiedUserId.current = userId;
+      }
       wasSignedIn.current = true;
     } else if (wasSignedIn.current) {
-      // Real logout transition — clear identified state.
       posthog.reset();
       wasSignedIn.current = false;
+      identifiedUserId.current = null;
     }
-    // Initial anonymous mount: neither identify nor reset.
   }, [posthog, isLoaded, isSignedIn, userId]);
 
   return null;
