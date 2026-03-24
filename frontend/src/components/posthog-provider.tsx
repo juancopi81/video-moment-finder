@@ -27,11 +27,15 @@ if (typeof window !== "undefined" && posthogKey) {
       return event;
     },
     sanitize_properties(properties) {
-      if (properties["$current_url"]) {
-        properties["$current_url"] = sanitizeAnalyticsUrl(properties["$current_url"]);
-      }
-      if (properties["$pathname"]) {
-        properties["$pathname"] = sanitizePathname(properties["$pathname"]);
+      for (const key of Object.keys(properties)) {
+        const value = properties[key];
+        if (typeof value !== "string") continue;
+
+        if (key === "$pathname" || key.endsWith("_pathname")) {
+          properties[key] = sanitizePathname(value);
+        } else if (key === "$current_url" || key.endsWith("_url")) {
+          properties[key] = sanitizeAnalyticsUrl(value);
+        }
       }
       return properties;
     },
