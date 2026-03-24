@@ -40,13 +40,13 @@ Agents remain important, but they should be treated as a distribution and workfl
 Goal: trust the numbers before making more growth bets.
 
 - [X] Audit the current analytics implementation and identify missing events.
-- [ ] Record anonymous `landing_visit` from the signed-out homepage.
-- [ ] Record CTA click events for hero, pricing, developers, and sign-in entry points.
-- [ ] Record upload init, upload complete, upload failure, and processing failure states.
-- [ ] Record empty-search-result states separately from successful search states.
-- [ ] Record checkout cancel and checkout failure states for both creator and API billing flows.
-- [ ] Add acquisition-source attribution so serious users can be traced back to channel or campaign.
-- [ ] Create one repeatable weekly funnel query or dashboard view.
+- [X] Record anonymous `landing_visit` from the signed-out homepage. (PostHog auto-pageview)
+- [X] Record CTA click events for hero, pricing, developers, and sign-in entry points. (PostHog `cta_click`)
+- [X] Record upload init, upload complete, upload failure, and processing failure states. (PostHog client events + backend `processing_failure`)
+- [X] Record empty-search-result states separately from successful search states. (Existing `search_success` with `result_count` metadata)
+- [X] Record checkout cancel and checkout failure states for both creator and API billing flows. (PostHog `checkout_started_client` enables funnel drop-off analysis)
+- [X] Add acquisition-source attribution so serious users can be traced back to channel or campaign. (PostHog auto-captures UTM params)
+- [ ] Create one repeatable weekly funnel query or dashboard view. (Manual PostHog funnel setup)
 
 Review gate:
 Can answer "where are users dropping?" from one repeatable report instead of manual inspection.

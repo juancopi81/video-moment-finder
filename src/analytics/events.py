@@ -10,6 +10,7 @@ ALLOWED_EVENTS = {
     "signup_complete",
     "video_submitted",
     "video_ready",
+    "processing_failure",
     "search_run",
     "search_success",
     "checkout_started",

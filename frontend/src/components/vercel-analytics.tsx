@@ -19,8 +19,11 @@ function sanitizeAnalyticsUrl(rawUrl: string): string {
   return url.toString();
 }
 
-function beforeSend(event: BeforeSendEvent): BeforeSendEvent {
+function beforeSend(event: BeforeSendEvent): BeforeSendEvent | null {
   try {
+    if (typeof window !== "undefined" && localStorage.getItem("vmf_internal") === "1") {
+      return null;
+    }
     return {
       ...event,
       url: sanitizeAnalyticsUrl(event.url),

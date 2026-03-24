@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: March 11, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: March 24, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -38,9 +38,10 @@ export default function PrivacyPage() {
               product.
             </li>
             <li>
-              <strong>Product analytics:</strong> We also record limited first-party product
-              events, such as signup completion, in our own database to understand onboarding and
-              improve the Service.
+              <strong>Product analytics:</strong> We use PostHog to record client-side product
+              analytics such as page views, feature usage, and button clicks. We also record
+              limited server-side product events, such as signup completion and processing
+              outcomes, in our own database to understand onboarding and improve the Service.
             </li>
           </ul>
         </section>
@@ -110,6 +111,9 @@ export default function PrivacyPage() {
             <li>
               <strong>Lemon Squeezy:</strong> Payment processing
             </li>
+            <li>
+              <strong>PostHog:</strong> Product analytics and funnel measurement
+            </li>
           </ul>
           <p className="mt-2">
             Each provider processes data in accordance with their own privacy policies.
@@ -129,9 +133,10 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-foreground">6. Cookies</h2>
           <p className="mt-2">
             We use essential cookies for authentication session management. We also use Vercel Web
-            Analytics to understand overall page traffic and whether our public site is helping
-            users discover and trust the product. We use this analytics tooling for product
-            improvement and reliability, not for advertising or cross-site retargeting.
+            Analytics and PostHog to understand overall page traffic and whether our public site
+            is helping users discover and trust the product. PostHog uses a cookie for session
+            attribution. We use this analytics tooling for product improvement and reliability,
+            not for advertising or cross-site retargeting.
           </p>
         </section>
 

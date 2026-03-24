@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
+import { usePostHog } from "posthog-js/react";
 import { BillingSummaryCard } from "@/components/billing-summary-card";
 import { CheckoutStatusBanner } from "@/components/checkout-status-banner";
 import { PricingCard } from "@/components/pricing-card";
@@ -109,6 +110,7 @@ function ApiPricingCard({
   isSignedIn: boolean;
   getToken: () => Promise<string | null>;
 }) {
+  const posthog = usePostHog();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +124,7 @@ function ApiPricingCard({
     setLoading(true);
     try {
       const url = await startApiCheckout(token);
+      posthog?.capture("checkout_started_client", { plan: "developer" });
       window.location.assign(url);
     } catch (err) {
       setError(
@@ -160,6 +163,7 @@ function ApiPricingCard({
 
 function PricingPageContent() {
   const { userId, getToken, isLoaded } = useAuth();
+  const posthog = usePostHog();
   const searchParams = useSearchParams();
   const [checkoutPlanLoading, setCheckoutPlanLoading] = useState<BillingPlan | null>(
     null,
@@ -203,6 +207,7 @@ function PricingPageContent() {
         throw new Error("Checkout URL missing in response.");
       }
 
+      posthog?.capture("checkout_started_client", { plan });
       window.location.assign(payload.checkout_url);
     } catch (err) {
       if (err instanceof TypeError && err.message.includes("fetch")) {

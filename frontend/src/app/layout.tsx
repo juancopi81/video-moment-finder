@@ -4,6 +4,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { VercelAnalytics } from "@/components/vercel-analytics";
+import { PHProvider } from "@/components/posthog-provider";
+import { PostHogIdentify } from "@/components/posthog-identify";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -50,10 +52,13 @@ export default function RootLayout({
         <body
           className={`${sourceSans.className} ${outfit.variable} ${sourceSans.variable} flex min-h-screen flex-col antialiased`}
         >
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-          <VercelAnalytics />
+          <PHProvider>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+            <PostHogIdentify />
+            <VercelAnalytics />
+          </PHProvider>
         </body>
       </html>
     </ClerkProvider>
