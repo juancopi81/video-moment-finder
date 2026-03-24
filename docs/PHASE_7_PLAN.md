@@ -41,10 +41,10 @@ Goal: trust the numbers before making more growth bets.
 
 - [X] Audit the current analytics implementation and identify missing events.
 - [X] Record anonymous `landing_visit` from the signed-out homepage. (PostHog auto-pageview)
-- [X] Record CTA click events for hero, pricing, developers, and sign-in entry points. (PostHog `cta_click`)
+- [X] Record CTA click events for hero, pricing, developers, and sign-in entry points. (PostHog `cta_click` on homepage and pricing CTAs; developers page not yet instrumented)
 - [X] Record upload init, upload complete, upload failure, and processing failure states. (PostHog client events + backend `processing_failure`)
 - [X] Record empty-search-result states separately from successful search states. (Existing `search_success` with `result_count` metadata)
-- [X] Record checkout cancel and checkout failure states for both creator and API billing flows. (PostHog `checkout_started_client` enables funnel drop-off analysis)
+- [ ] Record checkout cancel and checkout failure states for both creator and API billing flows. (PostHog `checkout_started_client` tracks checkout starts; cancel and failure events not yet captured because Lemon Squeezy does not surface them)
 - [X] Add acquisition-source attribution so serious users can be traced back to channel or campaign. (PostHog auto-captures UTM params)
 - [ ] Create one repeatable weekly funnel query or dashboard view. (Manual PostHog funnel setup)
 

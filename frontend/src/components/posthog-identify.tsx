@@ -9,12 +9,8 @@ export function PostHogIdentify() {
   const posthog = usePostHog();
 
   useEffect(() => {
-    if (!posthog) return;
-    if (isSignedIn && userId) {
-      posthog.identify(userId);
-    } else {
-      posthog.reset();
-    }
+    if (!posthog || !isSignedIn || !userId) return;
+    posthog.identify(userId);
   }, [posthog, isSignedIn, userId]);
 
   return null;
