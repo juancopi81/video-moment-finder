@@ -6,83 +6,67 @@
 - Execution history belongs in [STATUS.md](./STATUS.md).
 - Stable product charter belongs in [PROJECT_SPEC.md](./PROJECT_SPEC.md).
 - Historical roadmap snapshot: [docs/archive/roadmap/ROADMAP_2026-03-05.md](./docs/archive/roadmap/ROADMAP_2026-03-05.md)
+- Historical Phase 5/6 plan snapshot: [docs/archive/PHASE_5_6_PLAN_2026-03-23.md](./docs/archive/PHASE_5_6_PLAN_2026-03-23.md)
 
 ---
 
-## Current Phase: Phase 5 - Launch and Learn
+## Current Phase: Phase 7 - Acquire, Activate, Monetize
 
-**Gate:** app is publicly shareable, stable for early users, and instrumented to learn from usage.
+**Gate:** the product is measured clearly enough to trust funnel decisions, one ICP shows repeated activation, and early revenue signal exists without adding broad new product surface area.
 
-### ~~4.3 Security Advisor Closure~~ ✅
+- Active execution checklist: [docs/PHASE_7_PLAN.md](./docs/PHASE_7_PLAN.md)
+- Selected ICP pursuit playbook: [docs/ICP_KNOWLEDGE_CREATORS_PLAYBOOK.md](./docs/ICP_KNOWLEDGE_CREATORS_PLAYBOOK.md)
+- Phase 5/6 archive: [docs/archive/PHASE_5_6_PLAN_2026-03-23.md](./docs/archive/PHASE_5_6_PLAN_2026-03-23.md)
 
-- ~~Verify Supabase Security Advisor is clean in all deployed environments.~~
-- ~~Confirm RLS coverage is enabled and policies are least-privilege for user-owned data paths.~~
-- ~~Confirm all custom DB functions use explicit `search_path` and no mutable warnings remain.~~
+### 7.1 Funnel Instrumentation and Truth
 
-### ~~4.4 Launch Ops Readiness~~ ✅
+- Add the missing anonymous and pre-auth events needed to measure real traffic and drop-off.
+- Separate creator and API activation, checkout, and failure states in analytics.
+- Produce one repeatable weekly funnel view used to review progress.
 
-- ~~Confirm automated database backups and restore drill documentation.~~
-- ~~Finalize monitoring dashboards and production alert routing.~~
-- ~~Complete release/incident checklist for API, worker, and frontend deployments.~~
-- ~~Final copy pass on public pages for pricing/support/legal consistency.~~
+### 7.2 Activation and Onboarding
 
-### 4.5 Production Deployment Guardrail
+- Reduce signed-out friction so users can understand the value before auth.
+- Keep direct upload as the only primary ingest path and keep YouTube clearly secondary.
+- Improve first-search guidance, empty states, and failure-state UX.
 
-- Stop automatic deploy-to-production on every merge to `main`.
-- Require explicit production promotion/manual deploy step.
-- Keep feature branches + PR review as the default development flow.
+### 7.3 ICP and Positioning
 
----
+- Primary ICP: knowledge-heavy creators with owned long-form video libraries, such as course creators, coaches, consultants, and niche educators.
+- Rewrite homepage and developer messaging around one job-to-be-done: find the exact teaching or explanation moment inside a private archive.
+- Keep agents as an interface advantage for power users, not the whole product story.
 
-## Next: Phase 5 - Launch and Learn
+### 7.4 Distribution and Customer Discovery
 
-**Gate:** app is publicly shareable, stable for early users, and instrumented to learn from usage.
+- Run manual outbound and onboarding sessions with a tight target list.
+- Track acquisition source and objections for each serious user.
+- Prefer niche demos and case studies over broad launch-directory posting.
 
-### ~~5.1 Analytics Baseline (Behavior, Not Just Telemetry)~~ ✅
+### 7.5 Monetization Validation
 
-- ~~Use existing logs + DB counts immediately to track early signal (`new users`, `videos submitted`, `jobs completed`, `searches run`).~~
-- ~~Add a minimal product analytics event set in week 1:~~
-  - ~~`landing_visit`~~
-  - ~~`signup_complete`~~
-  - ~~`video_submitted`~~
-  - ~~`video_ready`~~
-  - ~~`search_run`~~
-  - ~~`search_success`~~
-  - ~~`checkout_started`~~
-  - ~~`checkout_success`~~
-- ~~Keep telemetry/monitoring (Sentry) as system health, separate from product behavior analytics.~~
+- Validate whether the current free-to-paid path can convert once activation improves.
+- Test lighter entry points only after measurement is trustworthy.
+- Keep creator and developer pricing tracks separate unless evidence says otherwise.
 
-### ~~5.2 Discovery Basics (SEO)~~ ✅
+### 7.6 Agent Productization on Evidence
 
-- ~~Add/verify `robots.txt`.~~
-- ~~Add/verify `sitemap.xml`.~~
-- ~~Ensure public pages have clear title/meta/OG metadata and canonical URLs.~~
-- ~~Add `llms.txt` for AI-crawler discoverability.~~
-
-### 5.3 Core Feature Priorities After Launch
-
-- Treat Phase 5 and Phase 6 as one staged rollout: strengthen core search first, then expose the same capabilities to agents. See [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
-- ~~Ship transcript-backed or hybrid search first (`where was this said?` queries).~~
-- ~~Add ASR-backed spoken retrieval for uploaded videos after subtitle-backed hybrid search proves out.~~
-- Keep UI refinements scoped to issues surfaced by early-user feedback.
+- Improve the current API and CLI onboarding before adding new agent surface area.
+- Add non-repo-clone quickstarts and end-to-end examples.
+- Keep MCP out of scope until the current agent/API path shows repeated successful use.
 
 ---
 
-## Later: Phase 6 - Agent Access and Scale
+## Later: Phase 8 - Expand Proven Demand
 
-**Gate:** early usage validates demand and justifies broader platform investment.
+**Gate:** repeated usage and early revenue justify broader platform and workflow expansion.
 
-### 6.1 Agent-Enabled Integration Path
+### 8.1 Agent Surface Expansion
 
-- ~~Provide authenticated REST access over the same core product capabilities.~~
-- ~~Add per-user API keys, usage attribution, quotas, and key revocation.~~
-- ~~Add CLI/MCP wrapper after API contracts are stable.~~
-- ~~Add dashboard API access area, separated API billing, and public developer page.~~
-- Deliver Phase 6 as milestone-based PR work with review gates defined in [docs/PHASE_5_6_PLAN.md](./docs/PHASE_5_6_PLAN.md).
+- Reassess MCP only after the current API and CLI path shows repeated end-to-end use.
+- Expand image-search and richer automation flows only after the core text-search path has traction.
+- Add more developer onboarding assets when evidence shows the API wedge is working.
 
-### 6.2 Environment and Cost Maturity
+### 8.2 Environment and Cost Maturity
 
-- ~~Local dev isolation for Supabase and Qdrant (`.env.local` overrides + local Docker services).~~
-- Keep lightweight infra while validating; avoid full staging complexity too early.
-- Introduce separate staging environment when usage, team size, or release risk justifies it.
+- Introduce separate staging only when release risk or team size justifies it.
 - Continue embedding/storage cost optimization and adaptive frame-sampling evaluation as volume grows.

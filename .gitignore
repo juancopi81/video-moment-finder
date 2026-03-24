@@ -29,3 +29,7 @@ test_video*
 supabase/.temp/
 supabase/.branches
 .claude/worktrees/
+
+# Private GTM and customer-development notes
+docs/private/*
+!docs/private/README.md

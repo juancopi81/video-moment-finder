@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 5: Launch and Learn** - In Progress
+**Phase 7: Acquire, Activate, Monetize** - In Progress
 
 ## Progress Log
 
@@ -57,10 +57,14 @@ Authoring rules:
 | 2026-03-17 | Phase 5 | Qdrant visual upsert batching                         | Done        | Batched frame-vector writes to stay under Qdrant payload limits, marked payload-limit failures terminal, and attached richer worker Sentry context. |
 | 2026-03-17 | Phase 6 | Agent CLI and public guide                            | Done        | Added the stdlib `vmf` CLI over `/api/v1` for upload, poll, key bootstrap, and text search, plus a public usage guide. |
 | 2026-03-18 | Phase 6 | Dashboard API access and billing separation            | Done        | Added /dashboard/api, separated API billing with unit-based model, /developers page, API section on pricing page. |
+| 2026-03-23 | Phase 7 | Phase 7 planning baseline                              | Done        | Archived the completed Phase 5/6 plan, created the Phase 7 checklist, and reset the active roadmap toward acquisition, activation, and monetization. |
+| 2026-03-23 | Phase 7 | ICP selection and pursuit playbook                     | Done        | Chose knowledge-heavy creators with owned long-form video libraries as the primary ICP and added a dedicated pursuit playbook. |
 
 ## Blockers
 
 - Best-effort YouTube URL import can be blocked from cloud IP ranges; direct upload is the supported reliable path.
+- Current traffic volume is too low to validate retention or pricing confidently.
+- Funnel instrumentation is incomplete on the signed-out and pre-auth path, so top-of-funnel conclusions are still weak.
 - ~~Final launch hardening depends on clearing remaining Supabase Security Advisor findings in every deployed environment.~~ Resolved 2026-03-06.
 - ~~Ops readiness checklist (backup verification and monitoring alert routing) remains open for launch gate completion.~~ Resolved 2026-03-06 (manual backup path verified; Sentry active for monitoring).
 
@@ -72,6 +76,7 @@ Authoring rules:
 - **Durable queue before expansion** was prioritized to stabilize processing reliability.
 - **Warm containers remain opt-in** to control default development and production cost.
 - **Direct upload is the primary ingest path**; YouTube URL import remains best effort.
+- **Phase 7 prioritizes acquisition, activation, and monetization learning** before broader platform expansion.
 
 ## Metrics / Measurements
 
