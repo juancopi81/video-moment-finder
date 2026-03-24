@@ -59,6 +59,7 @@ Authoring rules:
 | 2026-03-18 | Phase 6 | Dashboard API access and billing separation            | Done        | Added /dashboard/api, separated API billing with unit-based model, /developers page, API section on pricing page. |
 | 2026-03-23 | Phase 7 | Phase 7 planning baseline                              | Done        | Archived the completed Phase 5/6 plan, created the Phase 7 checklist, and reset the active roadmap toward acquisition, activation, and monetization. |
 | 2026-03-23 | Phase 7 | ICP selection and pursuit playbook                     | Done        | Chose knowledge-heavy creators with owned long-form video libraries as the primary ICP and added a dedicated pursuit playbook. |
+| 2026-03-24 | Phase 7 | PostHog funnel instrumentation (7.1)                   | Done        | Added PostHog for client-side product analytics; added processing_failure backend event; kept existing Supabase backend events. |
 
 ## Blockers
 

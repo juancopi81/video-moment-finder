@@ -26,6 +26,7 @@ Use those files as the canonical variable list and defaults. This document expla
 | `VIDEO_MAX_DURATION_S` | Optional | Optional | - | Duration checks are used in API admission and processing path validation. |
 | `VIDEO_JOB_MAX_ATTEMPTS`, `VIDEO_JOB_STALE_LOCK_TIMEOUT_S`, `VIDEO_JOB_IDLE_BACKOFF_MAX_S`, `VIDEO_JOB_DB_RETRY_BASE_DELAY_S`, `VIDEO_JOB_DB_RETRY_MAX_DELAY_S` | - | Optional | - | Worker queue behavior tuning. |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | - | - | Required | Frontend runtime config in Vercel/frontend env. |
+| `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` | - | - | Required | PostHog client-side product analytics. |
 
 ### Deployment Placement
 
@@ -60,13 +61,18 @@ Expected behavior:
 
 ## Analytics Event Contract
 
-- Pageview and visitor analytics are collected in the frontend by Vercel Web Analytics.
+Client-side product analytics (pageviews, CTA clicks, upload lifecycle, checkout tracking, UTM attribution) are handled by PostHog via `posthog-js` in the frontend. PostHog is initialized in `frontend/src/components/posthog-provider.tsx` and gracefully disabled when `NEXT_PUBLIC_POSTHOG_KEY` is unset.
+
+Vercel Web Analytics continues to run alongside PostHog for lightweight traffic data in the Vercel dashboard.
+
+Server-side product events use a first-party Supabase table:
+
 - Endpoint: `POST /analytics/event`
 - Body: `{"event_name": "...", "metadata": {...}}`
 - Allowed frontend events: `signup_complete`
 - Auth: required
 - Table: `analytics_events` in Supabase (service_role only RLS)
-- Backend events (`video_submitted`, `video_ready`, `search_run`, `search_success`, `checkout_started`, `checkout_success`) are inserted directly by API and worker handlers.
+- Backend events (`video_submitted`, `video_ready`, `processing_failure`, `search_run`, `search_success`, `checkout_started`, `checkout_success`) are inserted directly by API and worker handlers.
 
 Example verification query:
 ```sql

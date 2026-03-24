@@ -197,6 +197,7 @@ def _process_claimed_job(
         )
         update_video_status(video.id, "failed", error_message=error_message)
         complete_video_job(job.id, "failed", error_message=error_message)
+        track("processing_failure", user_id=video.user_id, metadata={"video_id": video.id, "reason": "validation_failure"})
         _log_worker_metric(
             "job_terminal_failure",
             worker_id=worker_id,
@@ -218,6 +219,7 @@ def _process_claimed_job(
         )
         update_video_status(video.id, "failed", error_message=error_message)
         complete_video_job(job.id, "failed", error_message=error_message)
+        track("processing_failure", user_id=video.user_id, metadata={"video_id": video.id, "reason": "non_retriable_failure"})
         _log_worker_metric(
             "job_terminal_failure",
             worker_id=worker_id,
@@ -262,6 +264,7 @@ def _process_claimed_job(
 
         update_video_status(video.id, "failed", error_message=error_message)
         complete_video_job(job.id, "failed", error_message=error_message)
+        track("processing_failure", user_id=video.user_id, metadata={"video_id": video.id, "reason": "max_attempts"})
         _log_worker_metric(
             "job_terminal_failure",
             worker_id=worker_id,

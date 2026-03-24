@@ -12,6 +12,7 @@
     "@clerk/nextjs": "^6.16.0",
     "@vercel/analytics": "^1.5.0",
     "next": "16.1.5",
+    "posthog-js": "^1.363.4",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

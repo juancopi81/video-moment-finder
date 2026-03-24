@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { usePostHog } from "posthog-js/react";
 import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { ApiBalanceCard } from "@/components/api-balance-card";
 import { ApiKeyCreateModal } from "@/components/api-key-create-modal";
@@ -32,6 +33,7 @@ function formatDate(value: string | null): string {
 
 function ApiDashboardContent() {
   const { getToken, isLoaded, userId } = useAuth();
+  const posthog = usePostHog();
   const searchParams = useSearchParams();
   const checkoutStatus = searchParams.get("checkout");
   const { apiBillingSummary, apiBillingSummaryError, isRefreshingBalance } =
@@ -95,6 +97,7 @@ function ApiDashboardContent() {
     setCheckoutLoading(true);
     try {
       const url = await startApiCheckout(t);
+      posthog?.capture("checkout_started_client", { plan: "developer" });
       window.location.assign(url);
     } catch (err) {
       setCheckoutError(

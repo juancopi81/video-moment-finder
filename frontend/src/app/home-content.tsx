@@ -9,6 +9,7 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { usePostHog } from "posthog-js/react";
 import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { API_URL, parseApiError, parseApiErrorPayload } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics";
@@ -25,6 +26,8 @@ function modeButtonClass(isActive: boolean): string {
 export default function HomeContent() {
   const router = useRouter();
   const { getToken, isLoaded, isSignedIn } = useAuth();
+  const posthog = usePostHog();
+  const trackCta = (cta: string) => () => posthog?.capture("cta_click", { cta });
   const [mode, setMode] = useState<SubmitMode>("upload");
   const [url, setUrl] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -145,6 +148,7 @@ export default function HomeContent() {
       }
 
       const initData = await initResponse.json();
+      posthog?.capture("upload_init");
 
       await new Promise<void>((resolve, reject) => {
         const request = new XMLHttpRequest();
@@ -191,16 +195,18 @@ export default function HomeContent() {
       }
 
       const data = await completeResponse.json();
+      posthog?.capture("upload_complete");
       shouldResetUploadState = false;
       router.push(`/video/${data.id}`);
     } catch (err) {
-      if (err instanceof TypeError && err.message.includes("Network")) {
-        setError("Cannot connect to server. Please try again later.");
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unexpected error occurred");
-      }
+      const message =
+        err instanceof TypeError && err.message.includes("Network")
+          ? "Cannot connect to server. Please try again later."
+          : err instanceof Error
+            ? err.message
+            : "An unexpected error occurred";
+      posthog?.capture("upload_failure", { error: message });
+      setError(message);
     } finally {
       if (shouldResetUploadState) {
         setIsUploading(false);
@@ -233,12 +239,14 @@ export default function HomeContent() {
           <SignedOut>
             <a
               href="#tool"
+              onClick={trackCta("hero_free_upload")}
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
               Try 1 free upload
             </a>
             <Link
               href="/pricing"
+              onClick={trackCta("hero_see_pricing")}
               className="text-sm font-medium text-zinc-600 transition-colors hover:text-accent dark:text-zinc-400"
             >
               See pricing
@@ -247,6 +255,7 @@ export default function HomeContent() {
           <SignedIn>
             <a
               href="#tool"
+              onClick={trackCta("hero_upload_video")}
               className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
             >
               Upload a video
@@ -263,7 +272,10 @@ export default function HomeContent() {
               Sign in to upload a video and start searching it.
             </p>
             <SignInButton mode="modal">
-              <button className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white">
+              <button
+                onClick={trackCta("tool_sign_in")}
+                className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white"
+              >
                 Sign In
               </button>
             </SignInButton>
@@ -493,6 +505,7 @@ export default function HomeContent() {
           </p>
           <a
             href="#tool"
+            onClick={trackCta("banner_free_upload")}
             className="mt-6 inline-block rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white"
           >
             Try 1 free upload
