@@ -65,7 +65,7 @@ Authoring rules:
 
 - Best-effort YouTube URL import can be blocked from cloud IP ranges; direct upload is the supported reliable path.
 - Current traffic volume is too low to validate retention or pricing confidently.
-- Funnel instrumentation is incomplete on the signed-out and pre-auth path, so top-of-funnel conclusions are still weak.
+- ~~Funnel instrumentation is incomplete on the signed-out and pre-auth path, so top-of-funnel conclusions are still weak.~~ Resolved 2026-03-25 (PostHog covers signed-out pageviews, CTAs, and full acquisition funnel).
 - ~~Final launch hardening depends on clearing remaining Supabase Security Advisor findings in every deployed environment.~~ Resolved 2026-03-06.
 - ~~Ops readiness checklist (backup verification and monitoring alert routing) remains open for launch gate completion.~~ Resolved 2026-03-06 (manual backup path verified; Sentry active for monitoring).
 

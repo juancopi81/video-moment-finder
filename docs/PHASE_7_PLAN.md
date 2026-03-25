@@ -46,7 +46,7 @@ Goal: trust the numbers before making more growth bets.
 - [X] Record empty-search-result states separately from successful search states. (Existing `search_success` with `result_count` metadata)
 - [ ] Record checkout cancel and checkout failure states for both creator and API billing flows. (PostHog `checkout_started_client` tracks checkout starts; cancel and failure events not yet captured because Lemon Squeezy does not surface them)
 - [X] Add acquisition-source attribution so serious users can be traced back to channel or campaign. (PostHog auto-captures UTM params)
-- [ ] Create one repeatable weekly funnel query or dashboard view. (Manual PostHog funnel setup)
+- [X] Create one repeatable weekly funnel query or dashboard view. (Saved as "Weekly Acquisition Funnel" in PostHog)
 
 Review gate:
 Can answer "where are users dropping?" from one repeatable report instead of manual inspection.
