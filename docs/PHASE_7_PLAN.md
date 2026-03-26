@@ -55,12 +55,12 @@ Can answer "where are users dropping?" from one repeatable report instead of man
 
 Goal: let users see value faster and remove avoidable friction.
 
-- [ ] Add a signed-out demo path so users can see real output before auth.
-- [ ] Keep direct upload as the only primary ingest CTA on the homepage.
-- [ ] Move YouTube import behind a clearly labeled secondary or beta path.
-- [ ] Add first-search suggestions once a video is ready.
-- [ ] Improve empty states for "what should I search for?"
-- [ ] Improve error and recovery copy for upload, processing, and search failure states.
+- [X] Add a signed-out demo path so users can see real output before auth. (Static preview card with mock visual and spoken results)
+- [X] Keep direct upload as the only primary ingest CTA on the homepage. (YouTube demoted to secondary text link)
+- [X] Move YouTube import behind a clearly labeled secondary or beta path. (Secondary text link, not equal tab)
+- [X] Add first-search suggestions once a video is ready. (4 ICP-relevant suggestion chips below text search input)
+- [X] Improve empty states for "what should I search for?" (Empty-results block with refinement guidance, dashboard empty state with ICP copy)
+- [X] Improve error and recovery copy for upload, processing, and search failure states. (Processing failed card, upload error card, search error hint)
 - [ ] Review the full onboarding flow with at least 3 live users and fix the biggest friction points.
 
 Review gate:

@@ -187,11 +187,17 @@ function DashboardPageContent() {
               Loading your videos...
             </div>
           ) : videos.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-300 bg-surface-card px-6 py-10 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-              <p>No videos yet.</p>
+            <div className="rounded-2xl border border-dashed border-zinc-300 bg-surface-card px-6 py-10 text-center dark:border-zinc-700">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Your video library is empty
+              </p>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Upload a lesson, webinar, or workshop recording and search it
+                for any moment by description or example image.
+              </p>
               <Link
                 href="/"
-                className="mt-3 inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
+                className="mt-4 inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
               >
                 Upload your first video
               </Link>

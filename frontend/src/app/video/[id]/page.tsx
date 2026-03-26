@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, useMemo, use, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -9,6 +9,7 @@ import {
   SignedOut,
   useAuth,
 } from "@clerk/nextjs";
+import { usePostHog } from "posthog-js/react";
 import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { API_URL, parseApiError } from "@/lib/api";
 
@@ -93,6 +94,7 @@ function buildTimestampUrl(baseUrl: string, seconds: number): string | null {
 export default function VideoPage({ params }: VideoPageProps) {
   const { id } = use(params);
   const { getToken, isLoaded, userId } = useAuth();
+  const posthog = usePostHog();
 
   const [status, setStatus] = useState<VideoStatus>("queued");
   const [error, setError] = useState<string | null>(null);
@@ -105,10 +107,11 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [queryImageFile, setQueryImageFile] = useState<File | null>(null);
   const [queryImagePreviewUrl, setQueryImagePreviewUrl] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const queryImageInputRef = useRef<HTMLInputElement | null>(null);
-  const resultGroups = groupedSearchResults(results);
+  const resultGroups = useMemo(() => groupedSearchResults(results), [results]);
 
   function resetQueryImageSelection() {
     setQueryImageFile(null);
@@ -120,6 +123,7 @@ export default function VideoPage({ params }: VideoPageProps) {
   function handleSearchModeChange(nextMode: SearchMode) {
     setSearchMode(nextMode);
     setResults([]);
+    setHasSearched(false);
     setError(null);
     if (nextMode !== "image") {
       resetQueryImageSelection();
@@ -229,6 +233,7 @@ export default function VideoPage({ params }: VideoPageProps) {
     if (searchMode === "image" && !queryImageFile) return;
 
     setIsSearching(true);
+    setHasSearched(true);
     setError(null);
     setResults([]);
 
@@ -267,6 +272,9 @@ export default function VideoPage({ params }: VideoPageProps) {
 
       const data: VideoSearchResponse = await res.json();
       setResults(data.results);
+      if (data.results.length === 0) {
+        posthog?.capture("search_empty_result_shown", { video_id: id, mode: searchMode });
+      }
       if (data.youtube_url) {
         setVideoUrl(data.youtube_url);
       }
@@ -324,16 +332,32 @@ export default function VideoPage({ params }: VideoPageProps) {
         )}
 
         {status === "failed" && (
-          <div className="text-center">
-            <p className="text-red-600 dark:text-red-400 mb-4">
-              {statusMessage ?? "Failed to process video"}
+          <div className="w-full max-w-xl rounded-lg border border-red-200 bg-red-50 px-6 py-6 text-center dark:border-red-500/40 dark:bg-red-500/10">
+            <p className="text-sm font-medium text-red-700 dark:text-red-200">
+              Processing failed
             </p>
-            <Link
-              href="/"
-              className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-            >
-              Try another video
-            </Link>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-300">
+              {statusMessage ?? "An error occurred while indexing this video."}
+            </p>
+            <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
+              Common causes: the video file may be corrupted, in an unsupported
+              codec, or too short to index. Try uploading a different file
+              (MP4 or MOV works best).
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <Link
+                href="/"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                Upload a different video
+              </Link>
+              <a
+                href="mailto:support@videomomentfinder.com"
+                className="inline-flex items-center justify-center rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Contact support
+              </a>
+            </div>
           </div>
         )}
 
@@ -420,6 +444,28 @@ export default function VideoPage({ params }: VideoPageProps) {
                     Spoken matches use YouTube captions when available and speech
                     transcription for direct uploads.
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">Try:</span>
+                    {[
+                      "where I explain the framework",
+                      "showing the slide with the 3 steps",
+                      "answering the pricing objection",
+                      "showing the worksheet on screen",
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(suggestion);
+                          posthog?.capture("search_suggestion_click", { suggestion });
+                        }}
+                        className="rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600 transition-colors hover:border-accent hover:text-accent dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-accent dark:hover:text-accent"
+                        disabled={isSearching}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div
@@ -483,6 +529,27 @@ export default function VideoPage({ params }: VideoPageProps) {
                 {isSearching ? "Searching..." : "Search"}
               </button>
             </form>
+
+            {hasSearched && !isSearching && results.length === 0 && !error && (
+              <div className="mt-6 rounded-lg border border-dashed border-zinc-300 px-6 py-8 text-center dark:border-zinc-700">
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  No matching moments found
+                </p>
+                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  Try a different description, use broader terms, or search for a
+                  visual element instead of a concept. For example,
+                  try &ldquo;person writing on whiteboard&rdquo;
+                  instead of &ldquo;brainstorming session.&rdquo;
+                </p>
+              </div>
+            )}
+
+            {hasSearched && error && (
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 text-center">
+                Try searching again, or use different terms. If this persists,
+                the video may need to be re-uploaded.
+              </p>
+            )}
 
             {results.length > 0 && (
               <div>
