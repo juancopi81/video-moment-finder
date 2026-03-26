@@ -447,10 +447,10 @@ export default function VideoPage({ params }: VideoPageProps) {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">Try:</span>
                     {[
-                      "explaining how to get started",
-                      "showing a dashboard or slide",
-                      "answering a common question",
-                      "demonstrating a workflow",
+                      "where I explain the framework",
+                      "showing the slide with the 3 steps",
+                      "answering the pricing objection",
+                      "showing the worksheet on screen",
                     ].map((suggestion) => (
                       <button
                         key={suggestion}
