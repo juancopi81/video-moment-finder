@@ -19,6 +19,8 @@ from urllib import request as urllib_request
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
+from src.utils.cleanup import cleanup_file
+
 CLI_VERSION = "0.1.0"
 ENV_API_BASE_URL = "VMF_API_BASE_URL"
 ENV_API_KEY = "VMF_API_KEY"
@@ -216,57 +218,6 @@ def _multipart_json_request(
 
     detail = _extract_error_detail_from_bytes(raw) or response.reason or "Request failed"
     raise CliError(f"HTTP {response.status}: {detail}")
-
-
-def _stream_upload_put(
-    upload_url: str,
-    file_path: Path,
-    *,
-    content_type: str | None,
-    timeout_s: float = DEFAULT_UPLOAD_TIMEOUT_S,
-) -> None:
-    parsed = urlsplit(upload_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise CliError("Upload URL is invalid")
-
-    connection_cls = (
-        http.client.HTTPSConnection
-        if parsed.scheme == "https"
-        else http.client.HTTPConnection
-    )
-    target = parsed.path or "/"
-    if parsed.query:
-        target = f"{target}?{parsed.query}"
-
-    conn = connection_cls(parsed.hostname, port=parsed.port, timeout=timeout_s)
-    try:
-        conn.putrequest("PUT", target)
-        conn.putheader("Content-Length", str(file_path.stat().st_size))
-        if content_type:
-            conn.putheader("Content-Type", content_type)
-        conn.endheaders()
-
-        with file_path.open("rb") as handle:
-            while True:
-                chunk = handle.read(UPLOAD_CHUNK_BYTES)
-                if not chunk:
-                    break
-                conn.send(chunk)
-
-        response = conn.getresponse()
-        body = response.read()
-    except OSError as exc:
-        raise CliError(f"Upload failed: {exc}") from exc
-    finally:
-        conn.close()
-
-    if 200 <= response.status < 300:
-        return
-
-    detail = _decode_text(body)
-    if detail:
-        raise CliError(f"Upload failed with status {response.status}: {detail}")
-    raise CliError(f"Upload failed with status {response.status}")
 
 
 def _decode_text(raw: bytes, *, limit: int = 240) -> str:
@@ -714,10 +665,7 @@ def _resolve_upload_source(
 def _cleanup_upload_source(source: UploadSource) -> None:
     if source.cleanup_path is None:
         return
-    try:
-        source.cleanup_path.unlink()
-    except OSError:
-        pass
+    cleanup_file(source.cleanup_path, ignore_errors=True)
 
 
 def _resolve_query_text(raw_value: str) -> str:
@@ -783,7 +731,7 @@ def _cmd_auth_clear(args: argparse.Namespace) -> Any:
     if preview is not None:
         return preview
 
-    path = _clear_local_config()
+    _clear_local_config()
     return {
         "cleared": True,
         "config_path": str(path),
@@ -850,7 +798,12 @@ def _cmd_keys_revoke(args: argparse.Namespace) -> Any:
     if preview is not None:
         return preview
 
-    base_url = _require_api_base_url(args.api_base_url)
+    if resolved_base_url.value is None:
+        raise CliError(
+            f"Missing API base URL. Provide --api-base-url, {ENV_API_BASE_URL}, or run `vmf auth set`.",
+            exit_code=2,
+        )
+    base_url = resolved_base_url.value
     bearer_token = _require_bearer_token(args.bearer_token)
     _json_request(
         "DELETE",
