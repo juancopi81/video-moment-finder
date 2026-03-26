@@ -112,10 +112,11 @@ Inspect the resolved config:
 uv run vmf auth status
 ```
 
-Clear the saved config:
+Preview or clear the saved config non-interactively:
 
 ```bash
-uv run vmf auth clear
+uv run vmf auth clear --dry-run
+uv run vmf auth clear --yes
 ```
 
 ### List or Revoke Keys

@@ -23,7 +23,7 @@ Use this file when you need one public entrypoint for the Video Moment Finder AP
 ## Supported Happy Path
 
 - create or reuse a `vmf_` API key
-- upload a video with the direct upload flow
+- upload a video with the one-shot multipart route
 - poll until processing reaches `ready`
 - search a processed video by text
 
@@ -32,13 +32,13 @@ Use this file when you need one public entrypoint for the Video Moment Finder AP
 - image search
 - YouTube submit
 
-Those capabilities may exist elsewhere in the product or API surface, but the canonical documented agent flow is direct upload plus text search.
+Those capabilities may exist elsewhere in the product or API surface, but the canonical documented agent flow is one-shot upload plus text search.
 
 ## Security Rules
 
 - Only send `vmf_` API keys to `https://api.videomomentfinder.com`.
 - Only send temporary Clerk bearer tokens to Video Moment Finder API routes that explicitly require them, such as `POST /api/v1/keys`.
-- Do not forward your `Authorization` header when uploading file bytes to the returned presigned `upload_url`.
+- If you choose the lower-level direct-upload flow, do not forward your `Authorization` header to the returned presigned `upload_url`.
 - Treat the raw API key returned by key creation as secret material. It is returned once.
 
 ## Fastest Path
@@ -57,37 +57,24 @@ Authorization: Bearer <token>
 
 Use the `/api/v1` routes for the public contract:
 
-1. Initialize a direct upload:
+1. Upload one video with the one-shot multipart route.
+   The response includes the `id` you use for status polling and search.
 
-```http
-POST https://api.videomomentfinder.com/api/v1/videos/upload/init
-Content-Type: application/json
-Authorization: Bearer <vmf_api_key>
-
-{"filename":"sample.mp4","content_type":"video/mp4"}
+```bash
+curl -X POST https://api.videomomentfinder.com/api/v1/videos/upload \
+  -H "Authorization: Bearer <vmf_api_key>" \
+  -H "Idempotency-Key: sample-v1" \
+  -F "file=@sample.mp4;type=video/mp4"
 ```
 
-2. `PUT` the raw file bytes to the returned `upload_url`.
-   Do not send your VMF auth header to that storage URL.
-
-3. Finalize the upload:
-
-```http
-POST https://api.videomomentfinder.com/api/v1/videos/upload/complete
-Content-Type: application/json
-Authorization: Bearer <vmf_api_key>
-
-{"video_id":"<video_id>","filename":"sample.mp4"}
-```
-
-4. Poll status until `status` is `ready`:
+2. Poll status until `status` is `ready`:
 
 ```http
 GET https://api.videomomentfinder.com/api/v1/videos/<video_id>
 Authorization: Bearer <vmf_api_key>
 ```
 
-5. Search by text:
+3. Search by text:
 
 ```http
 POST https://api.videomomentfinder.com/api/v1/videos/<video_id>/search
@@ -96,6 +83,12 @@ Authorization: Bearer <vmf_api_key>
 
 {"query_text":"when do they explain the model?","limit":3}
 ```
+
+Lower-level direct upload is still available if your client specifically needs a presigned URL flow:
+
+1. `POST /api/v1/videos/upload/init`
+2. `PUT` the raw bytes to the returned `upload_url`
+3. `POST /api/v1/videos/upload/complete`
 
 ## CLI Happy Path
 
