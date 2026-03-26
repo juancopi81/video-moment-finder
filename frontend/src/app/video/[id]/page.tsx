@@ -233,6 +233,7 @@ export default function VideoPage({ params }: VideoPageProps) {
     if (searchMode === "image" && !queryImageFile) return;
 
     setIsSearching(true);
+    setHasSearched(true);
     setError(null);
     setResults([]);
 
@@ -271,7 +272,6 @@ export default function VideoPage({ params }: VideoPageProps) {
 
       const data: VideoSearchResponse = await res.json();
       setResults(data.results);
-      setHasSearched(true);
       if (data.results.length === 0) {
         posthog?.capture("search_empty_result_shown", { video_id: id, mode: searchMode });
       }
@@ -530,7 +530,7 @@ export default function VideoPage({ params }: VideoPageProps) {
               </button>
             </form>
 
-            {hasSearched && results.length === 0 && !error && (
+            {hasSearched && !isSearching && results.length === 0 && !error && (
               <div className="mt-6 rounded-lg border border-dashed border-zinc-300 px-6 py-8 text-center dark:border-zinc-700">
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                   No matching moments found
