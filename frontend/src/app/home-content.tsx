@@ -266,6 +266,15 @@ export default function HomeContent() {
               Here is what search results look like
             </h3>
 
+            <div className="mt-4 flex items-center rounded-lg border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+              <span className="text-sm text-zinc-900 dark:text-zinc-100">
+                explaining the onboarding flow
+              </span>
+              <span className="ml-auto rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
+                Search
+              </span>
+            </div>
+
             <div className="mt-4 relative">
               <div className="aspect-video overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
                 <Image
