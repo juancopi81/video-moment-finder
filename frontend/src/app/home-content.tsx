@@ -267,8 +267,12 @@ export default function HomeContent() {
 
             <div className="mt-4 relative">
               <div className="aspect-video overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
-                <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
-                  Your video frame
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-zinc-400 dark:text-zinc-500">
+                  <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="2" />
+                    <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
+                  </svg>
+                  <span className="text-xs">Your video frame</span>
                 </div>
               </div>
               <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[11px] font-medium text-white">
