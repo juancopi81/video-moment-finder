@@ -16,13 +16,6 @@ import { trackEvent } from "@/lib/analytics";
 
 type SubmitMode = "youtube" | "upload";
 
-function modeButtonClass(isActive: boolean): string {
-  const base = "flex-1 rounded-lg px-4 py-2 text-sm font-medium";
-  return isActive
-    ? `${base} bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`
-    : `${base} border border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200`;
-}
-
 export default function HomeContent() {
   const router = useRouter();
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -267,16 +260,50 @@ export default function HomeContent() {
       {/* Tool section */}
       <section id="tool" className="flex flex-col items-center px-4 pb-16">
         <SignedOut>
-          <div className="w-full max-w-xl rounded-lg border border-zinc-300 dark:border-zinc-700 p-6 text-center">
-            <p className="mb-4 text-zinc-600 dark:text-zinc-400">
-              Sign in to upload a video and start searching it.
+          <div className="w-full max-w-xl rounded-lg border border-zinc-300 dark:border-zinc-700 p-6">
+            <h3 className="text-center text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Here is what search results look like
+            </h3>
+
+            <div className="mt-4 relative">
+              <div className="aspect-video overflow-hidden rounded bg-zinc-200 dark:bg-zinc-800">
+                <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
+                  Your video frame
+                </div>
+              </div>
+              <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[11px] font-medium text-white">
+                Visual
+              </span>
+              <p className="mt-1 text-sm text-center text-zinc-600 dark:text-zinc-400">
+                2:34
+              </p>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex items-center justify-between gap-3">
+                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                  Spoken
+                </span>
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  8:12
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+                &ldquo;...and that is exactly how the onboarding flow works from
+                start to finish.&rdquo;
+              </p>
+            </div>
+
+            <p className="mt-5 text-center text-sm text-zinc-600 dark:text-zinc-400">
+              Upload a video you already have. Search it by description or
+              example image. Get timestamped results like these.
             </p>
             <SignInButton mode="modal">
               <button
-                onClick={trackCta("tool_sign_in")}
-                className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-white"
+                onClick={trackCta("preview_sign_in")}
+                className="mt-4 w-full rounded-lg bg-accent px-4 py-3 font-medium text-white"
               >
-                Sign In
+                Sign in to try it free
               </button>
             </SignInButton>
           </div>
@@ -285,130 +312,120 @@ export default function HomeContent() {
         <SignedIn>
           <div className="w-full max-w-xl">
             <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-              Direct upload is the reliable path. YouTube URL import is a
-              secondary convenience for videos you own, but it may not always
-              work server-side.
+              Upload a video file you own. We will index it so you can search
+              any moment inside it.
             </p>
-            <div className="mb-4 flex gap-2" role="tablist" aria-label="Video source">
-              <button
-                type="button"
-                onClick={() => handleModeChange("upload")}
-                className={modeButtonClass(mode === "upload")}
-                disabled={isLoading || isUploading}
-                role="tab"
-                id="upload-tab"
-                aria-controls="upload-panel"
-                aria-selected={mode === "upload"}
-              >
-                Upload Video
-              </button>
-              <button
-                type="button"
-                onClick={() => handleModeChange("youtube")}
-                className={modeButtonClass(mode === "youtube")}
-                disabled={isLoading || isUploading}
-                role="tab"
-                id="youtube-tab"
-                aria-controls="youtube-panel"
-                aria-selected={mode === "youtube"}
-              >
-                YouTube URL
-              </button>
-            </div>
 
             {mode === "upload" ? (
-              <form
-                key="upload-form"
-                id="upload-panel"
-                role="tabpanel"
-                aria-labelledby="upload-tab"
-                onSubmit={handleUpload}
-              >
-                <input
-                  type="file"
-                  accept="video/*"
-                  aria-label="Upload a video file"
-                  onChange={(event) => {
-                    setUploadFile(event.target.files?.[0] ?? null);
-                  }}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                  disabled={isUploading}
-                />
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  Recommended for the most reliable processing. Upload a video
-                  file you own or have permission to use.
-                </p>
-                <button
-                  type="submit"
-                  className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
-                  disabled={isUploading}
-                >
-                  {isUploading ? "Uploading..." : "Upload and process"}
-                </button>
-                {uploadProgress !== null && (
-                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 text-center">
-                    Uploading to secure storage: {uploadProgress}%
+              <>
+                <form key="upload-form" onSubmit={handleUpload}>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    aria-label="Upload a video file"
+                    onChange={(event) => {
+                      setUploadFile(event.target.files?.[0] ?? null);
+                    }}
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    disabled={isUploading}
+                  />
+                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    Upload a lesson, webinar, workshop, or demo recording.
+                    After processing, you can search it by description or
+                    example image.
                   </p>
+                  <button
+                    type="submit"
+                    className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
+                    disabled={isUploading}
+                  >
+                    {isUploading ? "Uploading..." : "Upload and process"}
+                  </button>
+                  {uploadProgress !== null && (
+                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 text-center">
+                      Uploading to secure storage: {uploadProgress}%
+                    </p>
+                  )}
+                </form>
+                {!isUploading && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleModeChange("youtube");
+                      posthog?.capture("cta_click", { cta: "youtube_import_link" });
+                    }}
+                    className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  >
+                    Have a YouTube URL instead?
+                  </button>
                 )}
-              </form>
+              </>
             ) : (
-              <form
-                key="youtube-form"
-                id="youtube-panel"
-                role="tabpanel"
-                aria-labelledby="youtube-tab"
-                onSubmit={handleSubmit}
-              >
-                <input
-                  type="text"
-                  value={url}
-                  aria-label="Paste a YouTube video URL"
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    setYoutubeFallbackDetail(null);
-                  }}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
-                  disabled={isLoading}
-                />
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  Use this for videos you own or are authorized to use. If
-                  import is blocked, upload the video file instead.
-                </p>
+              <>
                 <button
-                  type="submit"
-                  className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
-                  disabled={isLoading}
+                  type="button"
+                  onClick={() => handleModeChange("upload")}
+                  className="mb-3 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                 >
-                  {isLoading ? "Importing..." : "Import from YouTube"}
+                  &larr; Back to upload
                 </button>
-                {youtubeFallbackDetail && (
-                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    <p className="font-medium">Upload is the reliable path.</p>
-                    <p className="mt-1">{youtubeFallbackDetail}</p>
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => handleModeChange("upload")}
-                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                      >
-                        Use upload instead
-                      </button>
-                      <Link
-                        href="/support#youtube-import"
-                        className="inline-flex items-center justify-center rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-400/40 dark:text-amber-100 dark:hover:bg-amber-400/10"
-                      >
-                        See YouTube import guidance
-                      </Link>
+                <form key="youtube-form" onSubmit={handleSubmit}>
+                  <input
+                    type="text"
+                    value={url}
+                    aria-label="Paste a YouTube video URL"
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      setYoutubeFallbackDetail(null);
+                    }}
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
+                    disabled={isLoading}
+                  />
+                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    Use this for videos you own or are authorized to use. If
+                    import is blocked, upload the video file instead.
+                  </p>
+                  <button
+                    type="submit"
+                    className="mt-4 w-full px-4 py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-medium disabled:opacity-50"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Importing..." : "Import from YouTube"}
+                  </button>
+                  {youtubeFallbackDetail && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                      <p className="font-medium">Upload is the reliable path.</p>
+                      <p className="mt-1">{youtubeFallbackDetail}</p>
+                      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => handleModeChange("upload")}
+                          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+                        >
+                          Use upload instead
+                        </button>
+                        <Link
+                          href="/support#youtube-import"
+                          className="inline-flex items-center justify-center rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-400/40 dark:text-amber-100 dark:hover:bg-amber-400/10"
+                        >
+                          See YouTube import guidance
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </form>
+                  )}
+                </form>
+              </>
             )}
             {error && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400 text-center">
-                {error}
-              </p>
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-left text-sm text-red-900 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
+                <p className="font-medium">{error}</p>
+                <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                  Check that the file is a supported video format (MP4, MOV,
+                  WebM) and under 30 minutes. If this keeps happening,
+                  contact support@videomomentfinder.com.
+                </p>
+              </div>
             )}
           </div>
         </SignedIn>
