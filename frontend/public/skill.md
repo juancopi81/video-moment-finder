@@ -103,13 +103,42 @@ If you already cloned this repository, the CLI wraps the same `/api/v1` flow:
 
 ```bash
 uv sync
+uv run vmf --version
 uv run vmf auth set \
   --api-base-url https://api.videomomentfinder.com \
   --api-key vmf_YOUR_KEY
 uv run vmf videos upload ./sample.mp4
+uv run vmf videos list
 uv run vmf videos wait <video_id>
 uv run vmf videos search <video_id> --query-text "when do they explain the model?"
 ```
+
+Retry-safe upload:
+
+```bash
+uv run vmf videos upload ./sample.mp4 --idempotency-key sample-v1
+```
+
+Upload from stdin:
+
+```bash
+cat sample.mp4 | uv run vmf videos upload - \
+  --filename sample.mp4 \
+  --content-type video/mp4
+```
+
+The CLI keeps stdout machine-readable:
+
+- success payloads are JSON on stdout
+- dry runs are JSON on stdout
+- prompts and errors go to stderr
+
+Destructive commands are safe by default:
+
+- `uv run vmf auth clear --dry-run`
+- `uv run vmf auth clear --yes`
+- `uv run vmf keys revoke <key_id> --dry-run`
+- `uv run vmf keys revoke <key_id> --yes --bearer-token <clerk-token>`
 
 ## References
 
