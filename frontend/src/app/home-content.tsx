@@ -268,7 +268,7 @@ export default function HomeContent() {
 
             <div className="mt-4 flex items-center rounded-lg border border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
               <span className="text-sm text-zinc-900 dark:text-zinc-100">
-                explaining the onboarding flow
+                drawing the page layout on the whiteboard
               </span>
               <span className="ml-auto rounded-lg bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
                 Search
@@ -303,8 +303,8 @@ export default function HomeContent() {
                 </span>
               </div>
               <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
-                &ldquo;...and that is exactly how the onboarding flow works from
-                start to finish.&rdquo;
+                &ldquo;...so here is where the video module goes, and right
+                below that we place the description field.&rdquo;
               </p>
             </div>
 
