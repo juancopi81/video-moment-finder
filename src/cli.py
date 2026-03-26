@@ -4,10 +4,12 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import http.client
+import io
 import json
 import mimetypes
 import os
 from pathlib import Path
+import shlex
 import sys
 import tempfile
 import time
@@ -15,7 +17,11 @@ from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 from urllib.parse import quote, urlsplit
+from uuid import uuid4
 
+from src.utils.cleanup import cleanup_file
+
+CLI_VERSION = "0.1.0"
 ENV_API_BASE_URL = "VMF_API_BASE_URL"
 ENV_API_KEY = "VMF_API_KEY"
 ENV_BEARER_TOKEN = "VMF_BEARER_TOKEN"
@@ -29,6 +35,11 @@ DEFAULT_WAIT_TIMEOUT_S = 1200.0
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 CONFIG_DIR_NAME = "video-moment-finder"
 CONFIG_FILE_NAME = "config.json"
+STDIN_SENTINEL = "-"
+REDACTED_FLAG_VALUES = {
+    "--api-key": "<api-key>",
+    "--bearer-token": "<bearer-token>",
+}
 
 
 class CliError(RuntimeError):
@@ -49,6 +60,46 @@ class LocalConfig:
 class ResolvedValue:
     value: str | None
     source: str
+
+
+@dataclass(frozen=True)
+class UploadSource:
+    file_path: Path
+    filename: str
+    content_type: str | None
+    cleanup_path: Path | None = None
+
+
+class CliHelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter,
+    argparse.RawDescriptionHelpFormatter,
+):
+    """Formatter that keeps examples readable and exposes defaults."""
+
+
+def _parse_json_response(raw: bytes) -> Any:
+    if not raw:
+        return None
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CliError("API returned a non-JSON response") from exc
+
+
+def _extract_error_detail_from_bytes(body: bytes) -> str | None:
+    if not body:
+        return None
+    try:
+        parsed = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        detail = _decode_text(body)
+        return detail or None
+
+    if isinstance(parsed, dict) and "detail" in parsed:
+        return _format_detail(parsed["detail"])
+    if isinstance(parsed, dict) and "message" in parsed:
+        return _format_detail(parsed["message"])
+    return _format_detail(parsed)
 
 
 def _json_request(
@@ -87,25 +138,46 @@ def _json_request(
         reason = getattr(exc, "reason", exc)
         raise CliError(f"Request failed: {reason}") from exc
 
-    if not raw:
-        return None
-
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise CliError("API returned a non-JSON response") from exc
+    return _parse_json_response(raw)
 
 
-def _stream_upload_put(
-    upload_url: str,
-    file_path: Path,
+def _multipart_json_request(
+    method: str,
+    url: str,
     *,
+    headers: dict[str, str] | None = None,
+    field_name: str,
+    file_path: Path,
+    filename: str,
     content_type: str | None,
     timeout_s: float = DEFAULT_UPLOAD_TIMEOUT_S,
-) -> None:
-    parsed = urlsplit(upload_url)
+) -> Any:
+    parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise CliError("Upload URL is invalid")
+        raise CliError("Request URL is invalid")
+
+    boundary = f"vmf-{uuid4().hex}"
+    preamble_lines = [
+        f"--{boundary}\r\n",
+        (
+            "Content-Disposition: form-data; "
+            f'name="{field_name}"; filename="{_escape_multipart_value(filename)}"\r\n'
+        ),
+    ]
+    if content_type:
+        preamble_lines.append(f"Content-Type: {content_type}\r\n")
+    preamble_lines.append("\r\n")
+
+    preamble = "".join(preamble_lines).encode("utf-8")
+    epilogue = f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    request_headers = {
+        "Accept": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(preamble) + file_path.stat().st_size + len(epilogue)),
+    }
+    if headers:
+        request_headers.update(headers)
 
     connection_cls = (
         http.client.HTTPSConnection
@@ -118,11 +190,11 @@ def _stream_upload_put(
 
     conn = connection_cls(parsed.hostname, port=parsed.port, timeout=timeout_s)
     try:
-        conn.putrequest("PUT", target)
-        conn.putheader("Content-Length", str(file_path.stat().st_size))
-        if content_type:
-            conn.putheader("Content-Type", content_type)
+        conn.putrequest(method, target)
+        for header_name, header_value in request_headers.items():
+            conn.putheader(header_name, header_value)
         conn.endheaders()
+        conn.send(preamble)
 
         with file_path.open("rb") as handle:
             while True:
@@ -131,20 +203,21 @@ def _stream_upload_put(
                     break
                 conn.send(chunk)
 
+        conn.send(epilogue)
         response = conn.getresponse()
-        body = response.read()
+        raw = response.read()
+    except TimeoutError as exc:
+        raise CliError(f"Request timed out after {timeout_s:g}s") from exc
     except OSError as exc:
-        raise CliError(f"Upload failed: {exc}") from exc
+        raise CliError(f"Request failed: {exc}") from exc
     finally:
         conn.close()
 
     if 200 <= response.status < 300:
-        return
+        return _parse_json_response(raw)
 
-    detail = _decode_text(body)
-    if detail:
-        raise CliError(f"Upload failed with status {response.status}: {detail}")
-    raise CliError(f"Upload failed with status {response.status}")
+    detail = _extract_error_detail_from_bytes(raw) or response.reason or "Request failed"
+    raise CliError(f"HTTP {response.status}: {detail}")
 
 
 def _decode_text(raw: bytes, *, limit: int = 240) -> str:
@@ -156,19 +229,9 @@ def _decode_text(raw: bytes, *, limit: int = 240) -> str:
 
 def _extract_http_error_detail(exc: urllib_error.HTTPError) -> str:
     body = exc.read()
-    if body:
-        try:
-            parsed = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            detail = _decode_text(body)
-            if detail:
-                return detail
-        else:
-            if isinstance(parsed, dict) and "detail" in parsed:
-                return _format_detail(parsed["detail"])
-            if isinstance(parsed, dict) and "message" in parsed:
-                return _format_detail(parsed["message"])
-            return _format_detail(parsed)
+    detail = _extract_error_detail_from_bytes(body)
+    if detail:
+        return detail
     return exc.reason or "Request failed"
 
 
@@ -282,6 +345,13 @@ def _normalize_api_key(value: str) -> str:
         raise CliError("api_key must be non-empty", exit_code=2)
     if not cleaned.startswith("vmf_"):
         raise CliError("api_key must start with vmf_", exit_code=2)
+    return cleaned
+
+
+def _normalize_non_empty_value(value: str, *, label: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise CliError(f"{label} must be non-empty", exit_code=2)
     return cleaned
 
 
@@ -403,6 +473,10 @@ def _print_json(payload: Any) -> None:
     print(json.dumps(payload, indent=2))
 
 
+def _stderr(message: str = "", *, end: str = "\n") -> None:
+    print(message, file=sys.stderr, end=end, flush=True)
+
+
 def _ensure_dict(payload: Any, *, context: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise CliError(f"{context} returned an unexpected response")
@@ -427,6 +501,190 @@ def _guess_video_content_type(path: Path) -> str | None:
 
 def _quote_path_value(value: str) -> str:
     return quote(value, safe="")
+
+
+def _escape_multipart_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _stdin_is_tty() -> bool:
+    isatty = getattr(sys.stdin, "isatty", None)
+    return bool(isatty and isatty())
+
+
+def _stderr_is_tty() -> bool:
+    isatty = getattr(sys.stderr, "isatty", None)
+    return bool(isatty and isatty())
+
+
+def _is_interactive_session() -> bool:
+    return _stdin_is_tty() and _stderr_is_tty()
+
+
+def _build_invocation(argv: list[str] | None) -> list[str]:
+    effective_argv = list(sys.argv[1:] if argv is None else argv)
+    return ["vmf", *effective_argv]
+
+
+def _redact_invocation(invocation: list[str]) -> list[str]:
+    redacted: list[str] = []
+    index = 0
+    while index < len(invocation):
+        token = invocation[index]
+        replacement = REDACTED_FLAG_VALUES.get(token)
+        if replacement is not None:
+            redacted.append(token)
+            if index + 1 < len(invocation):
+                redacted.append(replacement)
+                index += 2
+                continue
+            index += 1
+            continue
+        for flag, placeholder in REDACTED_FLAG_VALUES.items():
+            prefix = f"{flag}="
+            if token.startswith(prefix):
+                redacted.append(f"{prefix}{placeholder}")
+                break
+        else:
+            redacted.append(token)
+        index += 1
+    return redacted
+
+
+def _with_yes_flag(invocation: list[str]) -> list[str]:
+    if "--yes" in invocation:
+        return invocation
+    return [*invocation, "--yes"]
+
+
+def _render_rerun_command(invocation: list[str]) -> str:
+    return shlex.join(_redact_invocation(_with_yes_flag(invocation)))
+
+
+def _confirm_destructive_action(
+    *,
+    prompt: str,
+    action: str,
+    dry_run_payload: dict[str, Any],
+    yes: bool,
+    dry_run: bool,
+    invocation: list[str],
+) -> dict[str, Any] | None:
+    if dry_run:
+        return dry_run_payload
+    if yes:
+        return None
+    if not _is_interactive_session():
+        raise CliError(
+            (
+                f"Refusing to {action} in non-interactive mode without --yes.\n"
+                f"Re-run with: { _render_rerun_command(invocation) }"
+            ),
+            exit_code=2,
+        )
+
+    _stderr(f"{prompt} [y/N]: ", end="")
+    response = sys.stdin.readline()
+    if response.strip().lower() not in {"y", "yes"}:
+        raise CliError("Cancelled", exit_code=1)
+    return None
+
+
+def _stdin_buffer() -> io.BufferedReader | io.BytesIO:
+    buffer = getattr(sys.stdin, "buffer", None)
+    if buffer is not None:
+        return buffer
+    return io.BytesIO(sys.stdin.read().encode("utf-8"))
+
+
+def _read_stdin_to_temp_file() -> Path:
+    if _stdin_is_tty():
+        raise CliError(
+            "Reading upload bytes from stdin requires piped or redirected input.",
+            exit_code=2,
+        )
+
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_path = Path(temp_file.name)
+        total_bytes = 0
+        stdin_buffer = _stdin_buffer()
+        while True:
+            chunk = stdin_buffer.read(UPLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            temp_file.write(chunk)
+            total_bytes += len(chunk)
+
+    if total_bytes == 0:
+        try:
+            temp_path.unlink()
+        except OSError:
+            pass
+        raise CliError("No upload bytes received on stdin", exit_code=2)
+
+    return temp_path
+
+
+def _resolve_upload_source(
+    file_path_value: str,
+    *,
+    filename_override: str | None,
+    content_type_override: str | None,
+) -> UploadSource:
+    content_type = content_type_override.strip() if content_type_override else None
+    filename = filename_override.strip() if filename_override else None
+
+    if file_path_value == STDIN_SENTINEL:
+        if not filename:
+            raise CliError(
+                "stdin uploads require --filename so the API can name the uploaded file.",
+                exit_code=2,
+            )
+        if not content_type:
+            raise CliError(
+                "stdin uploads require --content-type, for example --content-type video/mp4.",
+                exit_code=2,
+            )
+        temp_path = _read_stdin_to_temp_file()
+        return UploadSource(
+            file_path=temp_path,
+            filename=filename,
+            content_type=content_type,
+            cleanup_path=temp_path,
+        )
+
+    path = _ensure_file(file_path_value)
+    return UploadSource(
+        file_path=path,
+        filename=filename or path.name,
+        content_type=content_type or _guess_video_content_type(path),
+        cleanup_path=None,
+    )
+
+
+def _cleanup_upload_source(source: UploadSource) -> None:
+    if source.cleanup_path is None:
+        return
+    cleanup_file(source.cleanup_path, ignore_errors=True)
+
+
+def _resolve_query_text(raw_value: str) -> str:
+    if raw_value != STDIN_SENTINEL:
+        query_text = raw_value.strip()
+        if not query_text:
+            raise CliError("query_text must be non-empty", exit_code=2)
+        return query_text
+
+    if _stdin_is_tty():
+        raise CliError(
+            "Reading query text from stdin requires piped or redirected input.",
+            exit_code=2,
+        )
+
+    query_text = sys.stdin.read().strip()
+    if not query_text:
+        raise CliError("No query text received on stdin", exit_code=2)
+    return query_text
 
 
 def _cmd_auth_set(args: argparse.Namespace) -> Any:
@@ -455,8 +713,25 @@ def _cmd_auth_status(args: argparse.Namespace) -> Any:
     }
 
 
-def _cmd_auth_clear(_args: argparse.Namespace) -> Any:
-    path = _clear_local_config()
+def _cmd_auth_clear(args: argparse.Namespace) -> Any:
+    path = _config_path()
+    preview = _confirm_destructive_action(
+        prompt=f"Clear local CLI auth config at {path}?",
+        action="clear local CLI auth config",
+        dry_run_payload={
+            "dry_run": True,
+            "action": "auth_clear",
+            "config_path": str(path),
+            "config_exists": path.exists(),
+        },
+        yes=args.yes,
+        dry_run=args.dry_run,
+        invocation=args.invocation,
+    )
+    if preview is not None:
+        return preview
+
+    _clear_local_config()
     return {
         "cleared": True,
         "config_path": str(path),
@@ -505,7 +780,30 @@ def _cmd_keys_list(args: argparse.Namespace) -> Any:
 
 
 def _cmd_keys_revoke(args: argparse.Namespace) -> Any:
-    base_url = _require_api_base_url(args.api_base_url)
+    resolved_base_url = _resolve_api_base_url(args.api_base_url)
+    preview = _confirm_destructive_action(
+        prompt=f"Revoke API key {args.key_id}?",
+        action="revoke an API key",
+        dry_run_payload={
+            "dry_run": True,
+            "action": "keys_revoke",
+            "key_id": args.key_id,
+            "api_base_url": resolved_base_url.value,
+            "api_base_url_source": resolved_base_url.source,
+        },
+        yes=args.yes,
+        dry_run=args.dry_run,
+        invocation=args.invocation,
+    )
+    if preview is not None:
+        return preview
+
+    if resolved_base_url.value is None:
+        raise CliError(
+            f"Missing API base URL. Provide --api-base-url, {ENV_API_BASE_URL}, or run `vmf auth set`.",
+            exit_code=2,
+        )
+    base_url = resolved_base_url.value
     bearer_token = _require_bearer_token(args.bearer_token)
     _json_request(
         "DELETE",
@@ -520,43 +818,39 @@ def _cmd_keys_revoke(args: argparse.Namespace) -> Any:
 
 def _cmd_videos_upload(args: argparse.Namespace) -> Any:
     base_url, api_key = _require_api_credentials(args.api_base_url, args.api_key)
-    file_path = _ensure_file(args.file_path)
-    content_type = _guess_video_content_type(file_path)
+    source = _resolve_upload_source(
+        args.file_path,
+        filename_override=args.filename,
+        content_type_override=args.content_type,
+    )
+    headers = _authorization_headers(api_key)
+    if args.idempotency_key is not None:
+        headers["Idempotency-Key"] = _normalize_non_empty_value(
+            args.idempotency_key,
+            label="idempotency_key",
+        )
 
-    init_payload: dict[str, Any] = {"filename": file_path.name}
-    if content_type is not None:
-        init_payload["content_type"] = content_type
+    try:
+        return _multipart_json_request(
+            "POST",
+            _api_v1_url(base_url, "/videos/upload"),
+            headers=headers,
+            field_name="file",
+            file_path=source.file_path,
+            filename=source.filename,
+            content_type=source.content_type,
+        )
+    finally:
+        _cleanup_upload_source(source)
 
-    init_response = _json_request(
-        "POST",
-        _api_v1_url(base_url, "/videos/upload/init"),
+
+def _cmd_videos_list(args: argparse.Namespace) -> Any:
+    base_url, api_key = _require_api_credentials(args.api_base_url, args.api_key)
+    return _json_request(
+        "GET",
+        _api_v1_url(base_url, "/videos"),
         headers=_authorization_headers(api_key),
-        payload=init_payload,
     )
-    init_data = _ensure_dict(init_response, context="Upload init")
-    video_id = init_data.get("video_id")
-    upload_url = init_data.get("upload_url")
-    if not isinstance(video_id, str) or not video_id:
-        raise CliError("Upload init response missing video_id")
-    if not isinstance(upload_url, str) or not upload_url:
-        raise CliError("Upload init response missing upload_url")
-
-    _stream_upload_put(
-        upload_url,
-        file_path,
-        content_type=content_type,
-    )
-
-    complete_response = _json_request(
-        "POST",
-        _api_v1_url(base_url, "/videos/upload/complete"),
-        headers=_authorization_headers(api_key),
-        payload={
-            "video_id": video_id,
-            "filename": file_path.name,
-        },
-    )
-    return complete_response
 
 
 def _get_video_response(
@@ -597,10 +891,12 @@ def _cmd_videos_wait(args: argparse.Namespace) -> Any:
             return response
         if status == "failed":
             _print_json(response)
-            raise CliError("Video processing failed")
+            error_message = response.get("error_message")
+            detail = str(error_message).strip() if error_message else "unknown error"
+            raise CliError(f"Video processing failed: {detail}")
         if time.monotonic() >= deadline:
             _print_json(response)
-            raise CliError(f"Timed out waiting for video {args.video_id}")
+            raise CliError(f"Timed out waiting for video {args.video_id} (last status: {status})")
         time.sleep(args.interval_seconds)
 
 
@@ -611,7 +907,7 @@ def _cmd_videos_search(args: argparse.Namespace) -> Any:
         _api_v1_url(base_url, f"/videos/{_quote_path_value(args.video_id)}/search"),
         headers=_authorization_headers(api_key),
         payload={
-            "query_text": args.query_text,
+            "query_text": _resolve_query_text(args.query_text),
             "limit": args.limit,
         },
         timeout_s=DEFAULT_SEARCH_TIMEOUT_S,
@@ -638,84 +934,399 @@ def _search_limit(value: str) -> int:
     return parsed
 
 
+def _examples(*lines: str) -> str:
+    rendered = ["Examples:"]
+    rendered.extend(f"  {line}" for line in lines)
+    return "\n".join(rendered)
+
+
+def _add_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+    name: str,
+    *,
+    help_text: str,
+    description: str,
+    epilog: str,
+) -> argparse.ArgumentParser:
+    return subparsers.add_parser(
+        name,
+        help=help_text,
+        description=description,
+        epilog=epilog,
+        formatter_class=CliHelpFormatter,
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Video Moment Finder CLI")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(
+        prog="vmf",
+        description="Agent-friendly CLI for the Video Moment Finder /api/v1 happy path.",
+        epilog="Run `vmf <command> --help` for examples and next steps.",
+        formatter_class=CliHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {CLI_VERSION}",
+    )
+    subparsers = parser.add_subparsers(dest="command", metavar="command", required=True)
 
-    auth_parser = subparsers.add_parser("auth", help="Manage local CLI auth config")
-    auth_subparsers = auth_parser.add_subparsers(dest="auth_command", required=True)
+    auth_parser = _add_parser(
+        subparsers,
+        "auth",
+        help_text="Manage local CLI auth config",
+        description="Save, inspect, or remove the local API base URL and API key.",
+        epilog=_examples(
+            "vmf auth set --api-base-url https://api.videomomentfinder.com --api-key vmf_xxx",
+            "vmf auth status",
+            "vmf auth clear --dry-run",
+        ),
+    )
+    auth_subparsers = auth_parser.add_subparsers(
+        dest="auth_command",
+        metavar="subcommand",
+        required=True,
+    )
 
-    auth_set = auth_subparsers.add_parser("set", help="Save API base URL and API key locally")
-    auth_set.add_argument("--api-base-url", required=True)
-    auth_set.add_argument("--api-key", required=True)
+    auth_set = _add_parser(
+        auth_subparsers,
+        "set",
+        help_text="Save API base URL and API key locally",
+        description="Write the API base URL and vmf_ API key to the local CLI config file.",
+        epilog=_examples(
+            "vmf auth set --api-base-url https://api.videomomentfinder.com --api-key vmf_xxx",
+            "vmf auth set --api-base-url http://localhost:8000 --api-key vmf_local_key",
+        ),
+    )
+    auth_set.add_argument(
+        "--api-base-url",
+        required=True,
+        help="API base URL, for example https://api.videomomentfinder.com",
+    )
+    auth_set.add_argument(
+        "--api-key",
+        required=True,
+        help="Video Moment Finder API key starting with vmf_",
+    )
     auth_set.set_defaults(func=_cmd_auth_set)
 
-    auth_status = auth_subparsers.add_parser("status", help="Show resolved auth settings")
-    auth_status.add_argument("--api-base-url", help="Override the API base URL")
-    auth_status.add_argument("--api-key", help="Override the stored API key")
+    auth_status = _add_parser(
+        auth_subparsers,
+        "status",
+        help_text="Show resolved auth settings",
+        description="Show the resolved API base URL and API key source using flag > env > config precedence.",
+        epilog=_examples(
+            "vmf auth status",
+            "vmf auth status --api-base-url https://api.videomomentfinder.com",
+        ),
+    )
+    auth_status.add_argument(
+        "--api-base-url",
+        help="Override the resolved API base URL for this status check",
+    )
+    auth_status.add_argument(
+        "--api-key",
+        help="Override the resolved API key for this status check",
+    )
     auth_status.set_defaults(func=_cmd_auth_status)
 
-    auth_clear = auth_subparsers.add_parser("clear", help="Remove local CLI auth config")
+    auth_clear = _add_parser(
+        auth_subparsers,
+        "clear",
+        help_text="Remove local CLI auth config",
+        description="Delete the local CLI config file that stores the API base URL and API key.",
+        epilog=_examples(
+            "vmf auth clear --dry-run",
+            "vmf auth clear --yes",
+        ),
+    )
+    auth_clear.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the config file that would be removed without mutating anything",
+    )
+    auth_clear.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the interactive confirmation prompt",
+    )
     auth_clear.set_defaults(func=_cmd_auth_clear)
 
-    keys_parser = subparsers.add_parser("keys", help="Bootstrap API keys with a Clerk token")
-    keys_subparsers = keys_parser.add_subparsers(dest="keys_command", required=True)
+    keys_parser = _add_parser(
+        subparsers,
+        "keys",
+        help_text="Bootstrap API keys with a Clerk token",
+        description="Create, list, or revoke API keys using a temporary Clerk bearer token.",
+        epilog=_examples(
+            "vmf keys create --name agent",
+            "vmf keys list --bearer-token <clerk-token>",
+            "vmf keys revoke key_123 --dry-run",
+        ),
+    )
+    keys_subparsers = keys_parser.add_subparsers(
+        dest="keys_command",
+        metavar="subcommand",
+        required=True,
+    )
 
-    keys_create = keys_subparsers.add_parser("create", help="Create an API key")
-    keys_create.add_argument("--api-base-url", help="Override the API base URL")
-    keys_create.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
-    keys_create.add_argument("--name", default="")
-    keys_create.add_argument("--no-save", action="store_true")
+    keys_create = _add_parser(
+        keys_subparsers,
+        "create",
+        help_text="Create an API key",
+        description="Create a new API key and optionally save it to the local CLI config file.",
+        epilog=_examples(
+            "vmf keys create --name agent",
+            "vmf keys create --bearer-token <clerk-token> --no-save",
+        ),
+    )
+    keys_create.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used to create the key",
+    )
+    keys_create.add_argument(
+        "--bearer-token",
+        help="Temporary Clerk bearer token used for key management",
+    )
+    keys_create.add_argument(
+        "--name",
+        default="",
+        help="Optional display name for the created API key",
+    )
+    keys_create.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Do not write the returned API key to the local CLI config file",
+    )
     keys_create.set_defaults(func=_cmd_keys_create)
 
-    keys_list = keys_subparsers.add_parser("list", help="List API keys")
-    keys_list.add_argument("--api-base-url", help="Override the API base URL")
-    keys_list.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
+    keys_list = _add_parser(
+        keys_subparsers,
+        "list",
+        help_text="List API keys",
+        description="List active API keys for the current account.",
+        epilog=_examples(
+            "vmf keys list --bearer-token <clerk-token>",
+            "VMF_BEARER_TOKEN=<clerk-token> vmf keys list",
+        ),
+    )
+    keys_list.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used to list keys",
+    )
+    keys_list.add_argument(
+        "--bearer-token",
+        help="Temporary Clerk bearer token used for key management",
+    )
     keys_list.set_defaults(func=_cmd_keys_list)
 
-    keys_revoke = keys_subparsers.add_parser("revoke", help="Revoke an API key")
-    keys_revoke.add_argument("--api-base-url", help="Override the API base URL")
-    keys_revoke.add_argument("--bearer-token", help="Clerk bearer token for key bootstrap")
-    keys_revoke.add_argument("key_id")
+    keys_revoke = _add_parser(
+        keys_subparsers,
+        "revoke",
+        help_text="Revoke an API key",
+        description="Revoke one API key. In non-interactive mode this requires --yes unless you use --dry-run.",
+        epilog=_examples(
+            "vmf keys revoke key_123 --dry-run",
+            "vmf keys revoke key_123 --yes --bearer-token <clerk-token>",
+        ),
+    )
+    keys_revoke.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used to revoke the key",
+    )
+    keys_revoke.add_argument(
+        "--bearer-token",
+        help="Temporary Clerk bearer token used for key management",
+    )
+    keys_revoke.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the revoke action without sending the DELETE request",
+    )
+    keys_revoke.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the interactive confirmation prompt",
+    )
+    keys_revoke.add_argument(
+        "key_id",
+        help="API key identifier to revoke",
+    )
     keys_revoke.set_defaults(func=_cmd_keys_revoke)
 
-    videos_parser = subparsers.add_parser("videos", help="Upload, poll, and search videos")
-    videos_subparsers = videos_parser.add_subparsers(dest="videos_command", required=True)
+    videos_parser = _add_parser(
+        subparsers,
+        "videos",
+        help_text="Upload, list, poll, and search videos",
+        description="Upload videos, list uploaded videos, poll processing status, and run text search against ready videos.",
+        epilog=_examples(
+            "vmf videos upload ./sample.mp4",
+            "vmf videos list",
+            "vmf videos wait 11111111-1111-4111-8111-111111111111",
+            "vmf videos search 11111111-1111-4111-8111-111111111111 --query-text \"explain the model\"",
+        ),
+    )
+    videos_subparsers = videos_parser.add_subparsers(
+        dest="videos_command",
+        metavar="subcommand",
+        required=True,
+    )
 
-    videos_upload = videos_subparsers.add_parser("upload", help="Upload a video via the direct-upload API flow")
-    videos_upload.add_argument("--api-base-url", help="Override the API base URL")
-    videos_upload.add_argument("--api-key", help="Override the stored API key")
-    videos_upload.add_argument("file_path")
+    videos_upload = _add_parser(
+        videos_subparsers,
+        "upload",
+        help_text="Upload a video with the one-shot multipart API",
+        description=(
+            "Upload one video with the /api/v1/videos/upload endpoint. "
+            "Pass a file path or '-' to read the raw video bytes from stdin."
+        ),
+        epilog=_examples(
+            "vmf videos upload ./sample.mp4",
+            "vmf videos upload ./sample.mp4 --idempotency-key sample-v1",
+            "cat sample.mp4 | vmf videos upload - --filename sample.mp4 --content-type video/mp4",
+        ),
+    )
+    videos_upload.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used for upload",
+    )
+    videos_upload.add_argument(
+        "--api-key",
+        help="Override the stored API key used for upload",
+    )
+    videos_upload.add_argument(
+        "--filename",
+        help="Override the uploaded filename; required when file_path is '-'",
+    )
+    videos_upload.add_argument(
+        "--content-type",
+        help="Override the uploaded content type; required when file_path is '-'",
+    )
+    videos_upload.add_argument(
+        "--idempotency-key",
+        help="Retry-safe idempotency key forwarded as the Idempotency-Key header",
+    )
+    videos_upload.add_argument(
+        "file_path",
+        help="Local video file path or '-' to read raw bytes from stdin",
+    )
     videos_upload.set_defaults(func=_cmd_videos_upload)
 
-    videos_get = videos_subparsers.add_parser("get", help="Fetch video status")
-    videos_get.add_argument("--api-base-url", help="Override the API base URL")
-    videos_get.add_argument("--api-key", help="Override the stored API key")
-    videos_get.add_argument("video_id")
+    videos_list = _add_parser(
+        videos_subparsers,
+        "list",
+        help_text="List videos",
+        description="List videos owned by the authenticated user.",
+        epilog=_examples(
+            "vmf videos list",
+            "VMF_API_KEY=vmf_xxx vmf videos list",
+        ),
+    )
+    videos_list.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used to list videos",
+    )
+    videos_list.add_argument(
+        "--api-key",
+        help="Override the stored API key used to list videos",
+    )
+    videos_list.set_defaults(func=_cmd_videos_list)
+
+    videos_get = _add_parser(
+        videos_subparsers,
+        "get",
+        help_text="Fetch video status",
+        description="Fetch the current processing state for one video.",
+        epilog=_examples(
+            "vmf videos get 11111111-1111-4111-8111-111111111111",
+            "VMF_API_KEY=vmf_xxx vmf videos get 11111111-1111-4111-8111-111111111111",
+        ),
+    )
+    videos_get.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used to fetch video status",
+    )
+    videos_get.add_argument(
+        "--api-key",
+        help="Override the stored API key used to fetch video status",
+    )
+    videos_get.add_argument(
+        "video_id",
+        help="Video identifier returned by upload or submit commands",
+    )
     videos_get.set_defaults(func=_cmd_videos_get)
 
-    videos_wait = videos_subparsers.add_parser("wait", help="Poll until a video is ready")
-    videos_wait.add_argument("--api-base-url", help="Override the API base URL")
-    videos_wait.add_argument("--api-key", help="Override the stored API key")
-    videos_wait.add_argument("video_id")
+    videos_wait = _add_parser(
+        videos_subparsers,
+        "wait",
+        help_text="Poll until a video is ready",
+        description="Poll a video until it reaches ready or failed status.",
+        epilog=_examples(
+            "vmf videos wait 11111111-1111-4111-8111-111111111111",
+            "vmf videos wait 11111111-1111-4111-8111-111111111111 --interval-seconds 5 --timeout-seconds 600",
+        ),
+    )
+    videos_wait.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used to poll video status",
+    )
+    videos_wait.add_argument(
+        "--api-key",
+        help="Override the stored API key used to poll video status",
+    )
+    videos_wait.add_argument(
+        "video_id",
+        help="Video identifier returned by upload or submit commands",
+    )
     videos_wait.add_argument(
         "--interval-seconds",
         type=_positive_float,
         default=DEFAULT_WAIT_INTERVAL_S,
+        help="Seconds to sleep between status requests",
     )
     videos_wait.add_argument(
         "--timeout-seconds",
         type=_positive_float,
         default=DEFAULT_WAIT_TIMEOUT_S,
+        help="Maximum total seconds to wait before timing out",
     )
     videos_wait.set_defaults(func=_cmd_videos_wait)
 
-    videos_search = videos_subparsers.add_parser("search", help="Run text search on a ready video")
-    videos_search.add_argument("--api-base-url", help="Override the API base URL")
-    videos_search.add_argument("--api-key", help="Override the stored API key")
-    videos_search.add_argument("video_id")
-    videos_search.add_argument("--query-text", required=True)
-    videos_search.add_argument("--limit", type=_search_limit, default=5)
+    videos_search = _add_parser(
+        videos_subparsers,
+        "search",
+        help_text="Run text search on a ready video",
+        description=(
+            "Run text search on a ready video. "
+            "Use --query-text - to read the full query from stdin."
+        ),
+        epilog=_examples(
+            "vmf videos search 11111111-1111-4111-8111-111111111111 --query-text \"explain the model\" --limit 3",
+            "printf 'explain the model' | vmf videos search 11111111-1111-4111-8111-111111111111 --query-text -",
+        ),
+    )
+    videos_search.add_argument(
+        "--api-base-url",
+        help="Override the API base URL used for search",
+    )
+    videos_search.add_argument(
+        "--api-key",
+        help="Override the stored API key used for search",
+    )
+    videos_search.add_argument(
+        "video_id",
+        help="Video identifier returned by upload or submit commands",
+    )
+    videos_search.add_argument(
+        "--query-text",
+        required=True,
+        help="Search query text, or '-' to read the full query from stdin",
+    )
+    videos_search.add_argument(
+        "--limit",
+        type=_search_limit,
+        default=5,
+        help="Maximum number of search results to return",
+    )
     videos_search.set_defaults(func=_cmd_videos_search)
 
     return parser
@@ -724,6 +1335,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    args.invocation = _build_invocation(argv)
 
     try:
         payload = args.func(args)
