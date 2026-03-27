@@ -1438,6 +1438,7 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: object())
     monkeypatch.setattr(
         "src.api.app.db_consume_processing_credit",
         lambda _user_id: (_ for _ in ()).throw(
@@ -1467,6 +1468,105 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     assert payload["id"] == UPLOAD_VIDEO_ID
     assert payload["status"] == "queued"
     assert payload["source_type"] == "upload"
+
+
+def test_complete_upload_reenqueues_matching_retry_when_job_missing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    existing = VideoRecord(
+        id=UPLOAD_VIDEO_ID,
+        youtube_url=None,
+        status="queued",  # type: ignore[arg-type]
+        user_id="user_123",
+        error_message=None,
+        source_type="upload",
+        source_r2_key=f"source/{UPLOAD_VIDEO_ID}/upload.mp4",
+        source_filename="upload.mp4",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    enqueue_calls: list[str] = []
+
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run for matching retry")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id) or object(),
+    )
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 200
+    assert enqueue_calls == [UPLOAD_VIDEO_ID]
+
+
+def test_complete_upload_recovers_failed_retry_without_job_history(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    existing = VideoRecord(
+        id=UPLOAD_VIDEO_ID,
+        youtube_url=None,
+        status="failed",  # type: ignore[arg-type]
+        user_id="user_123",
+        error_message="Failed to enqueue processing job",
+        source_type="upload",
+        source_r2_key=f"source/{UPLOAD_VIDEO_ID}/upload.mp4",
+        source_filename="upload.mp4",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    enqueue_calls: list[str] = []
+    status_updates: list[tuple[str, str]] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
+
+    def fake_update(video_id: str, status: str, error_message: str | None = None):
+        status_updates.append((video_id, status))
+        existing.status = status  # type: ignore[assignment]
+        existing.error_message = error_message
+        return existing
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr("src.api.app.update_video_status", fake_update)
+    monkeypatch.setattr(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run for recoverable retry")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id) or object(),
+    )
+
+    response = client.post(
+        "/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 200
+    assert status_updates == [(UPLOAD_VIDEO_ID, "queued")]
+    assert enqueue_calls == [UPLOAD_VIDEO_ID]
+    assert response.json()["status"] == "queued"
 
 
 def test_complete_upload_returns_409_for_mismatched_existing_upload(monkeypatch) -> None:
@@ -1544,6 +1644,7 @@ def test_complete_upload_handles_insert_race_as_idempotent_retry(monkeypatch) ->
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: object())
     monkeypatch.setattr(
         "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: (existing, False),

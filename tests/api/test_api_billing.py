@@ -622,6 +622,64 @@ class TestApiKeyUploadBilling:
         assert response.status_code == 402
         assert any(s == "failed" for _, s in status_updates)
 
+    def test_api_key_complete_upload_recovers_failed_retry_without_job_history(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+        enqueue_calls: list[str] = []
+        status_updates: list[tuple[str, str]] = []
+        existing = _upload_video_record(
+            "00000000-0000-4000-8000-000000000c03",
+            status="failed",
+        )
+        existing.error_message = "Failed to enqueue processing job"
+        existing.source_r2_key = f"source/{existing.id}/upload.mp4"
+        existing.source_filename = "upload.mp4"
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def source_exists(self, key):
+                return True
+
+        def mock_update_status(vid, status, error_message=None):
+            status_updates.append((vid, status))
+            existing.status = status  # type: ignore[assignment]
+            existing.error_message = error_message
+            return existing
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: existing)
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda _vid: None)
+        monkeypatch.setattr("src.api.app.update_video_status", mock_update_status)
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("create should not run for recoverable retry")
+            ),
+        )
+        monkeypatch.setattr(
+            "src.api.app.enqueue_video_job",
+            lambda vid: enqueue_calls.append(vid) or object(),
+        )
+
+        response = client.post(
+            "/api/v1/videos/upload/complete",
+            json={"video_id": existing.id, "filename": "upload.mp4"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 200
+        assert consumed["called"] is True
+        assert status_updates == [(existing.id, "queued")]
+        assert enqueue_calls == [existing.id]
+
     def test_api_key_simple_upload_deducts_api_units(self, monkeypatch) -> None:
         raw_key, record = _setup_api_key_auth(monkeypatch)
         consumed = {"called": False}
@@ -822,3 +880,39 @@ class TestApiKeySearchValidation:
 
         assert response.status_code == 400
         assert consumed["called"] is False
+
+    def test_api_key_search_backend_failure_compensates_units(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed: list[dict] = []
+        compensated: list[dict] = []
+
+        def mock_consume(**kwargs):
+            consumed.append(kwargs)
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9999)
+
+        def mock_compensate(**kwargs):
+            compensated.append(kwargs)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _upload_video_record(vid, status="ready"),
+        )
+        monkeypatch.setattr(
+            "src.api.app.search_video_by_text_service",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("qdrant down")),
+        )
+
+        response = client.post(
+            "/api/v1/videos/test-vid/search",
+            json={"query_text": "hello"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 503
+        assert len(consumed) == 1
+        assert len(compensated) == 1
+        assert consumed[0]["request_id"] == compensated[0]["request_id"]
+        assert compensated[0]["units"] == 1
+        assert compensated[0]["video_id"] == "test-vid"

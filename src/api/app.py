@@ -39,6 +39,7 @@ from src.db.supabase import (
     VideoRecord,
     apply_api_billing_credit_grant as db_apply_api_billing_credit_grant,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
+    compensate_api_units as db_compensate_api_units,
     consume_api_units as db_consume_api_units,
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
@@ -110,6 +111,10 @@ YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL = (
     "Upload a video file instead. If this is your own YouTube video, "
     "download it from YouTube Studio or Google Takeout, then upload it here."
 )
+RECOVERABLE_UPLOAD_RETRY_ERRORS = {
+    "Insufficient credits",
+    "Failed to enqueue processing job",
+}
 
 
 class UploadDurationValidationError(RuntimeError):
@@ -889,6 +894,27 @@ def _ensure_enqueued(record: VideoRecord) -> None:
         ) from exc
 
 
+def _should_retry_failed_upload(record: VideoRecord) -> bool:
+    if record.status != "failed":
+        return False
+    if record.error_message not in RECOVERABLE_UPLOAD_RETRY_ERRORS:
+        return False
+    return db_get_video_job(record.id) is None
+
+
+def _reset_upload_retry_record(record: VideoRecord) -> VideoRecord:
+    if record.status == "queued":
+        return record
+
+    updated = update_video_status(record.id, "queued")
+    if updated is not None:
+        return updated
+
+    record.status = "queued"
+    record.error_message = None
+    return record
+
+
 def _enqueue_or_raise(video_id: str) -> None:
     """Enqueue a video processing job, raising 500 on failure.
 
@@ -1158,6 +1184,7 @@ def complete_upload(
     filename = _sanitize_filename(request.filename)
     key = source_key(request.video_id, filename)
 
+    retry_record: VideoRecord | None = None
     existing = _get_idempotent_upload_record(
         video_id=request.video_id,
         user_id=user_id,
@@ -1165,7 +1192,11 @@ def complete_upload(
         source_filename=filename,
     )
     if existing is not None:
-        return _video_record_to_response(existing)
+        if _should_retry_failed_upload(existing):
+            retry_record = existing
+        else:
+            _ensure_enqueued(existing)
+            return _video_record_to_response(existing)
     requires_credit = _precheck_video_processing_admission(user_id)
 
     try:
@@ -1198,19 +1229,26 @@ def complete_upload(
     except UploadDurationProbeUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
-    record, created = db_insert_uploaded_video_idempotent(
-        request.video_id,
-        user_id,
-        key,
-        filename,
-    )
-    if not created:
-        record = _require_matching_upload_record(
-            record,
-            source_r2_key=key,
-            source_filename=filename,
+    if retry_record is None:
+        record, created = db_insert_uploaded_video_idempotent(
+            request.video_id,
+            user_id,
+            key,
+            filename,
         )
-        return _video_record_to_response(record)
+        if not created:
+            record = _require_matching_upload_record(
+                record,
+                source_r2_key=key,
+                source_filename=filename,
+            )
+            if _should_retry_failed_upload(record):
+                retry_record = record
+            else:
+                _ensure_enqueued(record)
+                return _video_record_to_response(record)
+    else:
+        record = retry_record
 
     if requires_credit:
         try:
@@ -1220,6 +1258,8 @@ def complete_upload(
                 update_video_status(record.id, "failed", error_message="Insufficient credits")
             raise
 
+    if retry_record is not None:
+        record = _reset_upload_retry_record(record)
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
@@ -1798,12 +1838,17 @@ def v1_complete_upload(
     filename = _sanitize_filename(request.filename)
     key = source_key(request.video_id, filename)
 
+    retry_record: VideoRecord | None = None
     existing = _get_idempotent_upload_record(
         video_id=request.video_id, user_id=user_id,
         source_r2_key=key, source_filename=filename,
     )
     if existing is not None:
-        return _video_record_to_response(existing)
+        if _should_retry_failed_upload(existing):
+            retry_record = existing
+        else:
+            _ensure_enqueued(existing)
+            return _video_record_to_response(existing)
 
     try:
         r2_config = R2Config.from_env()
@@ -1826,14 +1871,21 @@ def v1_complete_upload(
     except UploadDurationProbeUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
-    record, created = db_insert_uploaded_video_idempotent(
-        request.video_id, user_id, key, filename,
-    )
-    if not created:
-        record = _require_matching_upload_record(
-            record, source_r2_key=key, source_filename=filename,
+    if retry_record is None:
+        record, created = db_insert_uploaded_video_idempotent(
+            request.video_id, user_id, key, filename,
         )
-        return _video_record_to_response(record)
+        if not created:
+            record = _require_matching_upload_record(
+                record, source_r2_key=key, source_filename=filename,
+            )
+            if _should_retry_failed_upload(record):
+                retry_record = record
+            else:
+                _ensure_enqueued(record)
+                return _video_record_to_response(record)
+    else:
+        record = retry_record
 
     try:
         _consume_api_units_or_raise(
@@ -1842,10 +1894,12 @@ def v1_complete_upload(
             video_id=request.video_id,
         )
     except HTTPException as exc:
-        if exc.status_code == 402:
-            update_video_status(record.id, "failed", error_message="Insufficient credits")
-        raise
+            if exc.status_code == 402:
+                update_video_status(record.id, "failed", error_message="Insufficient credits")
+            raise
 
+    if retry_record is not None:
+        record = _reset_upload_retry_record(record)
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
@@ -1878,12 +1932,14 @@ def v1_search_video(
     if not request.query_text:
         raise HTTPException(status_code=400, detail="Provide query_text")
     record = _get_ready_video_for_search(video_id, user_id)
+    request_id = f"text_query:{uuid4()}"
     _consume_api_units_or_raise(
         user_id=user_id,
         api_key_id=identity.api_key_id,
         event_type="text_query",
         units=API_UNIT_COST_TEXT_QUERY,
         video_id=video_id,
+        request_id=request_id,
     )
     track("search_run", user_id=user_id, metadata={"video_id": video_id, "mode": "text"})
     try:
@@ -1893,6 +1949,20 @@ def v1_search_video(
             limit=request.limit,
         )
     except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        try:
+            db_compensate_api_units(
+                user_id=user_id,
+                units=API_UNIT_COST_TEXT_QUERY,
+                video_id=video_id,
+                request_id=request_id,
+                metadata={"event_type": "text_query_failed"},
+            )
+        except Exception as compensation_exc:
+            logger.exception(
+                "Failed to compensate billed text search for video_id=%s: %s",
+                video_id,
+                compensation_exc,
+            )
         _raise_search_backend_unavailable(video_id, exc)
 
     track("search_success", user_id=user_id, metadata={"video_id": video_id, "mode": "text", "result_count": len(results)})
