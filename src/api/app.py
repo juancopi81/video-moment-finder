@@ -995,8 +995,12 @@ def _raise_search_backend_unavailable(video_id: str, exc: Exception) -> None:
 
 
 app = FastAPI(
-    title="Video Moment Finder API",
+    title="Video Moment Finder Public API",
     version="0.2.0",
+    description=(
+        "Agent-ready REST API for uploading a video, polling processing status, "
+        "and searching by text. Internal web-only routes are excluded from this schema."
+    ),
 )
 
 app.add_middleware(
@@ -1024,7 +1028,7 @@ async def report_unhandled_exceptions(request: Request, call_next):
         raise
 
 
-@app.post("/analytics/event", status_code=204)
+@app.post("/analytics/event", status_code=204, include_in_schema=False)
 def analytics_event(
     request: AnalyticsEventRequest,
     user_id: str | None = Depends(get_optional_user_id),
@@ -1398,7 +1402,11 @@ def create_billing_checkout(
     )
 
 
-@app.post("/webhooks/lemonsqueezy", response_model=BillingWebhookResponse)
+@app.post(
+    "/webhooks/lemonsqueezy",
+    response_model=BillingWebhookResponse,
+    include_in_schema=False,
+)
 async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
     """Handle Lemon Squeezy webhook events and apply idempotent credit grants."""
     _enforce_webhook_rate_limit(request)
@@ -2091,12 +2099,14 @@ internal_v1_router.add_api_route(
     v1_billing_credits_summary,
     methods=["GET"],
     response_model=BillingSummaryResponse,
+    include_in_schema=False,
 )
 internal_v1_router.add_api_route(
     "/billing/credits/checkout",
     v1_billing_credits_checkout,
     methods=["POST"],
     response_model=BillingCheckoutResponse,
+    include_in_schema=False,
 )
 
 # Key management — static paths registered before parameterized /videos/{id}.
@@ -2152,6 +2162,7 @@ internal_v1_router.add_api_route(
     v1_create_video,
     methods=["POST"],
     response_model=VideoResponse,
+    include_in_schema=False,
 )
 public_v1_router.add_api_route(
     "/videos/{video_id}",
@@ -2170,6 +2181,7 @@ internal_v1_router.add_api_route(
     v1_search_video_by_image,
     methods=["POST"],
     response_model=VideoSearchResponse,
+    include_in_schema=False,
 )
 
 app.include_router(public_v1_router)

@@ -9,6 +9,7 @@ openapi: https://api.videomomentfinder.com/openapi.json
 # Video Moment Finder
 
 Use this file when you need one public entrypoint for the Video Moment Finder API and CLI.
+This is the current agent-ready REST API and CLI surface. It is not an MCP server.
 
 ## Canonical URLs
 
@@ -33,6 +34,7 @@ Use this file when you need one public entrypoint for the Video Moment Finder AP
 - YouTube submit
 
 Those capabilities may exist elsewhere in the product or API surface, but the canonical documented agent flow is one-shot upload plus text search.
+They are intentionally excluded from the public OpenAPI schema.
 
 ## Security Rules
 

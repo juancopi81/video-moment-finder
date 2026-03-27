@@ -2,6 +2,7 @@
 
 Need a one-link public entrypoint for agents? Start with `https://www.videomomentfinder.com/skill.md`.
 This guide remains the detailed reference for the same happy path.
+The current external integration surface is a curated REST API plus CLI. It is not an MCP server.
 
 This guide covers the supported external happy path for Video Moment Finder:
 
@@ -17,6 +18,13 @@ Current scope:
 - text search only
 - no image-search CLI yet
 - no YouTube-submit CLI yet
+
+Public references:
+
+- skill file: `https://www.videomomentfinder.com/skill.md`
+- developers page: `https://www.videomomentfinder.com/developers`
+- OpenAPI schema: `https://api.videomomentfinder.com/openapi.json`
+- Swagger UI: `https://api.videomomentfinder.com/docs`
 
 ## Prerequisites
 
@@ -268,6 +276,14 @@ The CLI wraps these existing `/api/v1` routes:
 | `vmf videos get` / `wait` | `GET` | `/api/v1/videos/{video_id}` | API key |
 | `vmf videos search` | `POST` | `/api/v1/videos/{video_id}/search` | API key |
 
+Additional public REST routes that are part of the curated schema:
+
+| Purpose | Method | Path | Auth |
+| --- | --- | --- | --- |
+| API billing summary | `GET` | `/api/v1/billing/units/summary` | Clerk bearer token or API key |
+| API billing usage | `GET` | `/api/v1/billing/units/usage` | Clerk bearer token or API key |
+| Developer Pack checkout | `POST` | `/api/v1/billing/units/checkout` | Clerk bearer token |
+
 The direct upload API remains available for lower-level clients:
 
 | REST route | Method | Path |
@@ -275,6 +291,8 @@ The direct upload API remains available for lower-level clients:
 | direct upload init | `POST` | `/api/v1/videos/upload/init` |
 | direct upload bytes | `PUT` | presigned `upload_url` |
 | direct upload complete | `POST` | `/api/v1/videos/upload/complete` |
+
+Web-only routes such as YouTube submit, creator credit billing, and image search are intentionally excluded from the published OpenAPI schema.
 
 All authenticated requests use:
 
