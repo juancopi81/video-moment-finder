@@ -1195,38 +1195,35 @@ def _complete_upload_core(
             _ensure_enqueued(existing)
             return _video_record_to_response(existing)
 
-    # Retry means the file was already validated on the original attempt;
-    # skip R2 existence check and duration probe to avoid wasted I/O.
-    if retry_record is None:
-        try:
-            r2_config = R2Config.from_env()
-        except StorageConfigError as exc:
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Upload storage is not configured",
+        ) from exc
+
+    store = R2Store(r2_config)
+
+    try:
+        if not store.source_exists(key):
             raise HTTPException(
-                status_code=503,
-                detail="Upload storage is not configured",
-            ) from exc
+                status_code=400,
+                detail="Uploaded source not found",
+            )
+    except R2StorageError as exc:
+        logger.exception("Failed to check uploaded source: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to verify upload",
+        ) from exc
 
-        store = R2Store(r2_config)
-
-        try:
-            if not store.source_exists(key):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Uploaded source not found",
-                )
-        except R2StorageError as exc:
-            logger.exception("Failed to check uploaded source: %s", exc)
-            raise HTTPException(
-                status_code=503,
-                detail="Failed to verify upload",
-            ) from exc
-
-        try:
-            _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
-        except UploadDurationLimitExceededError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except UploadDurationProbeUnavailableError as exc:
-            raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
+    try:
+        _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
+    except UploadDurationLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadDurationProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
     if retry_record is None:
         record, created = db_insert_uploaded_video_idempotent(
@@ -1260,12 +1257,11 @@ def complete_upload(
     """Finalize a presigned upload and enqueue processing."""
     _enforce_user_write_rate_limit(user_id)
     filename = _sanitize_filename(request.filename)
-    requires_credit = _precheck_video_processing_admission(user_id)
 
     def _bill_web_credits(record: VideoRecord) -> None:
-        if not requires_credit:
-            return
         try:
+            if not _precheck_video_processing_admission(user_id):
+                return
             _consume_processing_credit_or_raise(user_id)
         except HTTPException as exc:
             if exc.status_code == 402:
