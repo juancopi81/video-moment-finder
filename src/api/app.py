@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, UploadFile, File, Form, Request
@@ -39,11 +39,11 @@ from src.db.supabase import (
     VideoRecord,
     apply_api_billing_credit_grant as db_apply_api_billing_credit_grant,
     apply_billing_credit_grant as db_apply_billing_credit_grant,
+    compensate_api_units as db_compensate_api_units,
     consume_api_units as db_consume_api_units,
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
     create_api_key as db_create_api_key,
-    create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_api_credits as db_get_api_credits,
@@ -110,6 +110,12 @@ YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL = (
     "Upload a video file instead. If this is your own YouTube video, "
     "download it from YouTube Studio or Google Takeout, then upload it here."
 )
+FAILED_ERROR_INSUFFICIENT_CREDITS = "Insufficient credits"
+FAILED_ERROR_ENQUEUE = "Failed to enqueue processing job"
+RECOVERABLE_UPLOAD_RETRY_ERRORS = {
+    FAILED_ERROR_INSUFFICIENT_CREDITS,
+    FAILED_ERROR_ENQUEUE,
+}
 
 
 class UploadDurationValidationError(RuntimeError):
@@ -889,6 +895,34 @@ def _ensure_enqueued(record: VideoRecord) -> None:
         ) from exc
 
 
+def _should_retry_failed_upload(record: VideoRecord) -> bool:
+    if record.status != "failed":
+        return False
+    if record.error_message not in RECOVERABLE_UPLOAD_RETRY_ERRORS:
+        return False
+    return db_get_video_job(record.id) is None
+
+
+def _reset_upload_retry_record(record: VideoRecord) -> VideoRecord:
+    if record.status == "queued":
+        return record
+
+    updated = update_video_status(record.id, "queued")
+    if updated is not None:
+        return updated
+
+    # DB update returned None — the row may have been deleted concurrently.
+    # Patch in-memory so the response is consistent, but log since DB state
+    # may now disagree.
+    logger.warning(
+        "update_video_status returned None for video_id=%s during retry reset",
+        record.id,
+    )
+    record.status = "queued"
+    record.error_message = None
+    return record
+
+
 def _enqueue_or_raise(video_id: str) -> None:
     """Enqueue a video processing job, raising 500 on failure.
 
@@ -910,7 +944,7 @@ def _enqueue_video_or_fail(video_id: str) -> None:
         update_video_status(
             video_id,
             "failed",
-            error_message="Failed to enqueue processing job",
+            error_message=FAILED_ERROR_ENQUEUE,
         )
         raise
 
@@ -969,8 +1003,12 @@ def _raise_search_backend_unavailable(video_id: str, exc: Exception) -> None:
 
 
 app = FastAPI(
-    title="Video Moment Finder API",
+    title="Video Moment Finder Public API",
     version="0.2.0",
+    description=(
+        "Agent-ready REST API for uploading a video, polling processing status, "
+        "and searching by text. Internal web-only routes are excluded from this schema."
+    ),
 )
 
 app.add_middleware(
@@ -998,7 +1036,7 @@ async def report_unhandled_exceptions(request: Request, call_next):
         raise
 
 
-@app.post("/analytics/event", status_code=204)
+@app.post("/analytics/event", status_code=204, include_in_schema=False)
 def analytics_event(
     request: AnalyticsEventRequest,
     user_id: str | None = Depends(get_optional_user_id),
@@ -1007,21 +1045,6 @@ def analytics_event(
     if user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required for signup_complete")
     track(request.event_name, user_id=user_id, metadata=request.metadata)
-
-
-@app.post("/videos", response_model=VideoResponse)
-def create_video(
-    request: VideoCreateRequest,
-    user_id: str = Depends(get_current_user_id),
-) -> VideoResponse:
-    """Create a new video and enqueue durable processing job."""
-    _enforce_user_write_rate_limit(user_id)
-    _validate_video_duration(request.youtube_url)
-    _consume_and_admit_video_processing(user_id)
-    record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
-    _enqueue_video_or_fail(record.id)
-    track("video_submitted", user_id=user_id, metadata={"source_type": "youtube"})
-    return _video_record_to_response(record)
 
 
 def _try_cleanup_r2(store: R2Store, key: str, user_id: str) -> None:
@@ -1072,7 +1095,6 @@ def _validate_and_upload_file(
     return store, upload_result, filename, requires_credit
 
 
-@app.post("/videos/upload", response_model=VideoResponse)
 def upload_video(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
@@ -1102,7 +1124,6 @@ def upload_video(
     return _video_record_to_response(record)
 
 
-@app.post("/videos/upload/init", response_model=UploadInitResponse)
 def init_upload(
     request: UploadInitRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1148,25 +1169,37 @@ def init_upload(
     )
 
 
-@app.post("/videos/upload/complete", response_model=VideoResponse)
-def complete_upload(
-    request: UploadCompleteRequest,
-    user_id: str = Depends(get_current_user_id),
+def _complete_upload_core(
+    video_id: str,
+    filename: str,
+    user_id: str,
+    bill: Callable[[VideoRecord], None],
+    admit: Callable[[], None] | None = None,
 ) -> VideoResponse:
-    """Finalize a presigned upload and enqueue processing."""
-    _enforce_user_write_rate_limit(user_id)
-    filename = _sanitize_filename(request.filename)
-    key = source_key(request.video_id, filename)
+    """Shared upload-complete flow for both JWT and API-key paths.
 
+    ``admit`` runs after the idempotent check but before R2 validation and
+    DB insert — the correct point for free-tier / credit pre-checks.
+    ``bill`` runs after the DB insert and should raise on failure.
+    """
+    key = source_key(video_id, filename)
+
+    retry_record: VideoRecord | None = None
     existing = _get_idempotent_upload_record(
-        video_id=request.video_id,
+        video_id=video_id,
         user_id=user_id,
         source_r2_key=key,
         source_filename=filename,
     )
     if existing is not None:
-        return _video_record_to_response(existing)
-    requires_credit = _precheck_video_processing_admission(user_id)
+        if _should_retry_failed_upload(existing):
+            retry_record = existing
+        else:
+            _ensure_enqueued(existing)
+            return _video_record_to_response(existing)
+
+    if admit is not None:
+        admit()
 
     try:
         r2_config = R2Config.from_env()
@@ -1198,34 +1231,59 @@ def complete_upload(
     except UploadDurationProbeUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
-    record, created = db_insert_uploaded_video_idempotent(
-        request.video_id,
-        user_id,
-        key,
-        filename,
-    )
-    if not created:
-        record = _require_matching_upload_record(
-            record,
-            source_r2_key=key,
-            source_filename=filename,
+    if retry_record is None:
+        record, created = db_insert_uploaded_video_idempotent(
+            video_id, user_id, key, filename,
         )
-        return _video_record_to_response(record)
+        if not created:
+            record = _require_matching_upload_record(
+                record, source_r2_key=key, source_filename=filename,
+            )
+            if _should_retry_failed_upload(record):
+                retry_record = record
+            else:
+                _ensure_enqueued(record)
+                return _video_record_to_response(record)
+    else:
+        record = retry_record
 
-    if requires_credit:
-        try:
-            _consume_processing_credit_or_raise(user_id)
-        except HTTPException as exc:
-            if exc.status_code == 402:
-                update_video_status(record.id, "failed", error_message="Insufficient credits")
-            raise
+    bill(record)
 
+    if retry_record is not None:
+        record = _reset_upload_retry_record(record)
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
 
 
-@app.get("/videos/{video_id}", response_model=VideoResponse)
+def complete_upload(
+    request: UploadCompleteRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> VideoResponse:
+    """Finalize a presigned upload and enqueue processing."""
+    _enforce_user_write_rate_limit(user_id)
+    filename = _sanitize_filename(request.filename)
+    requires_credit = False
+
+    def _admit() -> None:
+        nonlocal requires_credit
+        requires_credit = _precheck_video_processing_admission(user_id)
+
+    def _bill_web_credits(record: VideoRecord) -> None:
+        if not requires_credit:
+            return
+        try:
+            _consume_processing_credit_or_raise(user_id)
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
+            raise
+
+    return _complete_upload_core(
+        request.video_id, filename, user_id, _bill_web_credits, admit=_admit,
+    )
+
+
 def get_video(
     video_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1238,7 +1296,6 @@ def get_video(
     return _video_record_to_response(record)
 
 
-@app.get("/users/me/videos", response_model=list[VideoResponse])
 def list_my_videos(
     user_id: str = Depends(get_current_user_id),
 ) -> list[VideoResponse]:
@@ -1247,7 +1304,6 @@ def list_my_videos(
     return [_video_record_to_response(record) for record in records]
 
 
-@app.get("/users/me/billing-summary", response_model=BillingSummaryResponse)
 def get_billing_summary(
     user_id: str = Depends(get_current_user_id),
 ) -> BillingSummaryResponse:
@@ -1269,7 +1325,6 @@ def get_billing_summary(
     )
 
 
-@app.post("/videos/{video_id}/search", response_model=VideoSearchResponse)
 def search_video(
     video_id: str,
     request: VideoSearchRequest,
@@ -1296,7 +1351,6 @@ def search_video(
     return _build_video_search_response(record, results)
 
 
-@app.post("/videos/{video_id}/search/image", response_model=VideoSearchResponse)
 def search_video_by_image(
     video_id: str,
     query_image: UploadFile = File(...),
@@ -1328,7 +1382,6 @@ def search_video_by_image(
     return _build_video_search_response(record, results)
 
 
-@app.post("/billing/checkout", response_model=BillingCheckoutResponse)
 def create_billing_checkout(
     request: BillingCheckoutRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1368,7 +1421,11 @@ def create_billing_checkout(
     )
 
 
-@app.post("/webhooks/lemonsqueezy", response_model=BillingWebhookResponse)
+@app.post(
+    "/webhooks/lemonsqueezy",
+    response_model=BillingWebhookResponse,
+    include_in_schema=False,
+)
 async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
     """Handle Lemon Squeezy webhook events and apply idempotent credit grants."""
     _enforce_webhook_rate_limit(request)
@@ -1529,48 +1586,39 @@ def revoke_api_key(
 
 
 # ---------------------------------------------------------------------------
-# Versioned external API (v1) — accepts both JWT and API key auth
+# Versioned API (v1)
 # ---------------------------------------------------------------------------
 
-# Thin v1 wrappers that accept API keys (via get_current_user) and delegate
-# to the shared business logic.  Legacy @app routes keep get_current_user_id
-# (JWT-only) so API keys are scoped to /api/v1/ only.
+# Public developer routes accept JWT or API keys when appropriate.
+# Internal web-only v1 routes remain JWT-only and are excluded from the
+# curated public schema.
 
 
 def v1_create_video(
     request: VideoCreateRequest,
-    identity: AuthIdentity = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
-    _enforce_user_write_rate_limit(identity.user_id)
+    _enforce_user_write_rate_limit(user_id)
     _validate_video_duration(request.youtube_url)
 
     # Atomic insert: the unique partial index on (user_id, youtube_url) serializes
     # concurrent retries at the DB level.  The record exists BEFORE billing so a
     # racing retry sees it and short-circuits — no double charge.
     record, created = db_insert_youtube_video_idempotent(
-        request.youtube_url, identity.user_id
+        request.youtube_url, user_id
     )
     if not created:
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 
     try:
-        if identity.auth_method == "api_key":
-            _consume_api_units_or_raise(
-                user_id=identity.user_id,
-                api_key_id=identity.api_key_id,
-                event_type="index_video",
-                units=API_UNIT_COST_INDEX_VIDEO,
-                video_id=record.id,
-            )
-        else:
-            _consume_and_admit_video_processing(identity.user_id)
+        _consume_and_admit_video_processing(user_id)
     except HTTPException:
-        update_video_status(record.id, "failed", error_message="Insufficient credits")
+        update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
         raise
 
     _enqueue_or_raise(record.id)
-    track("video_submitted", user_id=identity.user_id, metadata={"source_type": "youtube"})
+    track("video_submitted", user_id=user_id, metadata={"source_type": "youtube"})
     return _video_record_to_response(record)
 
 
@@ -1705,7 +1753,7 @@ def v1_upload_video(
         except HTTPException as exc:
             if exc.status_code == 402:
                 _try_cleanup_r2(store, upload_result.key, user_id)
-                update_video_status(record.id, "failed", error_message="Insufficient credits")
+                update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
             raise
 
         _enqueue_or_raise(record.id)
@@ -1738,7 +1786,7 @@ def v1_upload_video(
         except HTTPException as exc:
             if exc.status_code == 402:
                 _try_cleanup_r2(store, upload_result.key, user_id)
-                update_video_status(record.id, "failed", error_message="Insufficient credits")
+                update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
             raise
 
     _enqueue_or_raise(record.id)
@@ -1792,63 +1840,23 @@ def v1_complete_upload(
     if identity.auth_method != "api_key":
         return complete_upload(request, user_id=identity.user_id)
 
-    # API-key path: inline complete_upload logic with API billing instead of web credits
     user_id = identity.user_id
     _enforce_user_write_rate_limit(user_id)
     filename = _sanitize_filename(request.filename)
-    key = source_key(request.video_id, filename)
 
-    existing = _get_idempotent_upload_record(
-        video_id=request.video_id, user_id=user_id,
-        source_r2_key=key, source_filename=filename,
-    )
-    if existing is not None:
-        return _video_record_to_response(existing)
+    def _bill_api_units(record: VideoRecord) -> None:
+        try:
+            _consume_api_units_or_raise(
+                user_id=user_id, api_key_id=identity.api_key_id,
+                event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+                video_id=request.video_id,
+            )
+        except HTTPException as exc:
+            if exc.status_code == 402:
+                update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
+            raise
 
-    try:
-        r2_config = R2Config.from_env()
-    except StorageConfigError as exc:
-        raise HTTPException(status_code=503, detail="Upload storage is not configured") from exc
-
-    store = R2Store(r2_config)
-
-    try:
-        if not store.source_exists(key):
-            raise HTTPException(status_code=400, detail="Uploaded source not found")
-    except R2StorageError as exc:
-        logger.exception("Failed to check uploaded source: %s", exc)
-        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
-
-    try:
-        _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
-    except UploadDurationLimitExceededError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except UploadDurationProbeUnavailableError as exc:
-        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
-
-    record, created = db_insert_uploaded_video_idempotent(
-        request.video_id, user_id, key, filename,
-    )
-    if not created:
-        record = _require_matching_upload_record(
-            record, source_r2_key=key, source_filename=filename,
-        )
-        return _video_record_to_response(record)
-
-    try:
-        _consume_api_units_or_raise(
-            user_id=user_id, api_key_id=identity.api_key_id,
-            event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
-            video_id=request.video_id,
-        )
-    except HTTPException as exc:
-        if exc.status_code == 402:
-            update_video_status(record.id, "failed", error_message="Insufficient credits")
-        raise
-
-    _enqueue_video_or_fail(record.id)
-    track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
-    return _video_record_to_response(record)
+    return _complete_upload_core(request.video_id, filename, user_id, _bill_api_units)
 
 
 def v1_get_video(
@@ -1878,12 +1886,14 @@ def v1_search_video(
     if not request.query_text:
         raise HTTPException(status_code=400, detail="Provide query_text")
     record = _get_ready_video_for_search(video_id, user_id)
+    request_id = f"text_query:{uuid4()}"
     _consume_api_units_or_raise(
         user_id=user_id,
         api_key_id=identity.api_key_id,
         event_type="text_query",
         units=API_UNIT_COST_TEXT_QUERY,
         video_id=video_id,
+        request_id=request_id,
     )
     track("search_run", user_id=user_id, metadata={"video_id": video_id, "mode": "text"})
     try:
@@ -1893,10 +1903,51 @@ def v1_search_video(
             limit=request.limit,
         )
     except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        try:
+            db_compensate_api_units(
+                user_id=user_id,
+                units=API_UNIT_COST_TEXT_QUERY,
+                video_id=video_id,
+                request_id=request_id,
+                metadata={"event_type": "text_query_failed"},
+            )
+        except Exception as compensation_exc:
+            logger.exception(
+                "Failed to compensate billed text search for video_id=%s: %s",
+                video_id,
+                compensation_exc,
+            )
         _raise_search_backend_unavailable(video_id, exc)
 
     track("search_success", user_id=user_id, metadata={"video_id": video_id, "mode": "text", "result_count": len(results)})
     return _build_video_search_response(record, results)
+
+
+def v1_search_video_by_image(
+    video_id: str,
+    query_image: UploadFile = File(...),
+    limit: int = Form(default=5, ge=1, le=20),
+    user_id: str = Depends(get_current_user_id),
+) -> VideoSearchResponse:
+    return search_video_by_image(
+        video_id=video_id,
+        query_image=query_image,
+        limit=limit,
+        user_id=user_id,
+    )
+
+
+def v1_billing_credits_summary(
+    user_id: str = Depends(get_current_user_id),
+) -> BillingSummaryResponse:
+    return get_billing_summary(user_id=user_id)
+
+
+def v1_billing_credits_checkout(
+    request: BillingCheckoutRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> BillingCheckoutResponse:
+    return create_billing_checkout(request, user_id=user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1984,26 +2035,119 @@ def v1_api_billing_usage(
     ]
 
 
-v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+public_v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+internal_v1_router = APIRouter(prefix="/api/v1", tags=["v1-internal"])
 
-# Billing — static paths registered first.
-v1_router.add_api_route("/billing/checkout", v1_api_billing_checkout, methods=["POST"], response_model=BillingCheckoutResponse)
-v1_router.add_api_route("/billing/summary", v1_api_billing_summary, methods=["GET"], response_model=ApiBillingSummaryResponse)
-v1_router.add_api_route("/billing/usage", v1_api_billing_usage, methods=["GET"], response_model=list[ApiUsageEventResponse])
+# Public developer billing.
+public_v1_router.add_api_route(
+    "/billing/units/checkout",
+    v1_api_billing_checkout,
+    methods=["POST"],
+    response_model=BillingCheckoutResponse,
+)
+public_v1_router.add_api_route(
+    "/billing/units/summary",
+    v1_api_billing_summary,
+    methods=["GET"],
+    response_model=ApiBillingSummaryResponse,
+)
+public_v1_router.add_api_route(
+    "/billing/units/usage",
+    v1_api_billing_usage,
+    methods=["GET"],
+    response_model=list[ApiUsageEventResponse],
+)
+
+# Internal web billing.
+internal_v1_router.add_api_route(
+    "/billing/credits/summary",
+    v1_billing_credits_summary,
+    methods=["GET"],
+    response_model=BillingSummaryResponse,
+    include_in_schema=False,
+)
+internal_v1_router.add_api_route(
+    "/billing/credits/checkout",
+    v1_billing_credits_checkout,
+    methods=["POST"],
+    response_model=BillingCheckoutResponse,
+    include_in_schema=False,
+)
 
 # Key management — static paths registered before parameterized /videos/{id}.
-v1_router.add_api_route("/keys", create_api_key, methods=["POST"], response_model=ApiKeyCreatedResponse, status_code=201)
-v1_router.add_api_route("/keys", list_api_keys, methods=["GET"], response_model=list[ApiKeyResponse])
-v1_router.add_api_route("/keys/{key_id}", revoke_api_key, methods=["DELETE"], status_code=204)
+public_v1_router.add_api_route(
+    "/keys",
+    create_api_key,
+    methods=["POST"],
+    response_model=ApiKeyCreatedResponse,
+    status_code=201,
+)
+public_v1_router.add_api_route(
+    "/keys",
+    list_api_keys,
+    methods=["GET"],
+    response_model=list[ApiKeyResponse],
+)
+public_v1_router.add_api_route(
+    "/keys/{key_id}",
+    revoke_api_key,
+    methods=["DELETE"],
+    status_code=204,
+)
 
 # Static paths first (Starlette matches by registration order).
-v1_router.add_api_route("/videos/upload", v1_upload_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/upload/init", v1_init_upload, methods=["POST"], response_model=UploadInitResponse)
-v1_router.add_api_route("/videos/upload/complete", v1_complete_upload, methods=["POST"], response_model=VideoResponse)
-# Collection + parameterized paths.
-v1_router.add_api_route("/videos", v1_create_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos", v1_list_my_videos, methods=["GET"], response_model=list[VideoResponse])
-v1_router.add_api_route("/videos/{video_id}", v1_get_video, methods=["GET"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/{video_id}/search", v1_search_video, methods=["POST"], response_model=VideoSearchResponse)
+public_v1_router.add_api_route(
+    "/videos/upload",
+    v1_upload_video,
+    methods=["POST"],
+    response_model=VideoResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/upload/init",
+    v1_init_upload,
+    methods=["POST"],
+    response_model=UploadInitResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/upload/complete",
+    v1_complete_upload,
+    methods=["POST"],
+    response_model=VideoResponse,
+)
 
-app.include_router(v1_router)
+# Collection + parameterized paths.
+public_v1_router.add_api_route(
+    "/videos",
+    v1_list_my_videos,
+    methods=["GET"],
+    response_model=list[VideoResponse],
+)
+internal_v1_router.add_api_route(
+    "/videos",
+    v1_create_video,
+    methods=["POST"],
+    response_model=VideoResponse,
+    include_in_schema=False,
+)
+public_v1_router.add_api_route(
+    "/videos/{video_id}",
+    v1_get_video,
+    methods=["GET"],
+    response_model=VideoResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/{video_id}/search",
+    v1_search_video,
+    methods=["POST"],
+    response_model=VideoSearchResponse,
+)
+internal_v1_router.add_api_route(
+    "/videos/{video_id}/search/image",
+    v1_search_video_by_image,
+    methods=["POST"],
+    response_model=VideoSearchResponse,
+    include_in_schema=False,
+)
+
+app.include_router(public_v1_router)
+app.include_router(internal_v1_router)

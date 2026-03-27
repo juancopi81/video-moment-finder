@@ -58,15 +58,15 @@ def test_create_video_requires_authentication(monkeypatch) -> None:
     client = TestClient(app)
     called = False
 
-    def fake_create_video(*args, **kwargs) -> VideoRecord:
+    def fake_insert(*args, **kwargs) -> tuple[VideoRecord, bool]:
         nonlocal called
         called = True
-        return _video_record("video_unauth")
+        return _video_record("video_unauth"), True
 
-    monkeypatch.setattr("src.api.app.db_create_video", fake_create_video)
+    monkeypatch.setattr("src.api.app.db_insert_youtube_video_idempotent", fake_insert)
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -80,17 +80,17 @@ def test_create_video_enqueues_job_for_authenticated_owner(monkeypatch) -> None:
     _authenticate("user_123")
 
     enqueue_calls: list[str] = []
-    create_calls: list[tuple[str, str | None, str]] = []
+    insert_calls: list[tuple[str, str | None]] = []
 
-    def fake_create_video(youtube_url: str, user_id=None, status="queued") -> VideoRecord:
-        create_calls.append((youtube_url, user_id, status))
-        return _video_record("video_123", status=status)
+    def fake_insert(youtube_url: str, user_id=None) -> tuple[VideoRecord, bool]:
+        insert_calls.append((youtube_url, user_id))
+        return _video_record("video_123", status="queued"), True
 
     def fake_enqueue(video_id: str) -> object:
         enqueue_calls.append(video_id)
         return object()
 
-    monkeypatch.setattr("src.api.app.db_create_video", fake_create_video)
+    monkeypatch.setattr("src.api.app.db_insert_youtube_video_idempotent", fake_insert)
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
     monkeypatch.setattr(
         "src.api.app.fetch_video_metadata",
@@ -98,7 +98,7 @@ def test_create_video_enqueues_job_for_authenticated_owner(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://youtu.be/abc123xyz45"},
     )
 
@@ -109,8 +109,8 @@ def test_create_video_enqueues_job_for_authenticated_owner(monkeypatch) -> None:
     assert payload["youtube_url"] == "https://www.youtube.com/watch?v=abc123xyz45"
     assert payload["source_type"] == "youtube"
     assert enqueue_calls == ["video_123"]
-    assert create_calls == [
-        ("https://www.youtube.com/watch?v=abc123xyz45", "user_123", "queued")
+    assert insert_calls == [
+        ("https://www.youtube.com/watch?v=abc123xyz45", "user_123")
     ]
 
 
@@ -120,11 +120,8 @@ def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
     failure_updates: list[tuple[str, str, str | None]] = []
 
     monkeypatch.setattr(
-        "src.api.app.db_create_video",
-        lambda youtube_url, user_id=None, status="queued": _video_record(
-            "video_500",
-            status=status,
-        ),
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (_video_record("video_500", status="queued"), True),
     )
 
     def fake_update(video_id: str, status: str, error_message: str | None = None):
@@ -142,15 +139,115 @@ def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
     assert response.status_code == 500
     assert response.json()["detail"] == "Failed to enqueue processing job"
-    assert failure_updates
-    assert failure_updates[0][0] == "video_500"
-    assert failure_updates[0][1] == "failed"
+    assert failure_updates == []
+
+
+def test_create_video_retry_returns_existing_without_double_billing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    existing = _video_record("video_retry", status="queued")
+
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (existing, False),
+    )
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: object())
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("credit consume should not run for matching retry")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda _video_id: (_ for _ in ()).throw(
+            AssertionError("enqueue should not run when job history exists")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "video_retry"
+
+
+def test_create_video_retry_reenqueues_stranded_video(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    stranded = _video_record("video_stranded", status="queued")
+    enqueue_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (stranded, False),
+    )
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id) or object(),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("credit consume should not run for queued retry")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "video_stranded"
+    assert enqueue_calls == ["video_stranded"]
+
+
+def test_create_video_retry_returns_503_when_reenqueue_fails(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    stranded = _video_record("video_stranded_fail", status="queued")
+
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (stranded, False),
+    )
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda _video_id: (_ for _ in ()).throw(RuntimeError("queue down")),
+    )
+
+    response = client.post(
+        "/api/v1/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Video was created but processing could not be started. Please retry."
+    )
 
 
 def test_create_video_rejects_non_video_youtube_url() -> None:
@@ -158,7 +255,7 @@ def test_create_video_rejects_non_video_youtube_url() -> None:
     _authenticate("user_123")
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/channel/UC12345"},
     )
 
@@ -174,7 +271,7 @@ def test_create_video_rejects_live_stream(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -192,7 +289,7 @@ def test_create_video_rejects_long_video(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -213,7 +310,7 @@ def test_create_video_returns_actionable_503_for_youtube_bot_challenge(monkeypat
     monkeypatch.setattr("src.api.app.fetch_video_metadata", _raise)
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -271,7 +368,7 @@ def test_create_video_keeps_generic_metadata_fetch_failures_as_400(monkeypatch) 
     monkeypatch.setattr("src.api.app.fetch_video_metadata", _raise)
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -284,24 +381,31 @@ def test_create_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch)
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: None)
     monkeypatch.setattr(
         "src.api.app.fetch_video_metadata",
         lambda _: VideoMetadata(duration_s=120.0, is_live=False),
     )
+    status_updates: list[tuple[str, str, str | None]] = []
     monkeypatch.setattr(
-        "src.api.app.db_create_video",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("create should not run when credits are unavailable")
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda *args, **kwargs: (_video_record("video_credit_denied", status="queued"), True),
+    )
+    monkeypatch.setattr(
+        "src.api.app.update_video_status",
+        lambda video_id, status, error_message=None: status_updates.append(
+            (video_id, status, error_message)
         ),
     )
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
     assert response.status_code == 402
     assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
+    assert status_updates == [("video_credit_denied", "failed", "Insufficient credits")]
 
 
 def test_create_video_consumes_paid_credit_when_free_limit_reached(monkeypatch) -> None:
@@ -321,13 +425,13 @@ def test_create_video_consumes_paid_credit_when_free_limit_reached(monkeypatch) 
         ),
     )
     monkeypatch.setattr(
-        "src.api.app.db_create_video",
-        lambda youtube_url, user_id=None, status="queued": _video_record("video_paid", status=status),
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (_video_record("video_paid", status="queued"), True),
     )
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -345,20 +449,17 @@ def test_create_video_returns_429_when_write_rate_limit_exceeded(monkeypatch) ->
         lambda _: VideoMetadata(duration_s=120.0, is_live=False),
     )
     monkeypatch.setattr(
-        "src.api.app.db_create_video",
-        lambda youtube_url, user_id=None, status="queued": _video_record(
-            "video_rate_limited",
-            status=status,
-        ),
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (_video_record("video_rate_limited", status="queued"), True),
     )
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
 
     first = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
     second = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -380,25 +481,25 @@ def test_create_video_rate_limit_is_isolated_per_user(monkeypatch) -> None:
     )
     create_calls: list[str] = []
 
-    def _fake_create_video(youtube_url: str, user_id=None, status="queued") -> VideoRecord:
-        _ = youtube_url, status
+    def _fake_insert(youtube_url: str, user_id=None) -> tuple[VideoRecord, bool]:
+        _ = youtube_url
         create_calls.append(user_id or "")
-        return _video_record(f"video_{user_id or 'unknown'}", status="queued")
+        return _video_record(f"video_{user_id or 'unknown'}", status="queued"), True
 
-    monkeypatch.setattr("src.api.app.db_create_video", _fake_create_video)
+    monkeypatch.setattr("src.api.app.db_insert_youtube_video_idempotent", _fake_insert)
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
 
     first = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
     second = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
     current_user["id"] = "user_b"
     third = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -422,13 +523,13 @@ def test_create_video_allows_unlimited_user_override(monkeypatch) -> None:
         lambda _: VideoMetadata(duration_s=120.0, is_live=False),
     )
     monkeypatch.setattr(
-        "src.api.app.db_create_video",
-        lambda youtube_url, user_id=None, status="queued": _video_record("video_123", status=status),
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (_video_record("video_123", status="queued"), True),
     )
     monkeypatch.setattr("src.api.app.enqueue_video_job", lambda _video_id: object())
 
     response = client.post(
-        "/videos",
+        "/api/v1/videos",
         json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
     )
 
@@ -446,7 +547,7 @@ def test_get_video_requires_owner_scope(monkeypatch) -> None:
 
     monkeypatch.setattr("src.api.app.db_get_video", fake_get_video)
 
-    response = client.get("/videos/video_status")
+    response = client.get("/api/v1/videos/video_status")
 
     assert response.status_code == 200
     payload = response.json()
@@ -465,7 +566,7 @@ def test_get_video_returns_404_for_non_owner(monkeypatch) -> None:
         lambda video_id, user_id=None: None,
     )
 
-    response = client.get("/videos/video_status")
+    response = client.get("/api/v1/videos/video_status")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Video not found"
@@ -473,7 +574,7 @@ def test_get_video_returns_404_for_non_owner(monkeypatch) -> None:
 
 def test_get_video_requires_authentication() -> None:
     client = TestClient(app)
-    response = client.get("/videos/video_status")
+    response = client.get("/api/v1/videos/video_status")
 
     assert response.status_code == 401
     assert response.headers.get("www-authenticate") == "Bearer"
@@ -481,7 +582,7 @@ def test_get_video_requires_authentication() -> None:
 
 def test_list_my_videos_requires_authentication() -> None:
     client = TestClient(app)
-    response = client.get("/users/me/videos")
+    response = client.get("/api/v1/videos")
 
     assert response.status_code == 401
     assert response.headers.get("www-authenticate") == "Bearer"
@@ -507,7 +608,7 @@ def test_list_my_videos_scopes_to_user(monkeypatch) -> None:
         else None,
     )
 
-    response = client.get("/users/me/videos")
+    response = client.get("/api/v1/videos")
 
     assert response.status_code == 200
     payload = response.json()
@@ -519,7 +620,7 @@ def test_list_my_videos_scopes_to_user(monkeypatch) -> None:
 
 def test_billing_summary_requires_authentication() -> None:
     client = TestClient(app)
-    response = client.get("/users/me/billing-summary")
+    response = client.get("/api/v1/billing/credits/summary")
 
     assert response.status_code == 401
     assert response.headers.get("www-authenticate") == "Bearer"
@@ -533,7 +634,7 @@ def test_billing_summary_returns_usage_and_balance(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
     monkeypatch.setattr("src.api.app._max_free_videos", lambda: 5)
 
-    response = client.get("/users/me/billing-summary")
+    response = client.get("/api/v1/billing/credits/summary")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -553,7 +654,7 @@ def test_billing_summary_clamps_non_positive_remaining(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: True)
     monkeypatch.setattr("src.api.app._max_free_videos", lambda: 2)
 
-    response = client.get("/users/me/billing-summary")
+    response = client.get("/api/v1/billing/credits/summary")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -573,7 +674,7 @@ def test_billing_summary_clamps_negative_credit_balance(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _user_id: False)
     monkeypatch.setattr("src.api.app._max_free_videos", lambda: 5)
 
-    response = client.get("/users/me/billing-summary")
+    response = client.get("/api/v1/billing/credits/summary")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -597,7 +698,7 @@ def test_get_video_includes_source_url_for_uploaded_video(monkeypatch) -> None:
         lambda record: "https://example.com/source.mp4?token=abc",
     )
 
-    response = client.get("/videos/video_upload")
+    response = client.get("/api/v1/videos/video_upload")
 
     assert response.status_code == 200
     payload = response.json()
@@ -630,7 +731,7 @@ def test_get_video_returns_null_source_url_when_source_expired(monkeypatch) -> N
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
 
-    response = client.get("/videos/video_upload")
+    response = client.get("/api/v1/videos/video_upload")
 
     assert response.status_code == 200
     payload = response.json()
@@ -659,7 +760,7 @@ def test_search_video_accepts_nullable_thumbnail_url(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "robot in blue hoodie"},
     )
 
@@ -704,7 +805,7 @@ def test_search_video_includes_transcript_result_metadata(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "where does he explain the launch plan"},
     )
 
@@ -739,7 +840,7 @@ def test_search_uploaded_video_can_return_transcript_matches(monkeypatch) -> Non
     )
 
     response = client.post(
-        f"/videos/{UPLOAD_VIDEO_ID}/search",
+        f"/api/v1/videos/{UPLOAD_VIDEO_ID}/search",
         json={"query_text": "where does the instructor explain tritone substitution"},
     )
 
@@ -811,7 +912,7 @@ def test_search_video_limit_is_per_result_source(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "where is the cat", "limit": 2},
     )
 
@@ -839,7 +940,7 @@ def test_upload_video_requires_authentication(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Store.upload_source_video", fake_upload)
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -851,7 +952,7 @@ def test_upload_video_requires_authentication(monkeypatch) -> None:
 def test_init_upload_requires_authentication() -> None:
     client = TestClient(app)
     response = client.post(
-        "/videos/upload/init",
+        "/api/v1/videos/upload/init",
         json={"filename": "upload.mp4", "content_type": "video/mp4"},
     )
 
@@ -869,7 +970,7 @@ def test_init_upload_returns_503_when_r2_missing(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/upload/init",
+        "/api/v1/videos/upload/init",
         json={"filename": "upload.mp4", "content_type": "video/mp4"},
     )
 
@@ -888,7 +989,7 @@ def test_init_upload_rejects_when_no_paid_credits_after_free_limit(monkeypatch) 
     )
 
     response = client.post(
-        "/videos/upload/init",
+        "/api/v1/videos/upload/init",
         json={"filename": "upload.mp4", "content_type": "video/mp4"},
     )
 
@@ -920,7 +1021,7 @@ def test_init_upload_allows_paid_user_without_consuming(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
 
     response = client.post(
-        "/videos/upload/init",
+        "/api/v1/videos/upload/init",
         json={"filename": "upload.mp4", "content_type": "video/mp4"},
     )
 
@@ -942,7 +1043,7 @@ def test_init_upload_returns_presigned_url(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
 
     response = client.post(
-        "/videos/upload/init",
+        "/api/v1/videos/upload/init",
         json={"filename": "upload.mp4", "content_type": "video/mp4"},
     )
 
@@ -964,7 +1065,7 @@ def test_upload_video_returns_503_when_r2_missing(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -990,7 +1091,7 @@ def test_upload_video_rejects_when_no_paid_credits_after_free_limit(monkeypatch)
     )
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -1036,7 +1137,7 @@ def test_upload_video_cleans_up_source_on_post_upload_credit_denial(monkeypatch)
     )
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -1079,7 +1180,7 @@ def test_upload_video_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) 
     )
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -1109,7 +1210,7 @@ def test_upload_video_returns_503_when_duration_probe_unavailable(monkeypatch) -
     )
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -1120,7 +1221,7 @@ def test_upload_video_returns_503_when_duration_probe_unavailable(monkeypatch) -
 def test_complete_upload_requires_authentication() -> None:
     client = TestClient(app)
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1133,7 +1234,7 @@ def test_complete_upload_rejects_non_uuid_video_id() -> None:
     _authenticate("user_123")
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": "video_123", "filename": "upload.mp4"},
     )
 
@@ -1157,7 +1258,7 @@ def test_complete_upload_returns_400_when_source_missing(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1170,29 +1271,23 @@ def test_complete_upload_rejects_when_no_paid_credits_after_free_limit(monkeypat
     _authenticate("user_123")
     monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
+    monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: None)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
-
-    class FakeR2Store:
-        def __init__(self, *_args, **_kwargs) -> None:
-            pass
-
-        def source_exists(self, _key: str) -> bool:
-            raise AssertionError("source_exists should not run when precheck denies")
-
     monkeypatch.setattr(
         "src.api.app.R2Config.from_env",
-        lambda: (_ for _ in ()).throw(AssertionError("R2 config should not load")),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("R2 should not load when admit rejects")
+        ),
     )
-    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr(
         "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("create should not run when credits are unavailable")
+            AssertionError("insert should not run when admit rejects")
         ),
     )
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1242,7 +1337,7 @@ def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatc
     )
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1276,7 +1371,7 @@ def test_complete_upload_returns_503_when_duration_probe_unavailable(monkeypatch
     )
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1329,7 +1424,7 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1399,7 +1494,7 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1438,6 +1533,7 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: object())
     monkeypatch.setattr(
         "src.api.app.db_consume_processing_credit",
         lambda _user_id: (_ for _ in ()).throw(
@@ -1458,7 +1554,7 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1467,6 +1563,105 @@ def test_complete_upload_is_idempotent_for_matching_retry(monkeypatch) -> None:
     assert payload["id"] == UPLOAD_VIDEO_ID
     assert payload["status"] == "queued"
     assert payload["source_type"] == "upload"
+
+
+def test_complete_upload_reenqueues_matching_retry_when_job_missing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    existing = VideoRecord(
+        id=UPLOAD_VIDEO_ID,
+        youtube_url=None,
+        status="queued",  # type: ignore[arg-type]
+        user_id="user_123",
+        error_message=None,
+        source_type="upload",
+        source_r2_key=f"source/{UPLOAD_VIDEO_ID}/upload.mp4",
+        source_filename="upload.mp4",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    enqueue_calls: list[str] = []
+
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run for matching retry")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id) or object(),
+    )
+
+    response = client.post(
+        "/api/v1/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 200
+    assert enqueue_calls == [UPLOAD_VIDEO_ID]
+
+
+def test_complete_upload_recovers_failed_retry_without_job_history(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+
+    existing = VideoRecord(
+        id=UPLOAD_VIDEO_ID,
+        youtube_url=None,
+        status="failed",  # type: ignore[arg-type]
+        user_id="user_123",
+        error_message="Failed to enqueue processing job",
+        source_type="upload",
+        source_r2_key=f"source/{UPLOAD_VIDEO_ID}/upload.mp4",
+        source_filename="upload.mp4",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        updated_at=datetime.now(timezone.utc).isoformat(),
+    )
+    enqueue_calls: list[str] = []
+    status_updates: list[tuple[str, str]] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
+
+    def fake_update(video_id: str, status: str, error_message: str | None = None):
+        status_updates.append((video_id, status))
+        existing.status = status  # type: ignore[assignment]
+        existing.error_message = error_message
+        return existing
+
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: existing)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr("src.api.app.update_video_status", fake_update)
+    monkeypatch.setattr(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("create should not run for recoverable retry")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id) or object(),
+    )
+
+    response = client.post(
+        "/api/v1/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 200
+    assert status_updates == [(UPLOAD_VIDEO_ID, "queued")]
+    assert enqueue_calls == [UPLOAD_VIDEO_ID]
+    assert response.json()["status"] == "queued"
 
 
 def test_complete_upload_returns_409_for_mismatched_existing_upload(monkeypatch) -> None:
@@ -1510,7 +1705,7 @@ def test_complete_upload_returns_409_for_mismatched_existing_upload(monkeypatch)
     )
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1544,6 +1739,7 @@ def test_complete_upload_handles_insert_race_as_idempotent_retry(monkeypatch) ->
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: object())
     monkeypatch.setattr(
         "src.api.app.db_insert_uploaded_video_idempotent",
         lambda *args, **kwargs: (existing, False),
@@ -1562,7 +1758,7 @@ def test_complete_upload_handles_insert_race_as_idempotent_retry(monkeypatch) ->
     )
 
     response = client.post(
-        "/videos/upload/complete",
+        "/api/v1/videos/upload/complete",
         json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
     )
 
@@ -1620,7 +1816,7 @@ def test_upload_video_enqueues_job(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.enqueue_video_job", fake_enqueue)
 
     response = client.post(
-        "/videos/upload",
+        "/api/v1/videos/upload",
         files={"file": ("upload.mp4", b"data", "video/mp4")},
     )
 
@@ -1636,7 +1832,7 @@ def test_upload_video_enqueues_job(monkeypatch) -> None:
 def test_search_video_requires_authentication() -> None:
     client = TestClient(app)
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "an elevator"},
     )
 
@@ -1653,7 +1849,7 @@ def test_search_video_returns_404_when_video_not_owned(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "an elevator"},
     )
 
@@ -1674,7 +1870,7 @@ def test_search_video_returns_503_when_backend_fails(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "an elevator"},
     )
 
@@ -1691,7 +1887,7 @@ def test_search_video_rejects_blank_query_text(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "   "},
     )
 
@@ -1731,11 +1927,11 @@ def test_search_video_returns_429_when_rate_limit_exceeded(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.search_video_by_text_service", _fake_search_video_service)
 
     first = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "an elevator"},
     )
     second = client.post(
-        "/videos/video_ready/search",
+        "/api/v1/videos/video_ready/search",
         json={"query_text": "an elevator"},
     )
 
@@ -1750,7 +1946,7 @@ def test_search_video_by_image_requires_authentication() -> None:
     client = TestClient(app)
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
 
@@ -1764,7 +1960,7 @@ def test_search_video_by_image_returns_404_when_video_not_owned(monkeypatch) -> 
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
 
@@ -1781,7 +1977,7 @@ def test_search_video_by_image_returns_400_when_video_not_ready(monkeypatch) -> 
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
 
@@ -1798,7 +1994,7 @@ def test_search_video_by_image_rejects_non_image_content_type(monkeypatch) -> No
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.txt", b"abc", "text/plain")},
     )
 
@@ -1815,7 +2011,7 @@ def test_search_video_by_image_rejects_empty_upload(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", b"", "image/png")},
     )
 
@@ -1836,7 +2032,7 @@ def test_search_video_by_image_rejects_large_upload(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", OVERSIZED_QUERY_IMAGE_BYTES, "image/png")},
     )
 
@@ -1853,7 +2049,7 @@ def test_search_video_by_image_rejects_invalid_image(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", b"not-an-image", "image/png")},
     )
 
@@ -1895,7 +2091,7 @@ def test_search_video_by_image_returns_results(monkeypatch) -> None:
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         data={"limit": "3"},
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
@@ -1936,11 +2132,11 @@ def test_search_video_by_image_returns_429_when_rate_limit_exceeded(monkeypatch)
     )
 
     first = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
     second = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
 
@@ -1962,7 +2158,7 @@ def test_search_video_by_image_returns_503_when_backend_fails(monkeypatch) -> No
     )
 
     response = client.post(
-        "/videos/video_ready/search/image",
+        "/api/v1/videos/video_ready/search/image",
         files={"query_image": ("query.png", QUERY_IMAGE_BYTES, "image/png")},
     )
 
@@ -2002,7 +2198,7 @@ def test_extract_youtube_video_id_rejects_invalid_urls(url: str) -> None:
 def test_billing_checkout_requires_authentication() -> None:
     client = TestClient(app)
 
-    response = client.post("/billing/checkout", json={"plan": "starter"})
+    response = client.post("/api/v1/billing/credits/checkout", json={"plan": "starter"})
 
     assert response.status_code == 401
     assert response.headers.get("www-authenticate") == "Bearer"
@@ -2012,7 +2208,7 @@ def test_billing_checkout_rejects_invalid_plan() -> None:
     client = TestClient(app)
     _authenticate("user_123")
 
-    response = client.post("/billing/checkout", json={"plan": "enterprise"})
+    response = client.post("/api/v1/billing/credits/checkout", json={"plan": "enterprise"})
 
     assert response.status_code == 422
 
@@ -2022,7 +2218,7 @@ def test_billing_checkout_returns_503_when_variant_config_missing(monkeypatch) -
     _authenticate("user_123")
     monkeypatch.delenv("LEMON_SQUEEZY_VARIANT_ID_STARTER", raising=False)
 
-    response = client.post("/billing/checkout", json={"plan": "starter"})
+    response = client.post("/api/v1/billing/credits/checkout", json={"plan": "starter"})
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Billing checkout is not configured"
@@ -2044,7 +2240,7 @@ def test_billing_checkout_creates_starter_session(monkeypatch) -> None:
 
     monkeypatch.setattr("src.api.app.create_checkout_session", fake_create_checkout_session)
 
-    response = client.post("/billing/checkout", json={"plan": "starter"})
+    response = client.post("/api/v1/billing/credits/checkout", json={"plan": "starter"})
 
     assert response.status_code == 200
     assert response.json() == {
@@ -2074,7 +2270,7 @@ def test_billing_checkout_returns_502_when_provider_fails(monkeypatch) -> None:
 
     monkeypatch.setattr("src.api.app.create_checkout_session", _raise_provider_error)
 
-    response = client.post("/billing/checkout", json={"plan": "pro"})
+    response = client.post("/api/v1/billing/credits/checkout", json={"plan": "pro"})
 
     assert response.status_code == 502
     assert response.json()["detail"] == "Billing checkout is temporarily unavailable"
@@ -2581,7 +2777,7 @@ def test_report_unhandled_exceptions_uses_to_thread(monkeypatch) -> None:
         {
             "type": "http",
             "method": "POST",
-            "path": "/videos",
+            "path": "/api/v1/videos",
             "headers": [],
             "query_string": b"",
         }
@@ -2592,7 +2788,7 @@ def test_report_unhandled_exceptions_uses_to_thread(monkeypatch) -> None:
 
     assert len(to_thread_calls) == 1
     assert len(capture_calls) == 1
-    assert capture_calls[0][1] == {"path": "/videos", "method": "POST"}
+    assert capture_calls[0][1] == {"path": "/api/v1/videos", "method": "POST"}
 
 
 # ---------------------------------------------------------------------------

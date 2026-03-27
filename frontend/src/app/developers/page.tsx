@@ -7,7 +7,7 @@ export default function DevelopersPage() {
         Build with Video Moment Finder
       </h1>
       <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-        Index videos and search by text through a REST API and CLI.
+        Agent-ready REST API and CLI for upload, wait, and text search.
       </p>
 
       <section className="mt-12">
@@ -16,7 +16,8 @@ export default function DevelopersPage() {
           <p className="text-sm text-zinc-700 dark:text-zinc-300">
             For agents and coding assistants, start with the public skill file.
             It defines the canonical URLs, security rules, and the supported
-            upload -&gt; wait -&gt; search flow.
+            upload -&gt; wait -&gt; search flow. This is the public contract today;
+            MCP is not shipped yet.
           </p>
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <Link
@@ -38,6 +39,22 @@ export default function DevelopersPage() {
               Swagger UI
             </a>
           </div>
+        </div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="font-heading text-2xl font-bold">Public contract</h2>
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            The published OpenAPI schema covers API keys, developer billing,
+            one-shot upload, direct upload init and complete, status polling,
+            video listing, and text search.
+          </p>
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            Web-only routes like YouTube submit, creator credit checkout, and
+            image search still exist for the signed-in product, but they are
+            intentionally excluded from the public schema.
+          </p>
         </div>
       </section>
 

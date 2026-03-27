@@ -20,7 +20,7 @@ export type ApiUsageEvent = {
 export async function fetchApiBillingSummary(
   token: string,
 ): Promise<ApiBillingSummary> {
-  const response = await fetch(`${API_URL}/api/v1/billing/summary`, {
+  const response = await fetch(`${API_URL}/api/v1/billing/units/summary`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -45,7 +45,7 @@ export async function fetchApiUsageEvents(
     searchParams.set("limit", String(params.limit));
   }
   const qs = searchParams.toString();
-  const url = `${API_URL}/api/v1/billing/usage${qs ? `?${qs}` : ""}`;
+  const url = `${API_URL}/api/v1/billing/units/usage${qs ? `?${qs}` : ""}`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -60,7 +60,7 @@ export async function fetchApiUsageEvents(
 }
 
 export async function startApiCheckout(token: string): Promise<string> {
-  const response = await fetch(`${API_URL}/api/v1/billing/checkout`, {
+  const response = await fetch(`${API_URL}/api/v1/billing/units/checkout`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

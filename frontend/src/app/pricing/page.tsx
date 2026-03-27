@@ -188,7 +188,7 @@ function PricingPageContent() {
 
     setCheckoutPlanLoading(plan);
     try {
-      const response = await fetch(`${API_URL}/billing/checkout`, {
+      const response = await fetch(`${API_URL}/api/v1/billing/credits/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

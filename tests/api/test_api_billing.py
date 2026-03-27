@@ -177,22 +177,8 @@ class TestWebhookRoutingByGrantTarget:
 
 
 class TestApiAdmissionGate:
-    def test_api_key_video_submit_deducts_api_units(self, monkeypatch) -> None:
-        raw_key, record = _setup_api_key_auth(monkeypatch)
-        consumed = {"called": False}
-
-        def mock_consume(**kwargs):
-            consumed["called"] = True
-            assert kwargs["event_type"] == "index_video"
-            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
-
-        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
-        monkeypatch.setattr("src.api.app._validate_video_duration", lambda url: None)
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (_video_record("vid_1"), True),
-        )
-        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
+    def test_api_key_youtube_submit_is_rejected(self, monkeypatch) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
 
         response = client.post(
             "/api/v1/videos",
@@ -200,8 +186,8 @@ class TestApiAdmissionGate:
             headers={"Authorization": f"Bearer {raw_key}"},
         )
 
-        assert response.status_code == 200
-        assert consumed["called"] is True
+        assert response.status_code == 401
+        assert "not accepted" in response.json()["detail"].lower()
 
     def test_jwt_video_submit_uses_web_credits(self, monkeypatch) -> None:
         _authenticate("user_123")
@@ -230,14 +216,12 @@ class TestApiAdmissionGate:
         assert response.status_code == 200
         assert consumed_web["called"] is True
 
-    def test_insufficient_api_units_returns_402(self, monkeypatch) -> None:
-        raw_key, record = _setup_api_key_auth(monkeypatch)
-
-        monkeypatch.setattr(
-            "src.api.app.db_consume_api_units",
-            lambda **kwargs: ApiUnitConsumeResult(allowed=False, remaining_balance=0),
-        )
+    def test_jwt_youtube_submit_returns_402_when_web_credits_missing(self, monkeypatch) -> None:
+        _setup_api_key_auth(monkeypatch)
         monkeypatch.setattr("src.api.app._validate_video_duration", lambda url: None)
+        monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+        monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 1)
+        monkeypatch.setattr("src.api.app.db_get_credits", lambda _uid: None)
         monkeypatch.setattr(
             "src.api.app.db_insert_youtube_video_idempotent",
             lambda url, uid: (_video_record("vid_3"), True),
@@ -247,14 +231,14 @@ class TestApiAdmissionGate:
             lambda *a, **kw: None,
         )
 
+        _authenticate("user_123")
         response = client.post(
             "/api/v1/videos",
             json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
         )
 
         assert response.status_code == 402
-        assert response.json()["detail"]["code"] == "insufficient_api_units"
+        assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +346,7 @@ class TestApiCheckout:
         monkeypatch.setattr("src.api.app.create_checkout_session", mock_checkout)
 
         response = client.post(
-            "/api/v1/billing/checkout",
+            "/api/v1/billing/units/checkout",
             json={"plan": "developer"},
         )
 
@@ -373,7 +357,7 @@ class TestApiCheckout:
         _authenticate("user_123")
 
         response = client.post(
-            "/api/v1/billing/checkout",
+            "/api/v1/billing/units/checkout",
             json={"plan": "starter"},
         )
 
@@ -395,7 +379,7 @@ class TestApiBillingSummary:
             ),
         )
 
-        response = client.get("/api/v1/billing/summary")
+        response = client.get("/api/v1/billing/units/summary")
 
         assert response.status_code == 200
         data = response.json()
@@ -407,7 +391,7 @@ class TestApiBillingSummary:
         _authenticate("user_123")
         monkeypatch.setattr("src.api.app.db_get_api_credits", lambda uid: None)
 
-        response = client.get("/api/v1/billing/summary")
+        response = client.get("/api/v1/billing/units/summary")
 
         assert response.status_code == 200
         data = response.json()
@@ -440,7 +424,7 @@ class TestApiUsageEvents:
             ],
         )
 
-        response = client.get("/api/v1/billing/usage")
+        response = client.get("/api/v1/billing/units/usage")
 
         assert response.status_code == 200
         data = response.json()
@@ -457,7 +441,7 @@ class TestApiUsageEvents:
 
         monkeypatch.setattr("src.api.app.db_list_api_usage_events", mock_list)
 
-        response = client.get("/api/v1/billing/usage?api_key_id=key_abc")
+        response = client.get("/api/v1/billing/units/usage?api_key_id=key_abc")
 
         assert response.status_code == 200
         assert captured_kwargs["api_key_id"] == "key_abc"
@@ -621,6 +605,64 @@ class TestApiKeyUploadBilling:
 
         assert response.status_code == 402
         assert any(s == "failed" for _, s in status_updates)
+
+    def test_api_key_complete_upload_recovers_failed_retry_without_job_history(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+        enqueue_calls: list[str] = []
+        status_updates: list[tuple[str, str]] = []
+        existing = _upload_video_record(
+            "00000000-0000-4000-8000-000000000c03",
+            status="failed",
+        )
+        existing.error_message = "Failed to enqueue processing job"
+        existing.source_r2_key = f"source/{existing.id}/upload.mp4"
+        existing.source_filename = "upload.mp4"
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
+
+        class FakeR2Store:
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            def source_exists(self, key):
+                return True
+
+        def mock_update_status(vid, status, error_message=None):
+            status_updates.append((vid, status))
+            existing.status = status  # type: ignore[assignment]
+            existing.error_message = error_message
+            return existing
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: existing)
+        monkeypatch.setattr("src.api.app.db_get_video_job", lambda _vid: None)
+        monkeypatch.setattr("src.api.app.update_video_status", mock_update_status)
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+        monkeypatch.setattr(
+            "src.api.app.db_insert_uploaded_video_idempotent",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("create should not run for recoverable retry")
+            ),
+        )
+        monkeypatch.setattr(
+            "src.api.app.enqueue_video_job",
+            lambda vid: enqueue_calls.append(vid) or object(),
+        )
+
+        response = client.post(
+            "/api/v1/videos/upload/complete",
+            json={"video_id": existing.id, "filename": "upload.mp4"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 200
+        assert consumed["called"] is True
+        assert status_updates == [(existing.id, "queued")]
+        assert enqueue_calls == [existing.id]
 
     def test_api_key_simple_upload_deducts_api_units(self, monkeypatch) -> None:
         raw_key, record = _setup_api_key_auth(monkeypatch)
@@ -822,3 +864,39 @@ class TestApiKeySearchValidation:
 
         assert response.status_code == 400
         assert consumed["called"] is False
+
+    def test_api_key_search_backend_failure_compensates_units(self, monkeypatch) -> None:
+        raw_key, record = _setup_api_key_auth(monkeypatch)
+        consumed: list[dict] = []
+        compensated: list[dict] = []
+
+        def mock_consume(**kwargs):
+            consumed.append(kwargs)
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=9999)
+
+        def mock_compensate(**kwargs):
+            compensated.append(kwargs)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _upload_video_record(vid, status="ready"),
+        )
+        monkeypatch.setattr(
+            "src.api.app.search_video_by_text_service",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("qdrant down")),
+        )
+
+        response = client.post(
+            "/api/v1/videos/test-vid/search",
+            json={"query_text": "hello"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 503
+        assert len(consumed) == 1
+        assert len(compensated) == 1
+        assert consumed[0]["request_id"] == compensated[0]["request_id"]
+        assert compensated[0]["units"] == 1
+        assert compensated[0]["video_id"] == "test-vid"

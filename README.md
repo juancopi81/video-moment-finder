@@ -5,6 +5,14 @@ Process a video, run text or image queries, and jump to matching timestamps.
 
 **Live site:** [videomomentfinder.com](https://videomomentfinder.com)
 
+Public agent entrypoints:
+
+- [developers](https://www.videomomentfinder.com/developers)
+- [skill.md](https://www.videomomentfinder.com/skill.md)
+- [openapi.json](https://api.videomomentfinder.com/openapi.json)
+
+Today the external integration surface is an agent-ready REST API plus CLI. MCP is not shipped yet.
+
 ## What It Does
 
 - Accepts direct video uploads as the reliable ingest path.
@@ -16,6 +24,7 @@ Process a video, run text or image queries, and jump to matching timestamps.
 - Returns top timestamped matches for text or example-image queries, with thumbnails when visual matches are available.
 - For text queries, the `limit` applies per result group: up to `limit` visual matches and up to `limit` spoken matches.
 - Exposes the upload, poll, and text-search happy path through a thin CLI over `/api/v1`.
+- Publishes a curated public OpenAPI schema for the same upload, poll, and text-search contract.
 
 Current transcript scope:
 
@@ -116,6 +125,7 @@ YouTube URL import remains best effort and may be blocked by server-side restric
 - [STATUS.md](./STATUS.md): execution history only.
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
 - [docs/CLI_API_GUIDE.md](./docs/CLI_API_GUIDE.md): public CLI and external API happy-path guide.
+- [frontend/public/skill.md](./frontend/public/skill.md): public agent bootstrap with canonical URLs and security rules.
 
 ## Deployment (At a Glance)
 

@@ -83,7 +83,7 @@ function DashboardPageContent() {
           throw new Error("Please sign in to continue.");
         }
 
-        const videosResponse = await fetch(`${API_URL}/users/me/videos`, {
+        const videosResponse = await fetch(`${API_URL}/api/v1/videos`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
