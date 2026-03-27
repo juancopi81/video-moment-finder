@@ -217,8 +217,7 @@ class TestApiAdmissionGate:
         assert consumed_web["called"] is True
 
     def test_jwt_youtube_submit_returns_402_when_web_credits_missing(self, monkeypatch) -> None:
-        raw_key, record = _setup_api_key_auth(monkeypatch)
-        _ = raw_key, record
+        _setup_api_key_auth(monkeypatch)
         monkeypatch.setattr("src.api.app._validate_video_duration", lambda url: None)
         monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
         monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 1)
