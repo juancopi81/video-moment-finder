@@ -1273,29 +1273,16 @@ def test_complete_upload_rejects_when_no_paid_credits_after_free_limit(monkeypat
     monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _user_id: 1)
     monkeypatch.setattr("src.api.app.db_get_credits", lambda _user_id: None)
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
-
-    class FakeR2Store:
-        def __init__(self, *_args, **_kwargs) -> None:
-            pass
-
-        def source_exists(self, _key: str) -> bool:
-            return True
-
-    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
-    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
     monkeypatch.setattr(
-        "src.api.app._validate_uploaded_source_duration_with_cleanup",
-        lambda store, key, user_id: None,
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("R2 should not load when admit rejects")
+        ),
     )
-    status_updates: list[tuple[str, str, str | None]] = []
     monkeypatch.setattr(
         "src.api.app.db_insert_uploaded_video_idempotent",
-        lambda *args, **kwargs: (_upload_video_record(UPLOAD_VIDEO_ID), True),
-    )
-    monkeypatch.setattr(
-        "src.api.app.update_video_status",
-        lambda video_id, status, error_message=None: status_updates.append(
-            (video_id, status, error_message)
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("insert should not run when admit rejects")
         ),
     )
 
@@ -1306,7 +1293,6 @@ def test_complete_upload_rejects_when_no_paid_credits_after_free_limit(monkeypat
 
     assert response.status_code == 402
     assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
-    assert status_updates == [(UPLOAD_VIDEO_ID, "failed", "Insufficient credits")]
 
 
 def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) -> None:

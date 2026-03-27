@@ -1174,10 +1174,13 @@ def _complete_upload_core(
     filename: str,
     user_id: str,
     bill: Callable[[VideoRecord], None],
+    admit: Callable[[], None] | None = None,
 ) -> VideoResponse:
     """Shared upload-complete flow for both JWT and API-key paths.
 
-    ``bill`` is called with the video record and should raise on failure.
+    ``admit`` runs after the idempotent check but before R2 validation and
+    DB insert — the correct point for free-tier / credit pre-checks.
+    ``bill`` runs after the DB insert and should raise on failure.
     """
     key = source_key(video_id, filename)
 
@@ -1194,6 +1197,9 @@ def _complete_upload_core(
         else:
             _ensure_enqueued(existing)
             return _video_record_to_response(existing)
+
+    if admit is not None:
+        admit()
 
     try:
         r2_config = R2Config.from_env()
@@ -1257,18 +1263,25 @@ def complete_upload(
     """Finalize a presigned upload and enqueue processing."""
     _enforce_user_write_rate_limit(user_id)
     filename = _sanitize_filename(request.filename)
+    requires_credit = False
+
+    def _admit() -> None:
+        nonlocal requires_credit
+        requires_credit = _precheck_video_processing_admission(user_id)
 
     def _bill_web_credits(record: VideoRecord) -> None:
+        if not requires_credit:
+            return
         try:
-            if not _precheck_video_processing_admission(user_id):
-                return
             _consume_processing_credit_or_raise(user_id)
         except HTTPException as exc:
             if exc.status_code == 402:
                 update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
             raise
 
-    return _complete_upload_core(request.video_id, filename, user_id, _bill_web_credits)
+    return _complete_upload_core(
+        request.video_id, filename, user_id, _bill_web_credits, admit=_admit,
+    )
 
 
 def get_video(
