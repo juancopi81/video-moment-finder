@@ -44,7 +44,6 @@ from src.db.supabase import (
     consume_processing_credit as db_consume_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
     create_api_key as db_create_api_key,
-    create_video as db_create_video,
     create_uploaded_video as db_create_uploaded_video,
     enqueue_video_job,
     get_api_credits as db_get_api_credits,
@@ -1039,20 +1038,6 @@ def analytics_event(
     track(request.event_name, user_id=user_id, metadata=request.metadata)
 
 
-def create_video(
-    request: VideoCreateRequest,
-    user_id: str = Depends(get_current_user_id),
-) -> VideoResponse:
-    """Create a new video and enqueue durable processing job."""
-    _enforce_user_write_rate_limit(user_id)
-    _validate_video_duration(request.youtube_url)
-    _consume_and_admit_video_processing(user_id)
-    record = db_create_video(request.youtube_url, user_id=user_id, status="queued")
-    _enqueue_video_or_fail(record.id)
-    track("video_submitted", user_id=user_id, metadata={"source_type": "youtube"})
-    return _video_record_to_response(record)
-
-
 def _try_cleanup_r2(store: R2Store, key: str, user_id: str) -> None:
     """Best-effort delete of an R2 object. Logs on failure, never raises."""
     try:
@@ -1883,9 +1868,9 @@ def v1_complete_upload(
             video_id=request.video_id,
         )
     except HTTPException as exc:
-            if exc.status_code == 402:
-                update_video_status(record.id, "failed", error_message="Insufficient credits")
-            raise
+        if exc.status_code == 402:
+            update_video_status(record.id, "failed", error_message="Insufficient credits")
+        raise
 
     if retry_record is not None:
         record = _reset_upload_retry_record(record)

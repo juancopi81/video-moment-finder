@@ -148,6 +148,108 @@ def test_create_video_returns_500_when_enqueue_fails(monkeypatch) -> None:
     assert failure_updates == []
 
 
+def test_create_video_retry_returns_existing_without_double_billing(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    existing = _video_record("video_retry", status="queued")
+
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (existing, False),
+    )
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: object())
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("credit consume should not run for matching retry")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda _video_id: (_ for _ in ()).throw(
+            AssertionError("enqueue should not run when job history exists")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "video_retry"
+
+
+def test_create_video_retry_reenqueues_stranded_video(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    stranded = _video_record("video_stranded", status="queued")
+    enqueue_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (stranded, False),
+    )
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id) or object(),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda _user_id: (_ for _ in ()).throw(
+            AssertionError("credit consume should not run for queued retry")
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "video_stranded"
+    assert enqueue_calls == ["video_stranded"]
+
+
+def test_create_video_retry_returns_503_when_reenqueue_fails(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    stranded = _video_record("video_stranded_fail", status="queued")
+
+    monkeypatch.setattr(
+        "src.api.app.fetch_video_metadata",
+        lambda _: VideoMetadata(duration_s=120.0, is_live=False),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_youtube_video_idempotent",
+        lambda youtube_url, user_id=None: (stranded, False),
+    )
+    monkeypatch.setattr("src.api.app.db_get_video_job", lambda _video_id: None)
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda _video_id: (_ for _ in ()).throw(RuntimeError("queue down")),
+    )
+
+    response = client.post(
+        "/api/v1/videos",
+        json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Video was created but processing could not be started. Please retry."
+    )
+
+
 def test_create_video_rejects_non_video_youtube_url() -> None:
     client = TestClient(app)
     _authenticate("user_123")
