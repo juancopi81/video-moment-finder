@@ -9,13 +9,11 @@ from fastapi.testclient import TestClient
 
 from src.api.app import app
 from src.api.auth import AuthIdentity
-from src.db.supabase import ApiKeyRecord, ProcessingCreditConsumeResult, VideoRecord
-from src.video.download import VideoMetadata
+from src.db.supabase import ApiKeyRecord, VideoRecord
 
 from tests.api.conftest import (
     _authenticate,
     _make_api_key_record,
-    _mock_api_key_auth,
     _setup_api_key_auth,
     _video_record,
 )
@@ -147,7 +145,25 @@ class TestApiKeyAuth:
 
 
 class TestApiKeyScopeRestriction:
-    """API keys must not authenticate legacy @app routes."""
+    """API keys must not authenticate internal or removed client routes."""
+
+    @pytest.mark.parametrize("method,path,payload", [
+        ("get", f"{V1}/billing/credits/summary", None),
+        ("post", f"{V1}/billing/credits/checkout", {"plan": "starter"}),
+        ("post", f"{V1}/videos", {"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"}),
+        ("post", f"{V1}/videos/video_ready/search/image", None),
+    ])
+    def test_api_key_rejected_on_internal_v1_route(self, monkeypatch, method, path, payload):
+        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_scope")
+
+        kwargs: dict = {"headers": {"Authorization": f"Bearer {raw_key}"}}
+        if path.endswith("/search/image"):
+            kwargs["files"] = {"query_image": ("query.png", b"image-data", "image/png")}
+        elif payload is not None:
+            kwargs["json"] = payload
+        resp = getattr(client, method)(path, **kwargs)
+        assert resp.status_code == 401
+        assert "not accepted" in resp.json()["detail"].lower()
 
     @pytest.mark.parametrize("method,path,payload", [
         ("get", "/users/me/videos", None),
@@ -155,15 +171,14 @@ class TestApiKeyScopeRestriction:
         ("post", "/billing/checkout", {"plan": "starter"}),
         ("post", "/videos", {"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"}),
     ])
-    def test_api_key_rejected_on_legacy_route(self, monkeypatch, method, path, payload):
+    def test_removed_legacy_client_route_returns_404(self, monkeypatch, method, path, payload):
         raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_scope")
 
         kwargs: dict = {"headers": {"Authorization": f"Bearer {raw_key}"}}
         if payload is not None:
             kwargs["json"] = payload
         resp = getattr(client, method)(path, **kwargs)
-        assert resp.status_code == 401
-        assert "not accepted" in resp.json()["detail"].lower()
+        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -202,246 +217,7 @@ class TestAuthIdentityAttribution:
         assert identity.api_key_id is None
 
 
-# ---------------------------------------------------------------------------
-# Quota enforcement
-# ---------------------------------------------------------------------------
-
-
-class TestApiKeyQuota:
-    def test_api_key_auth_triggers_credit_check(self, monkeypatch):
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_quota")
-
-        # Simulate credit check failure (free tier, no credits).
-        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: False)
-        monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 1)
-        monkeypatch.setattr("src.api.app.db_get_credits", lambda _uid: None)
-        monkeypatch.setattr(
-            "src.api.app.db_consume_processing_credit",
-            lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
-        )
-
-        # RPC inserts successfully, then billing fails.
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (_video_record("quota-vid-id", status="queued"), True),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        monkeypatch.setattr("src.api.app.update_video_status", lambda vid, status, error_message=None: None)
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 402
-
-
-# ---------------------------------------------------------------------------
-# Retry-safe idempotency (no double billing)
-# ---------------------------------------------------------------------------
-
-
 class TestRetryIdempotency:
-    def test_youtube_retry_returns_existing_without_credit(self, monkeypatch):
-        """Retrying a YouTube video submit must return the existing record
-        without consuming another credit (atomic RPC-level dedup)."""
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_retry")
-
-        existing = _video_record("existing-vid-id", status="queued")
-
-        # RPC returns (existing_record, was_created=False) — simulates a retry
-        # where the first request already inserted the row.
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (existing, False),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        # If credit consumption were called, it would fail — proving no double billing.
-        monkeypatch.setattr(
-            "src.api.app.db_consume_processing_credit",
-            lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
-        )
-        # Job exists — normal retry, no re-enqueue needed.
-        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: object())
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["id"] == "existing-vid-id"
-
-    def test_youtube_new_url_creates_and_bills(self, monkeypatch):
-        """A new YouTube URL inserts via RPC and consumes credit."""
-        from src.db.supabase import ApiUnitConsumeResult
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_new")
-
-        created_video = _video_record("new-vid-id", status="queued")
-
-        # RPC returns (new_record, was_created=True)
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (created_video, True),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: None)
-        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
-        monkeypatch.setattr(
-            "src.api.app.db_consume_api_units",
-            lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=9500),
-        )
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["id"] == "new-vid-id"
-
-    def test_youtube_billing_failure_marks_video_failed(self, monkeypatch):
-        """If billing fails after atomic insert, the video is marked failed."""
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_fail")
-
-        created_video = _video_record("fail-vid-id", status="queued")
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (created_video, True),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: False)
-        monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 1)
-        monkeypatch.setattr("src.api.app.db_get_credits", lambda _uid: None)
-        monkeypatch.setattr(
-            "src.api.app.db_consume_processing_credit",
-            lambda _uid: ProcessingCreditConsumeResult(allowed=False, remaining_balance=0),
-        )
-
-        status_updates: list[tuple[str, str]] = []
-        monkeypatch.setattr(
-            "src.api.app.update_video_status",
-            lambda vid, status, error_message=None: status_updates.append((vid, status)),
-        )
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 402
-        assert ("fail-vid-id", "failed") in status_updates
-
-    def test_youtube_enqueue_failure_preserves_dedupe_anchor(self, monkeypatch):
-        """Enqueue failure must NOT mark the row failed, so retries still find
-        the dedupe anchor and don't consume another credit."""
-        from src.db.supabase import ApiUnitConsumeResult
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_enq_fail")
-
-        created_video = _video_record("enq-fail-vid", status="queued")
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (created_video, True),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        monkeypatch.setattr("src.api.app.db_has_unlimited_video_access", lambda _uid: True)
-        monkeypatch.setattr(
-            "src.api.app.db_consume_api_units",
-            lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=9500),
-        )
-
-        # Enqueue fails — should NOT mark row failed.
-        monkeypatch.setattr(
-            "src.api.app.enqueue_video_job",
-            lambda vid: (_ for _ in ()).throw(RuntimeError("queue down")),
-        )
-
-        status_updates: list[tuple[str, str]] = []
-        monkeypatch.setattr(
-            "src.api.app.update_video_status",
-            lambda vid, status, error_message=None: status_updates.append((vid, status)),
-        )
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 500
-        # Critical: the row must NOT be marked failed.
-        assert ("enq-fail-vid", "failed") not in status_updates
-
-    def test_youtube_retry_re_enqueues_stranded_video(self, monkeypatch):
-        """A retry that finds a queued video with no job row must re-enqueue it."""
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_strand")
-
-        stranded = _video_record("stranded-vid", status="queued")
-
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (stranded, False),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        # No existing job row — the original enqueue failed.
-        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: None)
-
-        enqueued: list[str] = []
-        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: enqueued.append(vid))
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 200
-        assert resp.json()["id"] == "stranded-vid"
-        assert "stranded-vid" in enqueued
-
-    def test_youtube_retry_returns_503_when_re_enqueue_fails(self, monkeypatch):
-        """If a retry finds a stranded video and re-enqueue also fails, return 503."""
-        raw_key, _ = _setup_api_key_auth(monkeypatch, user_id="user_strand2")
-
-        stranded = _video_record("stranded-vid-2", status="queued")
-
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (stranded, False),
-        )
-        monkeypatch.setattr(
-            "src.api.app.fetch_video_metadata",
-            lambda _: VideoMetadata(duration_s=60.0, is_live=False),
-        )
-        monkeypatch.setattr("src.api.app.db_get_video_job", lambda vid: None)
-        monkeypatch.setattr(
-            "src.api.app.enqueue_video_job",
-            lambda vid: (_ for _ in ()).throw(RuntimeError("queue down")),
-        )
-
-        resp = client.post(
-            f"{V1}/videos",
-            json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
-        )
-        assert resp.status_code == 503
-
     def test_upload_idempotency_key_returns_existing(self, monkeypatch):
         """Upload retry with same Idempotency-Key must return existing record
         without doing R2 upload or billing (fast-path early exit)."""

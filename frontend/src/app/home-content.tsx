@@ -66,7 +66,7 @@ export default function HomeContent() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/videos`, {
+      const response = await fetch(`${API_URL}/api/v1/videos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -125,7 +125,7 @@ export default function HomeContent() {
         return;
       }
 
-      const initResponse = await fetch(`${API_URL}/videos/upload/init`, {
+      const initResponse = await fetch(`${API_URL}/api/v1/videos/upload/init`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -172,7 +172,7 @@ export default function HomeContent() {
         request.send(uploadFile);
       });
 
-      const completeResponse = await fetch(`${API_URL}/videos/upload/complete`, {
+      const completeResponse = await fetch(`${API_URL}/api/v1/videos/upload/complete`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

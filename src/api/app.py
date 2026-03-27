@@ -1035,7 +1035,6 @@ def analytics_event(
     track(request.event_name, user_id=user_id, metadata=request.metadata)
 
 
-@app.post("/videos", response_model=VideoResponse)
 def create_video(
     request: VideoCreateRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1098,7 +1097,6 @@ def _validate_and_upload_file(
     return store, upload_result, filename, requires_credit
 
 
-@app.post("/videos/upload", response_model=VideoResponse)
 def upload_video(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id),
@@ -1128,7 +1126,6 @@ def upload_video(
     return _video_record_to_response(record)
 
 
-@app.post("/videos/upload/init", response_model=UploadInitResponse)
 def init_upload(
     request: UploadInitRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1174,7 +1171,6 @@ def init_upload(
     )
 
 
-@app.post("/videos/upload/complete", response_model=VideoResponse)
 def complete_upload(
     request: UploadCompleteRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1265,7 +1261,6 @@ def complete_upload(
     return _video_record_to_response(record)
 
 
-@app.get("/videos/{video_id}", response_model=VideoResponse)
 def get_video(
     video_id: str,
     user_id: str = Depends(get_current_user_id),
@@ -1278,7 +1273,6 @@ def get_video(
     return _video_record_to_response(record)
 
 
-@app.get("/users/me/videos", response_model=list[VideoResponse])
 def list_my_videos(
     user_id: str = Depends(get_current_user_id),
 ) -> list[VideoResponse]:
@@ -1287,7 +1281,6 @@ def list_my_videos(
     return [_video_record_to_response(record) for record in records]
 
 
-@app.get("/users/me/billing-summary", response_model=BillingSummaryResponse)
 def get_billing_summary(
     user_id: str = Depends(get_current_user_id),
 ) -> BillingSummaryResponse:
@@ -1309,7 +1302,6 @@ def get_billing_summary(
     )
 
 
-@app.post("/videos/{video_id}/search", response_model=VideoSearchResponse)
 def search_video(
     video_id: str,
     request: VideoSearchRequest,
@@ -1336,7 +1328,6 @@ def search_video(
     return _build_video_search_response(record, results)
 
 
-@app.post("/videos/{video_id}/search/image", response_model=VideoSearchResponse)
 def search_video_by_image(
     video_id: str,
     query_image: UploadFile = File(...),
@@ -1368,7 +1359,6 @@ def search_video_by_image(
     return _build_video_search_response(record, results)
 
 
-@app.post("/billing/checkout", response_model=BillingCheckoutResponse)
 def create_billing_checkout(
     request: BillingCheckoutRequest,
     user_id: str = Depends(get_current_user_id),
@@ -1569,48 +1559,39 @@ def revoke_api_key(
 
 
 # ---------------------------------------------------------------------------
-# Versioned external API (v1) — accepts both JWT and API key auth
+# Versioned API (v1)
 # ---------------------------------------------------------------------------
 
-# Thin v1 wrappers that accept API keys (via get_current_user) and delegate
-# to the shared business logic.  Legacy @app routes keep get_current_user_id
-# (JWT-only) so API keys are scoped to /api/v1/ only.
+# Public developer routes accept JWT or API keys when appropriate.
+# Internal web-only v1 routes remain JWT-only and are excluded from the
+# curated public schema.
 
 
 def v1_create_video(
     request: VideoCreateRequest,
-    identity: AuthIdentity = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
-    _enforce_user_write_rate_limit(identity.user_id)
+    _enforce_user_write_rate_limit(user_id)
     _validate_video_duration(request.youtube_url)
 
     # Atomic insert: the unique partial index on (user_id, youtube_url) serializes
     # concurrent retries at the DB level.  The record exists BEFORE billing so a
     # racing retry sees it and short-circuits — no double charge.
     record, created = db_insert_youtube_video_idempotent(
-        request.youtube_url, identity.user_id
+        request.youtube_url, user_id
     )
     if not created:
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 
     try:
-        if identity.auth_method == "api_key":
-            _consume_api_units_or_raise(
-                user_id=identity.user_id,
-                api_key_id=identity.api_key_id,
-                event_type="index_video",
-                units=API_UNIT_COST_INDEX_VIDEO,
-                video_id=record.id,
-            )
-        else:
-            _consume_and_admit_video_processing(identity.user_id)
+        _consume_and_admit_video_processing(user_id)
     except HTTPException:
         update_video_status(record.id, "failed", error_message="Insufficient credits")
         raise
 
     _enqueue_or_raise(record.id)
-    track("video_submitted", user_id=identity.user_id, metadata={"source_type": "youtube"})
+    track("video_submitted", user_id=user_id, metadata={"source_type": "youtube"})
     return _video_record_to_response(record)
 
 
@@ -1969,6 +1950,33 @@ def v1_search_video(
     return _build_video_search_response(record, results)
 
 
+def v1_search_video_by_image(
+    video_id: str,
+    query_image: UploadFile = File(...),
+    limit: int = Form(default=5, ge=1, le=20),
+    user_id: str = Depends(get_current_user_id),
+) -> VideoSearchResponse:
+    return search_video_by_image(
+        video_id=video_id,
+        query_image=query_image,
+        limit=limit,
+        user_id=user_id,
+    )
+
+
+def v1_billing_credits_summary(
+    user_id: str = Depends(get_current_user_id),
+) -> BillingSummaryResponse:
+    return get_billing_summary(user_id=user_id)
+
+
+def v1_billing_credits_checkout(
+    request: BillingCheckoutRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> BillingCheckoutResponse:
+    return create_billing_checkout(request, user_id=user_id)
+
+
 # ---------------------------------------------------------------------------
 # API billing endpoints (v1)
 # ---------------------------------------------------------------------------
@@ -2054,26 +2062,115 @@ def v1_api_billing_usage(
     ]
 
 
-v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+public_v1_router = APIRouter(prefix="/api/v1", tags=["v1"])
+internal_v1_router = APIRouter(prefix="/api/v1", tags=["v1-internal"])
 
-# Billing — static paths registered first.
-v1_router.add_api_route("/billing/checkout", v1_api_billing_checkout, methods=["POST"], response_model=BillingCheckoutResponse)
-v1_router.add_api_route("/billing/summary", v1_api_billing_summary, methods=["GET"], response_model=ApiBillingSummaryResponse)
-v1_router.add_api_route("/billing/usage", v1_api_billing_usage, methods=["GET"], response_model=list[ApiUsageEventResponse])
+# Public developer billing.
+public_v1_router.add_api_route(
+    "/billing/units/checkout",
+    v1_api_billing_checkout,
+    methods=["POST"],
+    response_model=BillingCheckoutResponse,
+)
+public_v1_router.add_api_route(
+    "/billing/units/summary",
+    v1_api_billing_summary,
+    methods=["GET"],
+    response_model=ApiBillingSummaryResponse,
+)
+public_v1_router.add_api_route(
+    "/billing/units/usage",
+    v1_api_billing_usage,
+    methods=["GET"],
+    response_model=list[ApiUsageEventResponse],
+)
+
+# Internal web billing.
+internal_v1_router.add_api_route(
+    "/billing/credits/summary",
+    v1_billing_credits_summary,
+    methods=["GET"],
+    response_model=BillingSummaryResponse,
+)
+internal_v1_router.add_api_route(
+    "/billing/credits/checkout",
+    v1_billing_credits_checkout,
+    methods=["POST"],
+    response_model=BillingCheckoutResponse,
+)
 
 # Key management — static paths registered before parameterized /videos/{id}.
-v1_router.add_api_route("/keys", create_api_key, methods=["POST"], response_model=ApiKeyCreatedResponse, status_code=201)
-v1_router.add_api_route("/keys", list_api_keys, methods=["GET"], response_model=list[ApiKeyResponse])
-v1_router.add_api_route("/keys/{key_id}", revoke_api_key, methods=["DELETE"], status_code=204)
+public_v1_router.add_api_route(
+    "/keys",
+    create_api_key,
+    methods=["POST"],
+    response_model=ApiKeyCreatedResponse,
+    status_code=201,
+)
+public_v1_router.add_api_route(
+    "/keys",
+    list_api_keys,
+    methods=["GET"],
+    response_model=list[ApiKeyResponse],
+)
+public_v1_router.add_api_route(
+    "/keys/{key_id}",
+    revoke_api_key,
+    methods=["DELETE"],
+    status_code=204,
+)
 
 # Static paths first (Starlette matches by registration order).
-v1_router.add_api_route("/videos/upload", v1_upload_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/upload/init", v1_init_upload, methods=["POST"], response_model=UploadInitResponse)
-v1_router.add_api_route("/videos/upload/complete", v1_complete_upload, methods=["POST"], response_model=VideoResponse)
-# Collection + parameterized paths.
-v1_router.add_api_route("/videos", v1_create_video, methods=["POST"], response_model=VideoResponse)
-v1_router.add_api_route("/videos", v1_list_my_videos, methods=["GET"], response_model=list[VideoResponse])
-v1_router.add_api_route("/videos/{video_id}", v1_get_video, methods=["GET"], response_model=VideoResponse)
-v1_router.add_api_route("/videos/{video_id}/search", v1_search_video, methods=["POST"], response_model=VideoSearchResponse)
+public_v1_router.add_api_route(
+    "/videos/upload",
+    v1_upload_video,
+    methods=["POST"],
+    response_model=VideoResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/upload/init",
+    v1_init_upload,
+    methods=["POST"],
+    response_model=UploadInitResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/upload/complete",
+    v1_complete_upload,
+    methods=["POST"],
+    response_model=VideoResponse,
+)
 
-app.include_router(v1_router)
+# Collection + parameterized paths.
+public_v1_router.add_api_route(
+    "/videos",
+    v1_list_my_videos,
+    methods=["GET"],
+    response_model=list[VideoResponse],
+)
+internal_v1_router.add_api_route(
+    "/videos",
+    v1_create_video,
+    methods=["POST"],
+    response_model=VideoResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/{video_id}",
+    v1_get_video,
+    methods=["GET"],
+    response_model=VideoResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/{video_id}/search",
+    v1_search_video,
+    methods=["POST"],
+    response_model=VideoSearchResponse,
+)
+internal_v1_router.add_api_route(
+    "/videos/{video_id}/search/image",
+    v1_search_video_by_image,
+    methods=["POST"],
+    response_model=VideoSearchResponse,
+)
+
+app.include_router(public_v1_router)
+app.include_router(internal_v1_router)

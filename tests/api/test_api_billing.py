@@ -177,22 +177,8 @@ class TestWebhookRoutingByGrantTarget:
 
 
 class TestApiAdmissionGate:
-    def test_api_key_video_submit_deducts_api_units(self, monkeypatch) -> None:
-        raw_key, record = _setup_api_key_auth(monkeypatch)
-        consumed = {"called": False}
-
-        def mock_consume(**kwargs):
-            consumed["called"] = True
-            assert kwargs["event_type"] == "index_video"
-            return ApiUnitConsumeResult(allowed=True, remaining_balance=9500)
-
-        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
-        monkeypatch.setattr("src.api.app._validate_video_duration", lambda url: None)
-        monkeypatch.setattr(
-            "src.api.app.db_insert_youtube_video_idempotent",
-            lambda url, uid: (_video_record("vid_1"), True),
-        )
-        monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
+    def test_api_key_youtube_submit_is_rejected(self, monkeypatch) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
 
         response = client.post(
             "/api/v1/videos",
@@ -200,8 +186,8 @@ class TestApiAdmissionGate:
             headers={"Authorization": f"Bearer {raw_key}"},
         )
 
-        assert response.status_code == 200
-        assert consumed["called"] is True
+        assert response.status_code == 401
+        assert "not accepted" in response.json()["detail"].lower()
 
     def test_jwt_video_submit_uses_web_credits(self, monkeypatch) -> None:
         _authenticate("user_123")
@@ -230,14 +216,13 @@ class TestApiAdmissionGate:
         assert response.status_code == 200
         assert consumed_web["called"] is True
 
-    def test_insufficient_api_units_returns_402(self, monkeypatch) -> None:
+    def test_jwt_youtube_submit_returns_402_when_web_credits_missing(self, monkeypatch) -> None:
         raw_key, record = _setup_api_key_auth(monkeypatch)
-
-        monkeypatch.setattr(
-            "src.api.app.db_consume_api_units",
-            lambda **kwargs: ApiUnitConsumeResult(allowed=False, remaining_balance=0),
-        )
+        _ = raw_key, record
         monkeypatch.setattr("src.api.app._validate_video_duration", lambda url: None)
+        monkeypatch.setenv("VIDEO_MAX_FREE_VIDEOS", "1")
+        monkeypatch.setattr("src.api.app.db_count_videos_for_user", lambda _uid: 1)
+        monkeypatch.setattr("src.api.app.db_get_credits", lambda _uid: None)
         monkeypatch.setattr(
             "src.api.app.db_insert_youtube_video_idempotent",
             lambda url, uid: (_video_record("vid_3"), True),
@@ -247,14 +232,14 @@ class TestApiAdmissionGate:
             lambda *a, **kw: None,
         )
 
+        _authenticate("user_123")
         response = client.post(
             "/api/v1/videos",
             json={"youtube_url": "https://www.youtube.com/watch?v=abc123xyz45"},
-            headers={"Authorization": f"Bearer {raw_key}"},
         )
 
         assert response.status_code == 402
-        assert response.json()["detail"]["code"] == "insufficient_api_units"
+        assert response.json()["detail"] == "Insufficient credits. Buy credits to process another video."
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +347,7 @@ class TestApiCheckout:
         monkeypatch.setattr("src.api.app.create_checkout_session", mock_checkout)
 
         response = client.post(
-            "/api/v1/billing/checkout",
+            "/api/v1/billing/units/checkout",
             json={"plan": "developer"},
         )
 
@@ -373,7 +358,7 @@ class TestApiCheckout:
         _authenticate("user_123")
 
         response = client.post(
-            "/api/v1/billing/checkout",
+            "/api/v1/billing/units/checkout",
             json={"plan": "starter"},
         )
 
@@ -395,7 +380,7 @@ class TestApiBillingSummary:
             ),
         )
 
-        response = client.get("/api/v1/billing/summary")
+        response = client.get("/api/v1/billing/units/summary")
 
         assert response.status_code == 200
         data = response.json()
@@ -407,7 +392,7 @@ class TestApiBillingSummary:
         _authenticate("user_123")
         monkeypatch.setattr("src.api.app.db_get_api_credits", lambda uid: None)
 
-        response = client.get("/api/v1/billing/summary")
+        response = client.get("/api/v1/billing/units/summary")
 
         assert response.status_code == 200
         data = response.json()
@@ -440,7 +425,7 @@ class TestApiUsageEvents:
             ],
         )
 
-        response = client.get("/api/v1/billing/usage")
+        response = client.get("/api/v1/billing/units/usage")
 
         assert response.status_code == 200
         data = response.json()
@@ -457,7 +442,7 @@ class TestApiUsageEvents:
 
         monkeypatch.setattr("src.api.app.db_list_api_usage_events", mock_list)
 
-        response = client.get("/api/v1/billing/usage?api_key_id=key_abc")
+        response = client.get("/api/v1/billing/units/usage?api_key_id=key_abc")
 
         assert response.status_code == 200
         assert captured_kwargs["api_key_id"] == "key_abc"

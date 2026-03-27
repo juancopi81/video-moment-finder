@@ -176,7 +176,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           return;
         }
 
-        const res = await fetch(`${API_URL}/videos/${id}`, {
+        const res = await fetch(`${API_URL}/api/v1/videos/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status === 401) {
@@ -245,7 +245,7 @@ export default function VideoPage({ params }: VideoPageProps) {
 
       let res: Response;
       if (searchMode === "text") {
-        res = await fetch(`${API_URL}/videos/${id}/search`, {
+        res = await fetch(`${API_URL}/api/v1/videos/${id}/search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -257,7 +257,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         if (!queryImageFile) return;
         const formData = new FormData();
         formData.append("query_image", queryImageFile);
-        res = await fetch(`${API_URL}/videos/${id}/search/image`, {
+        res = await fetch(`${API_URL}/api/v1/videos/${id}/search/image`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

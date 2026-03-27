@@ -9,7 +9,7 @@ export type BillingSummary = {
 };
 
 export async function fetchBillingSummary(token: string): Promise<BillingSummary> {
-  const response = await fetch(`${API_URL}/users/me/billing-summary`, {
+  const response = await fetch(`${API_URL}/api/v1/billing/credits/summary`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
