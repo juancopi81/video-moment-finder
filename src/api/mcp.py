@@ -312,7 +312,9 @@ async def startup_mcp_session_manager() -> None:
     if _mcp_session_manager_cm is not None:
         return
 
-    # Initialize a fresh session manager for the current app lifespan.
+    # FastMCP caches its session manager on a private attribute. Reset it so the
+    # parent FastAPI lifespan and repeated TestClient runs get a fresh manager.
+    # Revisit this workaround when upgrading the pinned MCP SDK.
     vmf_mcp._session_manager = None  # type: ignore[attr-defined]
     vmf_mcp.streamable_http_app()
     _mcp_session_manager_cm = vmf_mcp.session_manager.run()
