@@ -9,7 +9,8 @@ openapi: https://api.videomomentfinder.com/openapi.json
 # Video Moment Finder
 
 Use this file when you need one public entrypoint for the Video Moment Finder API and CLI.
-This is the current agent-ready REST API and CLI surface. It is not an MCP server.
+This remains the canonical REST API and CLI bootstrap.
+A remote MCP endpoint is also available at `https://api.videomomentfinder.com/mcp` for manual `vmf_` API-key testing, but the clean OAuth install/connect flow is not shipped yet.
 
 ## Canonical URLs
 
@@ -18,6 +19,7 @@ This is the current agent-ready REST API and CLI surface. It is not an MCP serve
 - Public skill file: `https://www.videomomentfinder.com/skill.md`
 - API host: `https://api.videomomentfinder.com`
 - Public REST prefix: `https://api.videomomentfinder.com/api/v1`
+- Remote MCP endpoint (manual-auth preview): `https://api.videomomentfinder.com/mcp`
 - OpenAPI schema: `https://api.videomomentfinder.com/openapi.json`
 - Swagger UI: `https://api.videomomentfinder.com/docs`
 
@@ -27,6 +29,13 @@ This is the current agent-ready REST API and CLI surface. It is not an MCP serve
 - upload a video with the one-shot multipart route
 - poll until processing reaches `ready`
 - search a processed video by text
+
+## Remote MCP Status
+
+- A thin remote MCP server now exists for manual API-key testing.
+- It exposes `upload_video`, `get_video_status`, `list_videos`, and `search_video`.
+- Authentication today is still manual: you send `Authorization: Bearer <vmf_api_key>`.
+- OAuth account linking is the next step and is not part of the shipped flow yet.
 
 ## Not The Primary Documented Agent Flow
 

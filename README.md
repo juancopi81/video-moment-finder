@@ -11,7 +11,8 @@ Public agent entrypoints:
 - [skill.md](https://www.videomomentfinder.com/skill.md)
 - [openapi.json](https://api.videomomentfinder.com/openapi.json)
 
-Today the external integration surface is an agent-ready REST API plus CLI. MCP is not shipped yet.
+Today the primary external integration surface is an agent-ready REST API plus CLI.
+A remote MCP endpoint is also available at `https://api.videomomentfinder.com/mcp` for manual `vmf_` API-key testing, but the clean OAuth install/connect flow is not shipped yet.
 
 ## What It Does
 
@@ -125,6 +126,7 @@ YouTube URL import remains best effort and may be blocked by server-side restric
 - [STATUS.md](./STATUS.md): execution history only.
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
 - [docs/CLI_API_GUIDE.md](./docs/CLI_API_GUIDE.md): public CLI and external API happy-path guide.
+- [docs/MCP_GUIDE.md](./docs/MCP_GUIDE.md): remote MCP scope, test flow, and merge/deploy notes.
 - [frontend/public/skill.md](./frontend/public/skill.md): public agent bootstrap with canonical URLs and security rules.
 
 ## Deployment (At a Glance)
