@@ -1,6 +1,58 @@
 -- OAuth persistence for the Claude MCP connector.
 
 -- ---------------------------------------------------------------------------
+-- mcp_oauth_clients
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.mcp_oauth_clients (
+  client_id text primary key,
+  client_secret text,
+  client_id_issued_at bigint,
+  client_secret_expires_at bigint,
+  redirect_uris text[] not null default array[]::text[],
+  token_endpoint_auth_method text not null default 'none',
+  grant_types text[] not null default array[]::text[],
+  response_types text[] not null default array[]::text[],
+  scope text,
+  client_name text,
+  client_uri text,
+  logo_uri text,
+  contacts text[],
+  tos_uri text,
+  policy_uri text,
+  jwks_uri text,
+  jwks jsonb,
+  software_id text,
+  software_version text,
+  created_at timestamptz not null default now()
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'mcp_oauth_clients_token_auth_method_valid'
+      and conrelid = 'public.mcp_oauth_clients'::regclass
+  ) then
+    alter table public.mcp_oauth_clients
+      add constraint mcp_oauth_clients_token_auth_method_valid
+      check (token_endpoint_auth_method in ('none', 'client_secret_post', 'client_secret_basic'));
+  end if;
+end
+$$;
+
+alter table public.mcp_oauth_clients enable row level security;
+
+drop policy if exists mcp_oauth_clients_service_role_all on public.mcp_oauth_clients;
+create policy mcp_oauth_clients_service_role_all
+on public.mcp_oauth_clients
+for all
+to service_role
+using (true)
+with check (true);
+
+-- ---------------------------------------------------------------------------
 -- mcp_oauth_authorization_requests
 -- ---------------------------------------------------------------------------
 

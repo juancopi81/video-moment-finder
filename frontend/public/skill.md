@@ -50,7 +50,7 @@ Remote MCP tools:
 How the Claude connect flow works:
 
 1. Add a custom connector in Claude with server URL `https://api.videomomentfinder.com/mcp`.
-2. Use the static client credentials provided to your review or internal test environment.
+2. Use guided OAuth. Claude surfaces that support dynamic client registration can self-register, and internal review flows may still use provided static credentials.
 3. Click `Connect`.
 4. Sign in to Video Moment Finder if needed.
 5. Buy a Developer Pack if your API-unit balance is zero.

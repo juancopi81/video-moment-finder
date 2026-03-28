@@ -30,6 +30,7 @@ def test_public_openapi_exposes_only_curated_routes() -> None:
     assert "/analytics/event" not in paths
     assert "/authorize" not in paths
     assert "/token" not in paths
+    assert "/register" not in paths
     assert "/revoke" not in paths
     assert "/oauth/mcp/requests/{request_id}" not in paths
     assert "/oauth/mcp/requests/{request_id}/approve" not in paths

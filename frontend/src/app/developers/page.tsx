@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const connectorSteps = [
   "Add a custom connector in Claude with server URL https://api.videomomentfinder.com/mcp.",
-  "Use the static client credentials from your secure review or internal test configuration.",
+  "Use guided OAuth. Claude surfaces that support dynamic client registration can self-register, and internal review flows may still use provided static credentials.",
   "Click Connect, then sign in to Video Moment Finder if needed.",
   "Buy a Developer Pack if your API-unit balance is zero.",
   "Review the four MCP tools and approve access.",

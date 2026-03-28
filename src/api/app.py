@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
 from mcp.server.auth.handlers.metadata import MetadataHandler, ProtectedResourceMetadataHandler
+from mcp.server.auth.handlers.register import RegistrationHandler
 from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
@@ -34,12 +35,13 @@ from src.api.mcp import (
     startup_mcp_session_manager,
 )
 from src.api.mcp_oauth import (
-    FlexibleStaticClientAuthenticator,
+    FlexibleClientAuthenticator,
     McpOAuthConfigError,
     McpOAuthFlowError,
     get_mcp_oauth_settings,
     get_mcp_oauth_provider,
     mcp_oauth_authorization_metadata,
+    mcp_oauth_client_registration_options,
     mcp_oauth_protected_resource_metadata,
     mcp_oauth_request_public_payload,
 )
@@ -421,6 +423,7 @@ def _consume_api_units_or_raise(
 
 def _mcp_oauth_provider_or_raise():
     try:
+        get_mcp_oauth_settings()
         return get_mcp_oauth_provider()
     except McpOAuthConfigError as exc:
         raise HTTPException(status_code=503, detail="MCP OAuth is not configured") from exc
@@ -1173,16 +1176,25 @@ async def oauth_authorize(request: Request):
     return await AuthorizationHandler(provider).handle(request)
 
 
+@app.post("/register", include_in_schema=False)
+async def oauth_register(request: Request):
+    provider = _mcp_oauth_provider_or_raise()
+    return await RegistrationHandler(
+        provider,
+        options=mcp_oauth_client_registration_options(),
+    ).handle(request)
+
+
 @app.post("/token", include_in_schema=False)
 async def oauth_token(request: Request):
     provider = _mcp_oauth_provider_or_raise()
-    return await TokenHandler(provider, FlexibleStaticClientAuthenticator(provider)).handle(request)
+    return await TokenHandler(provider, FlexibleClientAuthenticator(provider)).handle(request)
 
 
 @app.post("/revoke", include_in_schema=False)
 async def oauth_revoke(request: Request):
     provider = _mcp_oauth_provider_or_raise()
-    return await RevocationHandler(provider, FlexibleStaticClientAuthenticator(provider)).handle(request)
+    return await RevocationHandler(provider, FlexibleClientAuthenticator(provider)).handle(request)
 
 
 @app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)

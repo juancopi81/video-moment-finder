@@ -68,15 +68,18 @@ class SearchVideoResult(BaseModel):
 
 
 def _auth_error(*, status_code: int, error: str, description: str) -> JSONResponse:
+    www_authenticate = "Bearer"
+    try:
+        www_authenticate = mcp_oauth_www_authenticate(
+            error=error,
+            description=description,
+        )
+    except McpOAuthConfigError:
+        pass
     return JSONResponse(
         status_code=status_code,
         content={"error": error, "error_description": description},
-        headers={
-            "WWW-Authenticate": mcp_oauth_www_authenticate(
-                error=error,
-                description=description,
-            )
-        },
+        headers={"WWW-Authenticate": www_authenticate},
     )
 
 
@@ -93,6 +96,15 @@ class McpOAuthResourceApp:
 
         if scope["method"] == "HEAD":
             await Response(status_code=204)(scope, receive, send)
+            return
+
+        try:
+            configured_resource = mcp_oauth_resource_url()
+        except McpOAuthConfigError:
+            await JSONResponse(
+                status_code=503,
+                content={"detail": "MCP OAuth is not configured"},
+            )(scope, receive, send)
             return
 
         headers = Headers(scope=scope)
@@ -115,15 +127,7 @@ class McpOAuthResourceApp:
             return
 
         raw_token = token.strip()
-        try:
-            configured_resource = mcp_oauth_resource_url()
-            access_token = await load_mcp_oauth_access_token(raw_token)
-        except McpOAuthConfigError:
-            await JSONResponse(
-                status_code=503,
-                content={"detail": "MCP OAuth is not configured"},
-            )(scope, receive, send)
-            return
+        access_token = await load_mcp_oauth_access_token(raw_token)
         if access_token is None or access_token.resource.rstrip("/") != configured_resource:
             await _auth_error(
                 status_code=401,

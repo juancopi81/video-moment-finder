@@ -31,6 +31,7 @@ from src.api.auth import AuthIdentity, get_current_user, get_current_user_id
 from src.db.supabase import (
     McpOAuthAccessTokenRecord,
     McpOAuthAuthorizationCodeRecord,
+    McpOAuthClientRecord,
     McpOAuthAuthorizationRequestRecord,
     McpOAuthRefreshTokenRecord,
 )
@@ -181,6 +182,7 @@ def _setup_api_key_auth(
 class InMemoryMcpOAuthStore:
     def __init__(self) -> None:
         self._counter = 0
+        self.clients: dict[str, McpOAuthClientRecord] = {}
         self.requests: dict[str, McpOAuthAuthorizationRequestRecord] = {}
         self.codes: dict[str, McpOAuthAuthorizationCodeRecord] = {}
         self.access_tokens: dict[str, McpOAuthAccessTokenRecord] = {}
@@ -192,6 +194,57 @@ class InMemoryMcpOAuthStore:
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    def create_client(
+        self,
+        *,
+        client_id: str,
+        client_secret: str | None,
+        client_id_issued_at: int | None,
+        client_secret_expires_at: int | None,
+        redirect_uris: list[str],
+        token_endpoint_auth_method: str,
+        grant_types: list[str],
+        response_types: list[str],
+        scope: str | None = None,
+        client_name: str | None = None,
+        client_uri: str | None = None,
+        logo_uri: str | None = None,
+        contacts: list[str] | None = None,
+        tos_uri: str | None = None,
+        policy_uri: str | None = None,
+        jwks_uri: str | None = None,
+        jwks=None,
+        software_id: str | None = None,
+        software_version: str | None = None,
+    ) -> McpOAuthClientRecord:
+        record = McpOAuthClientRecord(
+            client_id=client_id,
+            client_secret=client_secret,
+            client_id_issued_at=client_id_issued_at,
+            client_secret_expires_at=client_secret_expires_at,
+            redirect_uris=redirect_uris,
+            token_endpoint_auth_method=token_endpoint_auth_method,
+            grant_types=grant_types,
+            response_types=response_types,
+            scope=scope,
+            client_name=client_name,
+            client_uri=client_uri,
+            logo_uri=logo_uri,
+            contacts=contacts,
+            tos_uri=tos_uri,
+            policy_uri=policy_uri,
+            jwks_uri=jwks_uri,
+            jwks=jwks,
+            software_id=software_id,
+            software_version=software_version,
+            created_at=self._now(),
+        )
+        self.clients[client_id] = record
+        return record
+
+    def get_client(self, client_id: str) -> McpOAuthClientRecord | None:
+        return self.clients.get(client_id)
 
     def create_request(
         self,
@@ -377,6 +430,14 @@ class InMemoryMcpOAuthStore:
 @pytest.fixture
 def mcp_oauth_store(monkeypatch) -> InMemoryMcpOAuthStore:
     store = InMemoryMcpOAuthStore()
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.create_mcp_oauth_client",
+        store.create_client,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.get_mcp_oauth_client",
+        store.get_client,
+    )
     monkeypatch.setattr(
         "src.api.mcp_oauth.create_mcp_oauth_authorization_request",
         store.create_request,

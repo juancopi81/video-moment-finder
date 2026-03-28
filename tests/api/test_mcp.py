@@ -204,6 +204,23 @@ def test_mcp_head_allows_tokenless_probe(mcp_oauth_store: InMemoryMcpOAuthStore)
     assert response.text == ""
 
 
+def test_mcp_returns_503_when_oauth_not_configured(monkeypatch) -> None:
+    for key in (
+        "MCP_OAUTH_ISSUER_URL",
+        "MCP_OAUTH_RESOURCE_URL",
+        "MCP_OAUTH_CLIENT_ID",
+        "MCP_OAUTH_CLIENT_SECRET",
+        "FRONTEND_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/mcp", json={})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "MCP OAuth is not configured"}
+
+
 def test_mcp_lists_only_expected_tools(
     monkeypatch,
     mcp_oauth_store: InMemoryMcpOAuthStore,

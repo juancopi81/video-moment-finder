@@ -32,6 +32,7 @@ def _pkce_pair(verifier: str = "vmf-oauth-test-verifier") -> tuple[str, str]:
 def _start_authorization_request(
     client: TestClient,
     *,
+    client_id: str = CLIENT_ID,
     redirect_uri: str = CLAUDE_REDIRECT_URI,
     scope: str = "vmf:mcp",
     resource: str = MCP_RESOURCE_URL,
@@ -42,7 +43,7 @@ def _start_authorization_request(
         "/authorize",
         params={
             "response_type": "code",
-            "client_id": CLIENT_ID,
+            "client_id": client_id,
             "redirect_uri": redirect_uri,
             "scope": scope,
             "code_challenge": challenge,
@@ -84,20 +85,39 @@ def _exchange_code(
     *,
     code: str,
     verifier: str,
+    client_id: str = CLIENT_ID,
     redirect_uri: str = CLAUDE_REDIRECT_URI,
-    client_secret: str = CLIENT_SECRET,
+    client_secret: str | None = CLIENT_SECRET,
 ) -> object:
-    return client.post(
-        "/token",
-        data={
-            "grant_type": "authorization_code",
-            "client_id": CLIENT_ID,
-            "client_secret": client_secret,
-            "code": code,
-            "code_verifier": verifier,
-            "redirect_uri": redirect_uri,
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": client_id,
+        "code": code,
+        "code_verifier": verifier,
+        "redirect_uri": redirect_uri,
+    }
+    if client_secret is not None:
+        payload["client_secret"] = client_secret
+    return client.post("/token", data=payload)
+
+
+def _register_public_client(client: TestClient, *, redirect_uri: str = LOCALHOST_REDIRECT_URI) -> str:
+    response = client.post(
+        "/register",
+        json={
+            "redirect_uris": [redirect_uri],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "scope": "vmf:mcp",
+            "client_name": "Claude Code",
         },
     )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["token_endpoint_auth_method"] == "none"
+    assert payload.get("client_secret") is None
+    return payload["client_id"]
 
 
 def test_oauth_authorization_server_metadata() -> None:
@@ -109,8 +129,14 @@ def test_oauth_authorization_server_metadata() -> None:
     assert payload["issuer"].rstrip("/") == "https://api.videomomentfinder.com"
     assert payload["authorization_endpoint"] == "https://api.videomomentfinder.com/authorize"
     assert payload["token_endpoint"] == "https://api.videomomentfinder.com/token"
+    assert payload["registration_endpoint"] == "https://api.videomomentfinder.com/register"
     assert payload["revocation_endpoint"] == "https://api.videomomentfinder.com/revoke"
     assert payload["scopes_supported"] == ["vmf:mcp"]
+    assert set(payload["token_endpoint_auth_methods_supported"]) == {
+        "none",
+        "client_secret_post",
+        "client_secret_basic",
+    }
 
 
 def test_oauth_protected_resource_metadata() -> None:
@@ -126,8 +152,11 @@ def test_oauth_protected_resource_metadata() -> None:
     assert payload["scopes_supported"] == ["vmf:mcp"]
 
 
-def test_authorize_rejects_invalid_client_id() -> None:
+def test_authorize_rejects_invalid_client_id(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
     verifier, challenge = _pkce_pair()
+    _ = mcp_oauth_store
     with TestClient(app) as client:
         response = client.get(
             "/authorize",
@@ -263,6 +292,35 @@ def test_authorize_accepts_localhost_callback(
     assert response.status_code == 302
     assert urlparse(redirect_url).scheme == "http"
     assert redirect_url.startswith(f"{LOCALHOST_REDIRECT_URI}?")
+
+
+def test_public_dcr_client_can_complete_authorization_code_flow(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+) -> None:
+    with TestClient(app) as client:
+        dynamic_client_id = _register_public_client(client)
+        response, request_id, verifier = _start_authorization_request(
+            client,
+            client_id=dynamic_client_id,
+            redirect_uri=LOCALHOST_REDIRECT_URI,
+        )
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+        token_response = _exchange_code(
+            client,
+            client_id=dynamic_client_id,
+            client_secret=None,
+            code=code,
+            verifier=verifier,
+            redirect_uri=LOCALHOST_REDIRECT_URI,
+        )
+
+    assert response.status_code == 302
+    assert dynamic_client_id in mcp_oauth_store.clients
+    assert token_response.status_code == 200
+    assert token_response.json()["token_type"] == "Bearer"
+    assert token_response.json()["refresh_token"]
 
 
 def test_connector_approve_blocks_zero_api_balance(
@@ -521,3 +579,56 @@ def test_mcp_cors_preflight_allows_claude_origins() -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://claude.ai"
+
+
+def test_oauth_routes_return_503_when_unconfigured(monkeypatch) -> None:
+    for key in (
+        "MCP_OAUTH_ISSUER_URL",
+        "MCP_OAUTH_RESOURCE_URL",
+        "MCP_OAUTH_CLIENT_ID",
+        "MCP_OAUTH_CLIENT_SECRET",
+        "FRONTEND_BASE_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        authorize_response = client.get(
+            "/authorize",
+            params={
+                "response_type": "code",
+                "client_id": CLIENT_ID,
+                "redirect_uri": CLAUDE_REDIRECT_URI,
+                "scope": "vmf:mcp",
+                "code_challenge": "abc",
+                "code_challenge_method": "S256",
+                "resource": MCP_RESOURCE_URL,
+                "state": "oauth-state",
+            },
+            follow_redirects=False,
+        )
+        token_response = client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "code": "code",
+                "code_verifier": "verifier",
+                "redirect_uri": CLAUDE_REDIRECT_URI,
+            },
+        )
+        revoke_response = client.post(
+            "/revoke",
+            data={
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "token": "token",
+            },
+        )
+
+    assert authorize_response.status_code == 503
+    assert authorize_response.json()["detail"] == "MCP OAuth is not configured"
+    assert token_response.status_code == 503
+    assert token_response.json()["detail"] == "MCP OAuth is not configured"
+    assert revoke_response.status_code == 503
+    assert revoke_response.json()["detail"] == "MCP OAuth is not configured"

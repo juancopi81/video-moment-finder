@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from supabase import create_client, Client
 from src.utils.logging import get_logger
@@ -149,6 +149,32 @@ class McpOAuthAuthorizationRequestRecord:
     resolved_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+
+
+@dataclass
+class McpOAuthClientRecord:
+    """Stored OAuth client metadata for MCP dynamic registration."""
+
+    client_id: str
+    client_secret: str | None = None
+    client_id_issued_at: int | None = None
+    client_secret_expires_at: int | None = None
+    redirect_uris: list[str] | None = None
+    token_endpoint_auth_method: str | None = None
+    grant_types: list[str] | None = None
+    response_types: list[str] | None = None
+    scope: str | None = None
+    client_name: str | None = None
+    client_uri: str | None = None
+    logo_uri: str | None = None
+    contacts: list[str] | None = None
+    tos_uri: str | None = None
+    policy_uri: str | None = None
+    jwks_uri: str | None = None
+    jwks: Any | None = None
+    software_id: str | None = None
+    software_version: str | None = None
+    created_at: str | None = None
 
 
 @dataclass
@@ -368,6 +394,31 @@ def _row_to_mcp_oauth_authorization_code(row: dict) -> McpOAuthAuthorizationCode
         expires_at=row.get("expires_at"),
         used_at=row.get("used_at"),
         revoked_at=row.get("revoked_at"),
+        created_at=row.get("created_at"),
+    )
+
+
+def _row_to_mcp_oauth_client(row: dict) -> McpOAuthClientRecord:
+    return McpOAuthClientRecord(
+        client_id=row["client_id"],
+        client_secret=row.get("client_secret"),
+        client_id_issued_at=row.get("client_id_issued_at"),
+        client_secret_expires_at=row.get("client_secret_expires_at"),
+        redirect_uris=list(row.get("redirect_uris") or []),
+        token_endpoint_auth_method=row.get("token_endpoint_auth_method"),
+        grant_types=list(row.get("grant_types") or []),
+        response_types=list(row.get("response_types") or []),
+        scope=row.get("scope"),
+        client_name=row.get("client_name"),
+        client_uri=row.get("client_uri"),
+        logo_uri=row.get("logo_uri"),
+        contacts=list(row.get("contacts") or []) if row.get("contacts") is not None else None,
+        tos_uri=row.get("tos_uri"),
+        policy_uri=row.get("policy_uri"),
+        jwks_uri=row.get("jwks_uri"),
+        jwks=row.get("jwks"),
+        software_id=row.get("software_id"),
+        software_version=row.get("software_version"),
         created_at=row.get("created_at"),
     )
 
@@ -1101,6 +1152,73 @@ def touch_api_key_last_used(key_id: str) -> None:
 # ---------------------------------------------------------------------------
 # MCP OAuth CRUD
 # ---------------------------------------------------------------------------
+
+
+def create_mcp_oauth_client(
+    *,
+    client_id: str,
+    client_secret: str | None,
+    client_id_issued_at: int | None,
+    client_secret_expires_at: int | None,
+    redirect_uris: list[str],
+    token_endpoint_auth_method: str,
+    grant_types: list[str],
+    response_types: list[str],
+    scope: str | None = None,
+    client_name: str | None = None,
+    client_uri: str | None = None,
+    logo_uri: str | None = None,
+    contacts: list[str] | None = None,
+    tos_uri: str | None = None,
+    policy_uri: str | None = None,
+    jwks_uri: str | None = None,
+    jwks: Any | None = None,
+    software_id: str | None = None,
+    software_version: str | None = None,
+) -> McpOAuthClientRecord:
+    client = get_client()
+    result = client.table("mcp_oauth_clients").insert(
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "client_id_issued_at": client_id_issued_at,
+            "client_secret_expires_at": client_secret_expires_at,
+            "redirect_uris": redirect_uris,
+            "token_endpoint_auth_method": token_endpoint_auth_method,
+            "grant_types": grant_types,
+            "response_types": response_types,
+            "scope": scope,
+            "client_name": client_name,
+            "client_uri": client_uri,
+            "logo_uri": logo_uri,
+            "contacts": contacts,
+            "tos_uri": tos_uri,
+            "policy_uri": policy_uri,
+            "jwks_uri": jwks_uri,
+            "jwks": jwks,
+            "software_id": software_id,
+            "software_version": software_version,
+        }
+    ).execute()
+    if not result.data:
+        raise RuntimeError("Failed to create MCP OAuth client")
+    return _row_to_mcp_oauth_client(result.data[0])
+
+
+def get_mcp_oauth_client(
+    client_id: str,
+) -> McpOAuthClientRecord | None:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_clients")
+        .select("*")
+        .eq("client_id", client_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_client(result.data[0])
 
 
 def create_mcp_oauth_authorization_request(

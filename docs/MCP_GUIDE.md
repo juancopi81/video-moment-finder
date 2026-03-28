@@ -12,6 +12,7 @@ This document covers the shipped Claude-compatible remote MCP server, its OAuth 
   - `GET /.well-known/oauth-protected-resource/mcp`
 - OAuth transaction endpoints:
   - `GET|POST /authorize`
+  - `POST /register`
   - `POST /token`
   - `POST /revoke`
 - Frontend approval page:
@@ -42,7 +43,7 @@ Behavior notes:
 ## Claude Connect Flow
 
 1. Add the custom connector in Claude with server URL `https://api.videomomentfinder.com/mcp`.
-2. Provide the static client credentials from the secure review/test configuration.
+2. Use guided OAuth. Claude web/Desktop can self-register through DCR, and internal review flows may still use the static client credentials from the secure review/test configuration.
 3. Click `Connect`.
 4. The user lands on `https://www.videomomentfinder.com/connectors/claude?request_id=...`.
 5. If signed out, they sign in or create an account.
@@ -63,8 +64,8 @@ Do not publish the confidential client secret in public docs or UI copy.
 
 For Anthropic review and internal testing:
 
-- Use the static client ID from `MCP_OAUTH_CLIENT_ID`.
-- Use the static client secret from `MCP_OAUTH_CLIENT_SECRET`.
+- Claude web/Desktop and other DCR-capable surfaces can self-register a public client through `POST /register`.
+- Keep the static reviewer client (`MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET`) available for review flows that still expect explicit credentials.
 - Prepare a live review account before submission:
   - valid login
   - positive Developer Pack API-unit balance

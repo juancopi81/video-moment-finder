@@ -20,6 +20,7 @@ from mcp.server.auth.provider import (
     AuthorizationParams,
     AuthorizeError,
     OAuthAuthorizationServerProvider,
+    RegistrationError,
     RefreshToken,
     TokenError,
     construct_redirect_uri,
@@ -32,10 +33,12 @@ from pydantic import AnyHttpUrl, TypeAdapter
 from src.db.supabase import (
     McpOAuthAuthorizationRequestRecord,
     consume_mcp_oauth_authorization_code,
+    create_mcp_oauth_client,
     create_mcp_oauth_authorization_code,
     create_mcp_oauth_authorization_request,
     create_mcp_oauth_tokens,
     get_mcp_oauth_access_token_by_hash,
+    get_mcp_oauth_client,
     get_mcp_oauth_authorization_code_by_hash,
     get_mcp_oauth_authorization_request,
     get_mcp_oauth_refresh_token_by_hash,
@@ -51,6 +54,11 @@ AUTHORIZATION_REQUEST_TTL_S = 3600
 AUTHORIZATION_CODE_TTL_S = 600
 ACCESS_TOKEN_TTL_S = 3600
 REFRESH_TOKEN_TTL_S = 30 * 24 * 3600
+SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = (
+    "none",
+    "client_secret_post",
+    "client_secret_basic",
+)
 CLAUDE_REDIRECT_URIS = [
     "https://claude.ai/api/mcp/auth_callback",
     "https://claude.com/api/mcp/auth_callback",
@@ -134,18 +142,25 @@ def mcp_oauth_resource_metadata_url() -> str:
     return str(build_resource_metadata_url(_any_http_url(mcp_oauth_resource_url())))
 
 
+def mcp_oauth_client_registration_options() -> ClientRegistrationOptions:
+    return ClientRegistrationOptions(
+        enabled=True,
+        valid_scopes=[DEFAULT_MCP_OAUTH_SCOPE],
+        default_scopes=[DEFAULT_MCP_OAUTH_SCOPE],
+    )
+
+
 def mcp_oauth_authorization_metadata() -> OAuthMetadata:
     settings = get_mcp_oauth_settings()
-    return build_metadata(
+    metadata = build_metadata(
         issuer_url=_any_http_url(settings.issuer_url),
         service_documentation_url=_any_http_url(f"{settings.frontend_base_url}/developers"),
-        client_registration_options=ClientRegistrationOptions(
-            enabled=False,
-            valid_scopes=[DEFAULT_MCP_OAUTH_SCOPE],
-            default_scopes=[DEFAULT_MCP_OAUTH_SCOPE],
-        ),
+        client_registration_options=mcp_oauth_client_registration_options(),
         revocation_options=RevocationOptions(enabled=True),
     )
+    metadata.token_endpoint_auth_methods_supported = list(SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS)
+    metadata.revocation_endpoint_auth_methods_supported = list(SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS)
+    return metadata
 
 
 def mcp_oauth_protected_resource_metadata() -> ProtectedResourceMetadata:
@@ -255,8 +270,32 @@ def _static_client() -> OAuthClientInformationFull:
     )
 
 
-class FlexibleStaticClientAuthenticator:
-    """Accept either client_secret_post or client_secret_basic for the static Claude client."""
+def _client_from_record(record) -> OAuthClientInformationFull:
+    return OAuthClientInformationFull(
+        client_id=record.client_id,
+        client_secret=record.client_secret,
+        client_id_issued_at=record.client_id_issued_at,
+        client_secret_expires_at=record.client_secret_expires_at,
+        redirect_uris=record.redirect_uris,
+        token_endpoint_auth_method=record.token_endpoint_auth_method,
+        grant_types=record.grant_types,
+        response_types=record.response_types,
+        scope=record.scope,
+        client_name=record.client_name,
+        client_uri=record.client_uri,
+        logo_uri=record.logo_uri,
+        contacts=record.contacts,
+        tos_uri=record.tos_uri,
+        policy_uri=record.policy_uri,
+        jwks_uri=record.jwks_uri,
+        jwks=record.jwks,
+        software_id=record.software_id,
+        software_version=record.software_version,
+    )
+
+
+class FlexibleClientAuthenticator:
+    """Accept form or Basic auth while allowing public DCR clients."""
 
     def __init__(self, provider: "McpOAuthProvider"):
         self.provider = provider
@@ -312,6 +351,10 @@ class FlexibleStaticClientAuthenticator:
         if client is None:
             raise AuthenticationError("Invalid client_id")
 
+        token_auth_method = client.token_endpoint_auth_method or "none"
+        if token_auth_method not in SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS:
+            raise AuthenticationError(f"Unsupported auth method: {token_auth_method}")
+
         if client.client_secret:
             if not request_client_secret:
                 raise AuthenticationError("Client secret is required")
@@ -327,13 +370,44 @@ class McpOAuthProvider(
     """Static-client OAuth provider backed by Supabase tables."""
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
-        client = _static_client()
-        if client_id != client.client_id:
+        static_client = _static_client()
+        if client_id == static_client.client_id:
+            return static_client
+
+        record = get_mcp_oauth_client(client_id)
+        if record is None:
             return None
-        return client
+        return _client_from_record(record)
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
-        raise NotImplementedError("Dynamic client registration is disabled")
+        auth_method = client_info.token_endpoint_auth_method or "none"
+        if auth_method not in SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS:
+            raise RegistrationError(
+                "invalid_client_metadata",
+                f"Unsupported token_endpoint_auth_method `{auth_method}`",
+            )
+
+        create_mcp_oauth_client(
+            client_id=client_info.client_id or "",
+            client_secret=client_info.client_secret,
+            client_id_issued_at=client_info.client_id_issued_at,
+            client_secret_expires_at=client_info.client_secret_expires_at,
+            redirect_uris=[str(uri) for uri in client_info.redirect_uris or []],
+            token_endpoint_auth_method=auth_method,
+            grant_types=list(client_info.grant_types),
+            response_types=list(client_info.response_types),
+            scope=client_info.scope,
+            client_name=client_info.client_name,
+            client_uri=str(client_info.client_uri) if client_info.client_uri is not None else None,
+            logo_uri=str(client_info.logo_uri) if client_info.logo_uri is not None else None,
+            contacts=list(client_info.contacts) if client_info.contacts is not None else None,
+            tos_uri=str(client_info.tos_uri) if client_info.tos_uri is not None else None,
+            policy_uri=str(client_info.policy_uri) if client_info.policy_uri is not None else None,
+            jwks_uri=str(client_info.jwks_uri) if client_info.jwks_uri is not None else None,
+            jwks=client_info.jwks,
+            software_id=client_info.software_id,
+            software_version=client_info.software_version,
+        )
 
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
         scopes = _normalize_scopes(params.scopes)
