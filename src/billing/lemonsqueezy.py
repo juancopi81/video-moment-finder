@@ -113,6 +113,7 @@ def create_checkout_session(
     plan: str,
     credits: int,
     variant_id: str,
+    redirect_url: str | None = None,
     timeout_s: float = 20.0,
     grant_target: str = "web",
 ) -> LemonSqueezyCheckoutSession:
@@ -133,7 +134,7 @@ def create_checkout_session(
         user_id=user_id.strip(),
         plan=plan.strip(),
         credits=credits,
-        redirect_url=settings.redirect_url,
+        redirect_url=(redirect_url or settings.redirect_url).strip(),
         test_mode=settings.test_mode,
         grant_target=grant_target,
     )

@@ -135,6 +135,43 @@ def test_create_checkout_session_raises_for_http_error(monkeypatch) -> None:
         )
 
 
+def test_create_checkout_session_overrides_redirect_url(monkeypatch) -> None:
+    _set_checkout_env(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(req, timeout):
+        captured["request"] = req
+        response_payload = {
+            "data": {
+                "attributes": {
+                    "url": "https://app.lemonsqueezy.com/checkout/buy/session_456"
+                }
+            }
+        }
+        return _MockResponse(json.dumps(response_payload).encode("utf-8"))
+
+    monkeypatch.setattr("src.billing.lemonsqueezy.request.urlopen", fake_urlopen)
+
+    result = create_checkout_session(
+        user_id="user_abc",
+        plan="developer",
+        credits=10_000,
+        variant_id="var_dev_1",
+        redirect_url="https://www.videomomentfinder.com/connectors/claude?request_id=req-123",
+        grant_target="api",
+    )
+
+    assert result.url == "https://app.lemonsqueezy.com/checkout/buy/session_456"
+    req = captured["request"]
+    assert req is not None
+    payload = json.loads(req.data.decode("utf-8"))
+    assert (
+        payload["data"]["attributes"]["product_options"]["redirect_url"]
+        == "https://www.videomomentfinder.com/connectors/claude?request_id=req-123"
+    )
+    assert payload["data"]["attributes"]["checkout_data"]["custom"]["grant_target"] == "api"
+
+
 def test_create_checkout_session_raises_for_non_json_response(monkeypatch) -> None:
     _set_checkout_env(monkeypatch)
     monkeypatch.setattr(

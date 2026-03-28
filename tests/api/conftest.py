@@ -2,12 +2,38 @@
 from __future__ import annotations
 
 import hashlib
+import os
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
 
+os.environ.setdefault("MCP_OAUTH_ISSUER_URL", "https://api.videomomentfinder.com")
+os.environ.setdefault("MCP_OAUTH_RESOURCE_URL", "https://api.videomomentfinder.com/mcp")
+os.environ.setdefault("MCP_OAUTH_CLIENT_ID", "claude-static-client")
+os.environ.setdefault("MCP_OAUTH_CLIENT_SECRET", "claude-static-secret")
+os.environ.setdefault("FRONTEND_BASE_URL", "https://www.videomomentfinder.com")
+os.environ.setdefault(
+    "CORS_ALLOWED_ORIGINS",
+    ",".join(
+        [
+            "http://localhost:3000",
+            "http://localhost:6274",
+            "http://127.0.0.1:6274",
+            "https://claude.ai",
+            "https://claude.com",
+        ]
+    ),
+)
+
 from src.api.app import app
 from src.api.auth import AuthIdentity, get_current_user, get_current_user_id
+from src.db.supabase import (
+    McpOAuthAccessTokenRecord,
+    McpOAuthAuthorizationCodeRecord,
+    McpOAuthAuthorizationRequestRecord,
+    McpOAuthRefreshTokenRecord,
+)
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.db.supabase import (
     ApiKeyRecord,
@@ -54,6 +80,15 @@ def _authenticate(user_id: str = "user_123") -> None:
     app.dependency_overrides[get_current_user] = lambda: AuthIdentity(
         user_id=user_id, auth_method="jwt"
     )
+
+
+@pytest.fixture(autouse=True)
+def _mock_mcp_oauth_env(monkeypatch) -> None:
+    monkeypatch.setenv("MCP_OAUTH_ISSUER_URL", "https://api.videomomentfinder.com")
+    monkeypatch.setenv("MCP_OAUTH_RESOURCE_URL", "https://api.videomomentfinder.com/mcp")
+    monkeypatch.setenv("MCP_OAUTH_CLIENT_ID", "claude-static-client")
+    monkeypatch.setenv("MCP_OAUTH_CLIENT_SECRET", "claude-static-secret")
+    monkeypatch.setenv("FRONTEND_BASE_URL", "https://www.videomomentfinder.com")
 
 
 @pytest.fixture(autouse=True)
@@ -141,3 +176,246 @@ def _setup_api_key_auth(
     raw_key, record = _make_api_key_record(user_id=user_id, **kwargs)
     _mock_api_key_auth(monkeypatch, record)
     return raw_key, record
+
+
+class InMemoryMcpOAuthStore:
+    def __init__(self) -> None:
+        self._counter = 0
+        self.requests: dict[str, McpOAuthAuthorizationRequestRecord] = {}
+        self.codes: dict[str, McpOAuthAuthorizationCodeRecord] = {}
+        self.access_tokens: dict[str, McpOAuthAccessTokenRecord] = {}
+        self.refresh_tokens: dict[str, McpOAuthRefreshTokenRecord] = {}
+
+    def _next_id(self, prefix: str) -> str:
+        self._counter += 1
+        return f"{prefix}-{self._counter}"
+
+    def _now(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def create_request(
+        self,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        redirect_uri_provided_explicitly: bool,
+        state: str | None,
+        scopes: list[str],
+        code_challenge: str,
+        resource: str,
+        expires_at: str,
+    ) -> McpOAuthAuthorizationRequestRecord:
+        now = self._now()
+        record = McpOAuthAuthorizationRequestRecord(
+            id=self._next_id("req"),
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            redirect_uri_provided_explicitly=redirect_uri_provided_explicitly,
+            state=state,
+            scopes=scopes,
+            code_challenge=code_challenge,
+            resource=resource,
+            status="pending",
+            expires_at=expires_at,
+            created_at=now,
+            updated_at=now,
+        )
+        self.requests[record.id] = record
+        return record
+
+    def get_request(self, request_id: str) -> McpOAuthAuthorizationRequestRecord | None:
+        return self.requests.get(request_id)
+
+    def update_request_resolution(
+        self,
+        request_id: str,
+        *,
+        status: str,
+        user_id: str | None = None,
+    ) -> McpOAuthAuthorizationRequestRecord | None:
+        record = self.requests.get(request_id)
+        if record is None or record.status != "pending":
+            return None
+        now = self._now()
+        updated = replace(
+            record,
+            status=status,
+            user_id=user_id if user_id is not None else record.user_id,
+            approved_at=now if status == "approved" else record.approved_at,
+            denied_at=now if status == "denied" else record.denied_at,
+            resolved_at=now,
+            updated_at=now,
+        )
+        self.requests[request_id] = updated
+        return updated
+
+    def create_code(
+        self,
+        *,
+        authorization_request_id: str | None,
+        user_id: str,
+        client_id: str,
+        code_hash: str,
+        redirect_uri: str,
+        redirect_uri_provided_explicitly: bool,
+        scopes: list[str],
+        code_challenge: str,
+        resource: str,
+        expires_at: str,
+    ) -> McpOAuthAuthorizationCodeRecord:
+        record = McpOAuthAuthorizationCodeRecord(
+            id=self._next_id("code"),
+            authorization_request_id=authorization_request_id,
+            user_id=user_id,
+            client_id=client_id,
+            code_hash=code_hash,
+            redirect_uri=redirect_uri,
+            redirect_uri_provided_explicitly=redirect_uri_provided_explicitly,
+            scopes=scopes,
+            code_challenge=code_challenge,
+            resource=resource,
+            expires_at=expires_at,
+            created_at=self._now(),
+        )
+        self.codes[record.id] = record
+        return record
+
+    def get_code_by_hash(self, code_hash: str) -> McpOAuthAuthorizationCodeRecord | None:
+        for record in self.codes.values():
+            if (
+                record.code_hash == code_hash
+                and record.used_at is None
+                and record.revoked_at is None
+            ):
+                return record
+        return None
+
+    def mark_code_used(self, code_id: str) -> None:
+        record = self.codes[code_id]
+        self.codes[code_id] = replace(record, used_at=self._now())
+
+    def create_tokens(
+        self,
+        *,
+        connection_id: str,
+        user_id: str,
+        client_id: str,
+        access_token_hash: str,
+        refresh_token_hash: str,
+        scopes: list[str],
+        resource: str,
+        access_expires_at: str,
+        refresh_expires_at: str,
+    ) -> tuple[McpOAuthAccessTokenRecord, McpOAuthRefreshTokenRecord]:
+        now = self._now()
+        access_record = McpOAuthAccessTokenRecord(
+            id=self._next_id("access"),
+            connection_id=connection_id,
+            user_id=user_id,
+            client_id=client_id,
+            token_hash=access_token_hash,
+            scopes=scopes,
+            resource=resource,
+            expires_at=access_expires_at,
+            created_at=now,
+        )
+        refresh_record = McpOAuthRefreshTokenRecord(
+            id=self._next_id("refresh"),
+            connection_id=connection_id,
+            user_id=user_id,
+            client_id=client_id,
+            token_hash=refresh_token_hash,
+            scopes=scopes,
+            resource=resource,
+            expires_at=refresh_expires_at,
+            created_at=now,
+        )
+        self.access_tokens[access_record.id] = access_record
+        self.refresh_tokens[refresh_record.id] = refresh_record
+        return access_record, refresh_record
+
+    def get_access_by_hash(self, token_hash: str) -> McpOAuthAccessTokenRecord | None:
+        for record in self.access_tokens.values():
+            if record.token_hash == token_hash and record.revoked_at is None:
+                return record
+        return None
+
+    def get_refresh_by_hash(self, token_hash: str) -> McpOAuthRefreshTokenRecord | None:
+        for record in self.refresh_tokens.values():
+            if record.token_hash == token_hash and record.revoked_at is None:
+                return record
+        return None
+
+    def revoke_access_tokens_for_connection(self, connection_id: str) -> None:
+        now = self._now()
+        for token_id, record in list(self.access_tokens.items()):
+            if record.connection_id == connection_id and record.revoked_at is None:
+                self.access_tokens[token_id] = replace(record, revoked_at=now)
+
+    def revoke_refresh_token(self, refresh_token_id: str) -> None:
+        record = self.refresh_tokens[refresh_token_id]
+        if record.revoked_at is None:
+            self.refresh_tokens[refresh_token_id] = replace(
+                record, revoked_at=self._now()
+            )
+
+    def revoke_tokens_by_connection_id(self, connection_id: str) -> None:
+        self.revoke_access_tokens_for_connection(connection_id)
+        now = self._now()
+        for token_id, record in list(self.refresh_tokens.items()):
+            if record.connection_id == connection_id and record.revoked_at is None:
+                self.refresh_tokens[token_id] = replace(record, revoked_at=now)
+
+
+@pytest.fixture
+def mcp_oauth_store(monkeypatch) -> InMemoryMcpOAuthStore:
+    store = InMemoryMcpOAuthStore()
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.create_mcp_oauth_authorization_request",
+        store.create_request,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.get_mcp_oauth_authorization_request",
+        store.get_request,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.update_mcp_oauth_authorization_request_resolution",
+        store.update_request_resolution,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.create_mcp_oauth_authorization_code",
+        store.create_code,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.get_mcp_oauth_authorization_code_by_hash",
+        store.get_code_by_hash,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.mark_mcp_oauth_authorization_code_used",
+        store.mark_code_used,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.create_mcp_oauth_tokens",
+        store.create_tokens,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.get_mcp_oauth_access_token_by_hash",
+        store.get_access_by_hash,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.get_mcp_oauth_refresh_token_by_hash",
+        store.get_refresh_by_hash,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.revoke_mcp_oauth_access_tokens_for_connection",
+        store.revoke_access_tokens_for_connection,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.revoke_mcp_oauth_refresh_token",
+        store.revoke_refresh_token,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.revoke_mcp_oauth_tokens_by_connection_id",
+        store.revoke_tokens_by_connection_id,
+    )
+    return store

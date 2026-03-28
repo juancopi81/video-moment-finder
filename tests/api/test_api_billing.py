@@ -353,6 +353,51 @@ class TestApiCheckout:
         assert response.status_code == 200
         assert "checkout.example.com" in response.json()["checkout_url"]
 
+    def test_developer_plan_passes_return_path_as_redirect_url(self, monkeypatch) -> None:
+        _authenticate("user_123")
+        monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_DEVELOPER", "variant_dev")
+        monkeypatch.setenv("LEMON_SQUEEZY_API_KEY", "key")
+        monkeypatch.setenv("LEMON_SQUEEZY_STORE_ID", "store")
+        monkeypatch.setenv("LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL", "https://example.com")
+        monkeypatch.setenv("FRONTEND_BASE_URL", "https://www.videomomentfinder.com")
+
+        from src.billing.lemonsqueezy import LemonSqueezyCheckoutSession
+
+        def mock_checkout(**kwargs):
+            assert kwargs["redirect_url"] == (
+                "https://www.videomomentfinder.com/connectors/claude?request_id=req-123"
+            )
+            return LemonSqueezyCheckoutSession(
+                url="https://checkout.example.com",
+                test_mode=True,
+            )
+
+        monkeypatch.setattr("src.api.app.create_checkout_session", mock_checkout)
+
+        response = client.post(
+            "/api/v1/billing/units/checkout",
+            json={
+                "plan": "developer",
+                "return_path": "/connectors/claude?request_id=req-123",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "checkout.example.com" in response.json()["checkout_url"]
+
+    def test_developer_plan_rejects_non_relative_return_path(self) -> None:
+        _authenticate("user_123")
+
+        response = client.post(
+            "/api/v1/billing/units/checkout",
+            json={
+                "plan": "developer",
+                "return_path": "https://evil.example.com",
+            },
+        )
+
+        assert response.status_code == 422
+
     def test_non_developer_plan_rejected(self, monkeypatch) -> None:
         _authenticate("user_123")
 

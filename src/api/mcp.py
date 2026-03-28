@@ -4,12 +4,20 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 from starlette.datastructures import Headers
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from src.api.auth import AuthIdentity, TokenVerificationError, verify_api_key
+from src.api.auth import AuthIdentity
+from src.api.mcp_oauth import (
+    McpOAuthConfigError,
+    load_mcp_oauth_access_token,
+    mcp_oauth_resource_url,
+    mcp_oauth_scope,
+    mcp_oauth_www_authenticate,
+)
 from src.db.supabase import SourceType, VideoStatus
 
 _IDENTITY_STATE_KEY = "vmf_mcp_identity"
@@ -59,19 +67,21 @@ class SearchVideoResult(BaseModel):
     results: list[McpSearchResult]
 
 
-def _unauthorized(detail: str) -> JSONResponse:
+def _auth_error(*, status_code: int, error: str, description: str) -> JSONResponse:
     return JSONResponse(
-        status_code=401,
-        content={"detail": detail},
-        headers={"WWW-Authenticate": "Bearer"},
+        status_code=status_code,
+        content={"error": error, "error_description": description},
+        headers={
+            "WWW-Authenticate": mcp_oauth_www_authenticate(
+                error=error,
+                description=description,
+            )
+        },
     )
 
 
-# TODO(next PR: OAuth connector): replace this manual vmf_ API-key gate with
-# MCP protected resource metadata + OAuth account linking, then remove the
-# manual-key testing instructions from the docs.
-class ManualApiKeyAuthApp:
-    """Require Bearer vmf_ API keys before forwarding to the mounted MCP app."""
+class McpOAuthResourceApp:
+    """Require OAuth Bearer tokens before forwarding to the mounted MCP app."""
 
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -81,30 +91,60 @@ class ManualApiKeyAuthApp:
             await self.app(scope, receive, send)
             return
 
+        if scope["method"] == "HEAD":
+            await Response(status_code=204)(scope, receive, send)
+            return
+
         headers = Headers(scope=scope)
         authorization = headers.get("authorization")
         if authorization is None:
-            await _unauthorized("Missing Authorization header")(scope, receive, send)
+            await _auth_error(
+                status_code=401,
+                error="invalid_token",
+                description="Authentication required",
+            )(scope, receive, send)
             return
 
         scheme, _, token = authorization.partition(" ")
         if scheme.lower() != "bearer" or not token.strip():
-            await _unauthorized("Invalid Authorization header")(scope, receive, send)
+            await _auth_error(
+                status_code=401,
+                error="invalid_token",
+                description="Invalid Authorization header",
+            )(scope, receive, send)
             return
 
         raw_token = token.strip()
-        if not raw_token.startswith("vmf_"):
-            await _unauthorized("MCP endpoints require a vmf_ API key")(scope, receive, send)
+        try:
+            configured_resource = mcp_oauth_resource_url()
+            access_token = await load_mcp_oauth_access_token(raw_token)
+        except McpOAuthConfigError:
+            await JSONResponse(
+                status_code=503,
+                content={"detail": "MCP OAuth is not configured"},
+            )(scope, receive, send)
+            return
+        if access_token is None or access_token.resource.rstrip("/") != configured_resource:
+            await _auth_error(
+                status_code=401,
+                error="invalid_token",
+                description="Invalid authentication token",
+            )(scope, receive, send)
             return
 
-        try:
-            identity = verify_api_key(raw_token)
-        except TokenVerificationError as exc:
-            await _unauthorized(str(exc))(scope, receive, send)
+        if mcp_oauth_scope() not in access_token.scopes:
+            await _auth_error(
+                status_code=403,
+                error="insufficient_scope",
+                description=f"Required scope: {mcp_oauth_scope()}",
+            )(scope, receive, send)
             return
 
         scope.setdefault("state", {})
-        scope["state"][_IDENTITY_STATE_KEY] = identity
+        scope["state"][_IDENTITY_STATE_KEY] = AuthIdentity(
+            user_id=access_token.user_id,
+            auth_method="mcp_oauth",
+        )
         await self.app(scope, receive, send)
 
 
@@ -164,15 +204,12 @@ def _search_result_from_response(response: Any) -> SearchVideoResult:
     )
 
 
-# TODO(next PR: OAuth connector): publish connector-grade metadata here once the
-# authorization server, approval UI, and scope model are in place.
 vmf_mcp = FastMCP(
     name="Video Moment Finder",
     instructions=(
-        "Remote MCP server for Video Moment Finder. "
+        "OAuth-protected remote MCP server for Video Moment Finder. "
         "Supports presigned upload bootstrap, upload completion, video status, "
-        "video listing, and text search. Manual vmf_ API-key auth is supported "
-        "for private testing. OAuth account linking is not shipped yet."
+        "video listing, and text search for your connected account."
     ),
     website_url="https://www.videomomentfinder.com",
     host="0.0.0.0",
@@ -182,7 +219,41 @@ vmf_mcp = FastMCP(
 )
 
 
-@vmf_mcp.tool()
+def mcp_tool_approval_items() -> list[dict[str, str]]:
+    return [
+        {
+            "name": "upload_video",
+            "title": "Upload Video",
+            "description": "Start a presigned video upload or complete it after the file bytes are uploaded.",
+        },
+        {
+            "name": "get_video_status",
+            "title": "Get Video Status",
+            "description": "Check the processing status for one indexed video.",
+        },
+        {
+            "name": "list_videos",
+            "title": "List Videos",
+            "description": "List your recent indexed videos.",
+        },
+        {
+            "name": "search_video",
+            "title": "Search Video",
+            "description": "Run a text search against a ready video and return timestamped matches.",
+        },
+    ]
+
+
+@vmf_mcp.tool(
+    title="Upload Video",
+    annotations=ToolAnnotations(
+        title="Upload Video",
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
 def upload_video(
     action: Annotated[
         Literal["start", "complete"],
@@ -239,7 +310,15 @@ def upload_video(
     )
 
 
-@vmf_mcp.tool()
+@vmf_mcp.tool(
+    title="Get Video Status",
+    annotations=ToolAnnotations(
+        title="Get Video Status",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=False,
+    ),
+)
 def get_video_status(
     video_id: Annotated[str, Field(min_length=1, description="Video UUID returned from upload_video.")],
     ctx: Context | None = None,
@@ -255,7 +334,15 @@ def get_video_status(
     return _video_record_from_response(response)
 
 
-@vmf_mcp.tool()
+@vmf_mcp.tool(
+    title="List Videos",
+    annotations=ToolAnnotations(
+        title="List Videos",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=False,
+    ),
+)
 def list_videos(
     limit: Annotated[
         int,
@@ -275,7 +362,15 @@ def list_videos(
     return ListVideosResult(returned_count=len(videos), videos=videos)
 
 
-@vmf_mcp.tool()
+@vmf_mcp.tool(
+    title="Search Video",
+    annotations=ToolAnnotations(
+        title="Search Video",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=False,
+    ),
+)
 def search_video(
     video_id: Annotated[str, Field(min_length=1, description="Video UUID to search.")],
     query_text: Annotated[
@@ -304,8 +399,8 @@ def search_video(
 
 
 def build_mcp_asgi_app() -> ASGIApp:
-    """Return the `/mcp` ASGI endpoint protected by manual API-key auth."""
-    return ManualApiKeyAuthApp(StreamableHttpMcpEndpoint(vmf_mcp))
+    """Return the `/mcp` ASGI endpoint protected by OAuth bearer auth."""
+    return McpOAuthResourceApp(StreamableHttpMcpEndpoint(vmf_mcp))
 
 
 async def startup_mcp_session_manager() -> None:

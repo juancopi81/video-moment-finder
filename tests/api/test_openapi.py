@@ -28,10 +28,18 @@ def test_public_openapi_exposes_only_curated_routes() -> None:
     assert set(paths["/api/v1/videos"]) == {"get"}
 
     assert "/analytics/event" not in paths
+    assert "/authorize" not in paths
+    assert "/token" not in paths
+    assert "/revoke" not in paths
+    assert "/oauth/mcp/requests/{request_id}" not in paths
+    assert "/oauth/mcp/requests/{request_id}/approve" not in paths
+    assert "/oauth/mcp/requests/{request_id}/deny" not in paths
     assert "/webhooks/lemonsqueezy" not in paths
     assert "/api/v1/billing/credits/summary" not in paths
     assert "/api/v1/billing/credits/checkout" not in paths
     assert "/api/v1/videos/{video_id}/search/image" not in paths
+    assert "/.well-known/oauth-authorization-server" not in paths
+    assert "/.well-known/oauth-protected-resource/mcp" not in paths
 
 
 def test_docs_uses_public_openapi_schema() -> None:
