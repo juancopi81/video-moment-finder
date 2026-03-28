@@ -294,6 +294,13 @@ class InMemoryMcpOAuthStore:
         record = self.codes[code_id]
         self.codes[code_id] = replace(record, used_at=self._now())
 
+    def consume_code(self, code_id: str) -> bool:
+        record = self.codes.get(code_id)
+        if record is None or record.used_at is not None or record.revoked_at is not None:
+            return False
+        self.codes[code_id] = replace(record, used_at=self._now())
+        return True
+
     def create_tokens(
         self,
         *,
@@ -391,8 +398,8 @@ def mcp_oauth_store(monkeypatch) -> InMemoryMcpOAuthStore:
         store.get_code_by_hash,
     )
     monkeypatch.setattr(
-        "src.api.mcp_oauth.mark_mcp_oauth_authorization_code_used",
-        store.mark_code_used,
+        "src.api.mcp_oauth.consume_mcp_oauth_authorization_code",
+        store.consume_code,
     )
     monkeypatch.setattr(
         "src.api.mcp_oauth.create_mcp_oauth_tokens",

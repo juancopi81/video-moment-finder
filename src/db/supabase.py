@@ -1237,6 +1237,19 @@ def mark_mcp_oauth_authorization_code_used(code_id: str) -> None:
     ).eq("id", code_id).execute()
 
 
+def consume_mcp_oauth_authorization_code(code_id: str) -> bool:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_authorization_codes")
+        .update({"used_at": _utc_now_iso()})
+        .eq("id", code_id)
+        .is_("used_at", "null")
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return bool(result.data)
+
+
 def create_mcp_oauth_tokens(
     *,
     connection_id: str,

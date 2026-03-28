@@ -131,7 +131,11 @@ function ClaudeConnectorContent() {
     }
     setCheckoutLoading(true);
     try {
-      const returnPath = `/connectors/claude?request_id=${encodeURIComponent(requestId)}`;
+      const params = new URLSearchParams({
+        request_id: requestId,
+        checkout: "success",
+      });
+      const returnPath = `/connectors/claude?${params.toString()}`;
       const url = await startApiCheckout(token, returnPath);
       window.location.assign(url);
     } catch (error) {

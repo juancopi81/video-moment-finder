@@ -6,9 +6,12 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 from urllib.parse import parse_qs, urlparse
 
+import anyio
 from fastapi.testclient import TestClient
+from mcp.server.auth.provider import TokenError
 
 from src.api.app import app
+from src.api.mcp_oauth import get_mcp_oauth_provider
 from src.db.supabase import ApiCreditRecord
 from tests.api.conftest import InMemoryMcpOAuthStore, _authenticate
 
@@ -396,6 +399,32 @@ def test_token_exchange_rejects_wrong_code_verifier(
     assert "code_verifier" in response.json()["error_description"]
 
 
+def test_token_exchange_accepts_client_secret_basic_without_form_client_id(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+) -> None:
+    basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode("utf-8")).decode("utf-8")
+
+    with TestClient(app) as client:
+        _response, request_id, verifier = _start_authorization_request(client)
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+
+        response = client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "code_verifier": verifier,
+                "redirect_uri": CLAUDE_REDIRECT_URI,
+            },
+            headers={"Authorization": f"Basic {basic_auth}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["token_type"] == "Bearer"
+
+
 def test_token_exchange_rejects_wrong_client_secret(
     mcp_oauth_store: InMemoryMcpOAuthStore,
     monkeypatch,
@@ -413,6 +442,70 @@ def test_token_exchange_rejects_wrong_client_secret(
 
     assert response.status_code == 401
     assert response.json()["error"] == "unauthorized_client"
+
+
+def test_revoke_accepts_client_secret_basic_without_form_client_id(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+) -> None:
+    basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode("utf-8")).decode("utf-8")
+
+    with TestClient(app) as client:
+        _response, request_id, verifier = _start_authorization_request(client)
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+        token_response = _exchange_code(client, code=code, verifier=verifier)
+        access_token = token_response.json()["access_token"]
+
+        response = client.post(
+            "/revoke",
+            data={
+                "token": access_token,
+                "token_type_hint": "access_token",
+            },
+            headers={"Authorization": f"Basic {basic_auth}"},
+        )
+
+        mcp_response = client.post(
+            "/mcp",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={},
+        )
+
+    assert response.status_code == 200
+    assert mcp_response.status_code == 401
+
+
+def test_exchange_rejects_second_preloaded_copy_of_same_authorization_code(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+) -> None:
+    with TestClient(app) as client:
+        _response, request_id, verifier = _start_authorization_request(client)
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+
+    async def _runner() -> None:
+        provider = get_mcp_oauth_provider()
+        oauth_client = await provider.get_client(CLIENT_ID)
+        assert oauth_client is not None
+
+        first_loaded = await provider.load_authorization_code(oauth_client, code)
+        second_loaded = await provider.load_authorization_code(oauth_client, code)
+        assert first_loaded is not None
+        assert second_loaded is not None
+
+        first_token = await provider.exchange_authorization_code(oauth_client, first_loaded)
+        assert first_token.access_token
+
+        try:
+            await provider.exchange_authorization_code(oauth_client, second_loaded)
+        except TokenError as exc:
+            assert exc.error == "invalid_grant"
+            return
+        raise AssertionError("Second preloaded authorization code redemption unexpectedly succeeded")
+
+    anyio.run(_runner)
 
 
 def test_mcp_cors_preflight_allows_claude_origins() -> None:

@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import unquote
 from uuid import uuid4
 
+from starlette.datastructures import FormData
 from mcp.server.auth.middleware.client_auth import AuthenticationError
 from mcp.server.auth.provider import (
     AccessToken,
@@ -30,6 +31,7 @@ from pydantic import AnyHttpUrl, TypeAdapter
 
 from src.db.supabase import (
     McpOAuthAuthorizationRequestRecord,
+    consume_mcp_oauth_authorization_code,
     create_mcp_oauth_authorization_code,
     create_mcp_oauth_authorization_request,
     create_mcp_oauth_tokens,
@@ -37,7 +39,6 @@ from src.db.supabase import (
     get_mcp_oauth_authorization_code_by_hash,
     get_mcp_oauth_authorization_request,
     get_mcp_oauth_refresh_token_by_hash,
-    mark_mcp_oauth_authorization_code_used,
     revoke_mcp_oauth_access_tokens_for_connection,
     revoke_mcp_oauth_refresh_token,
     revoke_mcp_oauth_tokens_by_connection_id,
@@ -184,6 +185,14 @@ def _hash_secret(raw_value: str) -> str:
     return hashlib.sha256(raw_value.encode()).hexdigest()
 
 
+def _set_request_form_field(request: Any, form_data: FormData, *, name: str, value: str) -> FormData:
+    items = list(form_data.multi_items())
+    items.append((name, value))
+    updated = FormData(items)
+    request._form = updated
+    return updated
+
+
 def _normalize_scopes(scopes: list[str] | None) -> list[str]:
     if not scopes:
         return [DEFAULT_MCP_OAUTH_SCOPE]
@@ -255,14 +264,9 @@ class FlexibleStaticClientAuthenticator:
     async def authenticate_request(self, request) -> OAuthClientInformationFull:
         form_data = await request.form()
         client_id_raw = form_data.get("client_id")
-        if not isinstance(client_id_raw, str) or not client_id_raw:
-            raise AuthenticationError("Missing client_id")
-
-        client = await self.provider.get_client(client_id_raw)
-        if client is None:
-            raise AuthenticationError("Invalid client_id")
-
+        form_client_id = client_id_raw if isinstance(client_id_raw, str) and client_id_raw else None
         request_client_secret: str | None = None
+        basic_client_id: str | None = None
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Basic "):
             try:
@@ -272,7 +276,7 @@ class FlexibleStaticClientAuthenticator:
                 basic_client_id, request_client_secret = decoded.split(":", 1)
                 basic_client_id = unquote(basic_client_id)
                 request_client_secret = unquote(request_client_secret)
-                if basic_client_id != client_id_raw:
+                if form_client_id is not None and basic_client_id != form_client_id:
                     raise AuthenticationError("Client ID mismatch in Basic auth")
             except (ValueError, UnicodeDecodeError, binascii.Error):
                 raise AuthenticationError("Invalid Basic authentication header")
@@ -280,6 +284,33 @@ class FlexibleStaticClientAuthenticator:
             client_secret_raw = form_data.get("client_secret")
             if isinstance(client_secret_raw, str) and client_secret_raw:
                 request_client_secret = client_secret_raw
+
+        effective_client_id = form_client_id or basic_client_id
+        if not effective_client_id:
+            raise AuthenticationError("Missing client_id")
+        if form_client_id is None and basic_client_id is not None:
+            form_data = _set_request_form_field(
+                request,
+                form_data,
+                name="client_id",
+                value=basic_client_id,
+            )
+        form_client_secret = form_data.get("client_secret")
+        if (
+            basic_client_id is not None
+            and request_client_secret is not None
+            and not isinstance(form_client_secret, str)
+        ):
+            form_data = _set_request_form_field(
+                request,
+                form_data,
+                name="client_secret",
+                value=request_client_secret,
+            )
+
+        client = await self.provider.get_client(effective_client_id)
+        if client is None:
+            raise AuthenticationError("Invalid client_id")
 
         if client.client_secret:
             if not request_client_secret:
@@ -351,6 +382,8 @@ class McpOAuthProvider(
     ) -> OAuthToken:
         if authorization_code.client_id != client.client_id:
             raise TokenError("invalid_grant", "authorization code does not belong to this client")
+        if not consume_mcp_oauth_authorization_code(authorization_code.record_id):
+            raise TokenError("invalid_grant", "authorization code does not exist")
 
         connection_id = str(uuid4())
         raw_access_token = secrets.token_urlsafe(32)
@@ -366,7 +399,6 @@ class McpOAuthProvider(
             access_expires_at=_expiry_iso(ACCESS_TOKEN_TTL_S),
             refresh_expires_at=_expiry_iso(REFRESH_TOKEN_TTL_S),
         )
-        mark_mcp_oauth_authorization_code_used(authorization_code.record_id)
         return OAuthToken(
             access_token=raw_access_token,
             token_type="Bearer",
