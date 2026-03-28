@@ -18,21 +18,6 @@ def _authorized_headers(raw_key: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw_key}"}
 
 
-def _video_record(video_id: str, *, status: str = "ready") -> VideoRecord:
-    return VideoRecord(
-        id=video_id,
-        youtube_url=None,
-        status=status,  # type: ignore[arg-type]
-        user_id="user_123",
-        error_message=None,
-        source_type="upload",
-        source_r2_key="source/video_123/upload.mp4",
-        source_filename="upload.mp4",
-        created_at=datetime.now(timezone.utc).isoformat(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
-    )
-
-
 def _run_mcp_session(headers: dict[str, str], callback):
     async def _runner():
         transport = httpx.ASGITransport(app=app)
@@ -227,9 +212,9 @@ def test_mcp_list_videos_respects_limit(monkeypatch) -> None:
     monkeypatch.setattr(
         "src.api.app.db_list_videos",
         lambda user_id=None: [
-            _video_record("video-1"),
-            _video_record("video-2"),
-            _video_record("video-3"),
+            _upload_video_record("video-1"),
+            _upload_video_record("video-2"),
+            _upload_video_record("video-3"),
         ],
     )
     monkeypatch.setattr(

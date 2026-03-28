@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.api.auth import AuthIdentity, TokenVerificationError, verify_api_key
+from src.db.supabase import SourceType, VideoStatus
 
 _IDENTITY_STATE_KEY = "vmf_mcp_identity"
 _mcp_session_manager_cm: Any | None = None
@@ -18,8 +19,8 @@ _mcp_session_manager_cm: Any | None = None
 class McpVideoRecord(BaseModel):
     id: str
     youtube_url: str | None
-    status: Literal["queued", "processing", "ready", "failed"]
-    source_type: Literal["youtube", "upload"]
+    status: VideoStatus
+    source_type: SourceType
     source_filename: str | None = None
     source_url: str | None = None
     created_at: str
@@ -54,7 +55,7 @@ class SearchVideoResult(BaseModel):
     video_id: str
     youtube_url: str | None
     source_url: str | None = None
-    status: Literal["queued", "processing", "ready", "failed"]
+    status: VideoStatus
     results: list[McpSearchResult]
 
 
@@ -127,18 +128,19 @@ def _request_identity(ctx: Context) -> AuthIdentity:
     return identity
 
 
+def _optional_str(value: Any) -> str | None:
+    return str(value) if value is not None else None
+
+
 def _video_record_from_response(response: Any) -> McpVideoRecord:
-    created_at = response.created_at.isoformat() if hasattr(response.created_at, "isoformat") else str(response.created_at)
-    youtube_url = str(response.youtube_url) if response.youtube_url is not None else None
-    source_url = str(response.source_url) if response.source_url is not None else None
     return McpVideoRecord(
         id=response.id,
-        youtube_url=youtube_url,
+        youtube_url=_optional_str(response.youtube_url),
         status=response.status,
         source_type=response.source_type,
         source_filename=response.source_filename,
-        source_url=source_url,
-        created_at=created_at,
+        source_url=_optional_str(response.source_url),
+        created_at=response.created_at.isoformat(),
         error_message=response.error_message,
     )
 
@@ -146,13 +148,13 @@ def _video_record_from_response(response: Any) -> McpVideoRecord:
 def _search_result_from_response(response: Any) -> SearchVideoResult:
     return SearchVideoResult(
         video_id=response.video_id,
-        youtube_url=str(response.youtube_url) if response.youtube_url is not None else None,
-        source_url=str(response.source_url) if response.source_url is not None else None,
+        youtube_url=_optional_str(response.youtube_url),
+        source_url=_optional_str(response.source_url),
         status=response.status,
         results=[
             McpSearchResult(
                 timestamp_s=result.timestamp_s,
-                thumbnail_url=str(result.thumbnail_url) if result.thumbnail_url is not None else None,
+                thumbnail_url=_optional_str(result.thumbnail_url),
                 score=result.score,
                 source=result.source,
                 transcript_text=result.transcript_text,
