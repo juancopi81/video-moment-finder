@@ -16,8 +16,16 @@ export default function DevelopersPage() {
           <p className="text-sm text-zinc-700 dark:text-zinc-300">
             For agents and coding assistants, start with the public skill file.
             It defines the canonical URLs, security rules, and the supported
-            upload -&gt; wait -&gt; search flow. This is the public contract today;
-            MCP is not shipped yet.
+            upload -&gt; wait -&gt; search flow. This remains the primary public
+            contract today.
+          </p>
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            A thin remote MCP endpoint is also available at{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
+              https://api.videomomentfinder.com/mcp
+            </code>{" "}
+            for manual <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">vmf_</code> API-key
+            testing. The clean OAuth install/connect flow is not shipped yet.
           </p>
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <Link

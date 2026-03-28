@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -22,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, fie
 
 from src.analytics.events import track
 from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id, hash_api_key
+from src.api.mcp import build_mcp_asgi_app, shutdown_mcp_session_manager, startup_mcp_session_manager
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,
@@ -1002,6 +1004,15 @@ def _raise_search_backend_unavailable(video_id: str, exc: Exception) -> None:
     ) from exc
 
 
+@asynccontextmanager
+async def app_lifespan(_app: FastAPI):
+    await startup_mcp_session_manager()
+    try:
+        yield
+    finally:
+        await shutdown_mcp_session_manager()
+
+
 app = FastAPI(
     title="Video Moment Finder Public API",
     version="0.2.0",
@@ -1009,6 +1020,7 @@ app = FastAPI(
         "Agent-ready REST API for uploading a video, polling processing status, "
         "and searching by text. Internal web-only routes are excluded from this schema."
     ),
+    lifespan=app_lifespan,
 )
 
 app.add_middleware(
@@ -2151,3 +2163,4 @@ internal_v1_router.add_api_route(
 
 app.include_router(public_v1_router)
 app.include_router(internal_v1_router)
+app.add_route("/mcp", build_mcp_asgi_app(), methods=["GET", "POST", "DELETE"], include_in_schema=False)

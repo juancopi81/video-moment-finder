@@ -50,9 +50,9 @@
 
 ### 7.6 Agent Productization on Evidence
 
-- Improve the current API and CLI onboarding before adding new agent surface area.
-- Add non-repo-clone quickstarts and end-to-end examples.
-- Keep MCP out of scope until the current agent/API path shows repeated successful use.
+- Improve the current API and CLI onboarding alongside the thin manual-auth MCP path.
+- Add non-repo-clone quickstarts and end-to-end examples for REST, CLI, and the four-tool MCP flow.
+- Add OAuth account linking and connector-specific docs before broad Claude promotion.
 
 ---
 
@@ -62,7 +62,7 @@
 
 ### 8.1 Agent Surface Expansion
 
-- Reassess MCP only after the current API and CLI path shows repeated end-to-end use.
+- Expand beyond the thin four-tool MCP surface only after repeated end-to-end use justifies broader connector investment.
 - Expand image-search and richer automation flows only after the core text-search path has traction.
 - Add more developer onboarding assets when evidence shows the API wedge is working.
 
