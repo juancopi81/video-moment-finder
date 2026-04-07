@@ -19,7 +19,8 @@ Use those files as the canonical variable list and defaults. This document expla
 | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Required | Required | - | Required for Modal calls from both services. |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Optional | Optional | - | Runtime monitoring for API and worker. |
 | `CLERK_ISSUER`, `CLERK_AUDIENCE`, `CLERK_JWKS_URL` | Required | - | - | API JWT verification only. |
-| `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEX` | Required | - | - | API CORS policy only. |
+| `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEX` | Required | - | - | API CORS policy only. Include Claude web origins and localhost callback origins for MCP browser auth. |
+| `FRONTEND_BASE_URL`, `MCP_OAUTH_ISSUER_URL`, `MCP_OAUTH_RESOURCE_URL`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Required | - | - | Claude connector OAuth issuer, protected resource metadata, DCR support, optional static reviewer client validation, and approval-page redirects. |
 | `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`, `LEMON_SQUEEZY_VARIANT_ID_DEVELOPER`, `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`, `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`, `LEMON_SQUEEZY_WEBHOOK_SECRET`, `BILLING_GRANT_EVENT_NAMES`, `API_UNIT_COST_INDEX_VIDEO`, `API_UNIT_COST_TEXT_QUERY` | Required | - | - | API billing checkout, webhook handling, and API unit pricing. |
 | `RATE_LIMIT_*` | Optional | - | - | API rate limit tuning. |
 | `VIDEO_MAX_FREE_VIDEOS`, `VIDEO_UPLOAD_URL_TTL_S`, `VIDEO_SOURCE_URL_TTL_S` | Optional | - | - | API admission and signed URL behavior. |
@@ -97,9 +98,36 @@ Notes:
 - Missing R2 configuration or failed storage verification returns `503`.
 - Missing uploaded object on complete returns `400`.
 
+## Claude Connector OAuth Contract
+
+- Protected resource endpoint: `https://api.videomomentfinder.com/mcp`
+- OAuth discovery endpoints:
+  - `GET /.well-known/oauth-authorization-server`
+  - `GET /.well-known/oauth-protected-resource/mcp`
+- OAuth transaction endpoints:
+  - `GET|POST /authorize`
+  - `POST /register`
+  - `POST /token`
+  - `POST /revoke`
+- Frontend approval page:
+  - `https://www.videomomentfinder.com/connectors/claude?request_id=...`
+- Approved redirect URIs:
+  - `https://claude.ai/api/mcp/auth_callback`
+  - `https://claude.com/api/mcp/auth_callback`
+  - `http://localhost:6274/oauth/callback`
+  - `http://localhost:6274/oauth/callback/debug`
+
+Behavior notes:
+
+- `/mcp` only accepts OAuth bearer tokens. Legacy `vmf_` API keys remain valid for REST and CLI, not for MCP.
+- Connector usage bills against Developer Pack API units and records `api_usage_events.api_key_id = null`.
+- The connect page blocks approval when `api_units_balance <= 0` and sends users through Developer Pack checkout with a preserved `return_path`.
+- `HEAD /mcp` must stay tokenless for Claude client compatibility checks.
+
 ## Quick Troubleshooting
 
 - `Billing webhook is not configured` -> set `LEMON_SQUEEZY_WEBHOOK_SECRET` in API service.
 - `Upload storage is not configured` -> set R2 variables in API and worker services.
 - Modal auth failures -> set both `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` in both services.
+- `MCP OAuth is not configured` -> set `FRONTEND_BASE_URL`, `MCP_OAUTH_ISSUER_URL`, `MCP_OAUTH_RESOURCE_URL`, `MCP_OAUTH_CLIENT_ID`, and `MCP_OAUTH_CLIENT_SECRET` on the API service.
 - YouTube metadata or import fails with bot/sign-in challenges -> direct upload is the supported reliable path. Use the `yt-dlp` deploy/runtime notes only when explicitly debugging the best-effort YouTube import path.

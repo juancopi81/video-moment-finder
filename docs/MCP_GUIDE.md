@@ -1,203 +1,141 @@
 # Remote MCP Guide
 
-This document covers the thin remote MCP server shipped in this repository and how to review, test, deploy, and merge it safely.
+This document covers the shipped Claude-compatible remote MCP server, its OAuth flow, reviewer setup, and the validation gates required before submission.
 
-## What This Ships
+## What Ships
 
 - Remote MCP endpoint: `https://api.videomomentfinder.com/mcp`
 - Transport: Streamable HTTP
-- Auth today: manual `Authorization: Bearer <vmf_...>` API key
-- Tools:
+- Auth: OAuth 2.0 authorization-code + PKCE
+- OAuth discovery:
+  - `GET /.well-known/oauth-authorization-server`
+  - `GET /.well-known/oauth-protected-resource/mcp`
+- OAuth transaction endpoints:
+  - `GET|POST /authorize`
+  - `POST /register`
+  - `POST /token`
+  - `POST /revoke`
+- Frontend approval page:
+  - `https://www.videomomentfinder.com/connectors/claude?request_id=...`
+- Current MCP tools:
   - `upload_video`
   - `get_video_status`
   - `list_videos`
   - `search_video`
 
-Current scope:
+Behavior notes:
 
-- `upload_video` is a two-phase presigned-upload flow:
+- `/mcp` is OAuth-only.
+- REST API and CLI keep their existing JWT + `vmf_` API-key behavior.
+- Connector usage bills against Developer Pack API units.
+- MCP tool execution records `api_usage_events.api_key_id = null` for OAuth calls.
+- `upload_video` is annotated as a write tool; the other three tools are read-only.
+
+## Current Tool Scope
+
+- `upload_video` is a two-step presigned upload flow:
   - `action="start"` returns `video_id` + `upload_url`
   - `action="complete"` finalizes the upload after the file bytes are written
 - `search_video` is text-only in MCP
-- OAuth account linking is intentionally deferred to the next PR
+- YouTube submit is not part of the MCP tool surface
+- REST remains the canonical public contract for one-shot multipart upload, image search, and non-MCP programmatic usage
 
-## What Is Deferred
+## Claude Connect Flow
 
-Not part of this shipped flow:
+1. Add the custom connector in Claude with server URL `https://api.videomomentfinder.com/mcp`.
+2. Use guided OAuth. Claude web/Desktop can self-register through DCR, and internal review flows may still use the static client credentials from the secure review/test configuration.
+3. Click `Connect`.
+4. The user lands on `https://www.videomomentfinder.com/connectors/claude?request_id=...`.
+5. If signed out, they sign in or create an account.
+6. If `api_units_balance <= 0`, they buy a Developer Pack and return to the same connector page.
+7. They review the four MCP tools and explicitly approve access.
+8. Claude receives the authorization code callback, exchanges it for tokens, and begins using the connector.
 
-- Claude-native OAuth install/connect
-- Protected resource metadata for MCP OAuth discovery
-- Account-link approval UX
-- Connector-specific pricing/connect UI
-- Image search in MCP
-- YouTube submit in MCP
+Supported redirect URIs:
 
-## Local Test Flow
+- `https://claude.ai/api/mcp/auth_callback`
+- `https://claude.com/api/mcp/auth_callback`
+- `http://localhost:6274/oauth/callback`
+- `http://localhost:6274/oauth/callback/debug`
 
-1. Start the API:
+## Reviewer Setup
+
+Do not publish the confidential client secret in public docs or UI copy.
+
+For Anthropic review and internal testing:
+
+- Claude web/Desktop and other DCR-capable surfaces can self-register a public client through `POST /register`.
+- Keep the static reviewer client (`MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET`) available for review flows that still expect explicit credentials.
+- Prepare a live review account before submission:
+  - valid login
+  - positive Developer Pack API-unit balance
+  - at least one ready video
+  - at least three documented example prompts
+
+Related public pages:
+
+- Developers: `https://www.videomomentfinder.com/developers`
+- Privacy: `https://www.videomomentfinder.com/privacy`
+- Support: `https://www.videomomentfinder.com/support`
+
+## Example Prompts
+
+1. `List my recent videos in Video Moment Finder.`
+   Expected behavior: Claude calls `list_videos` and returns recent video IDs, status, and upload source details.
+
+2. `Check whether video <video_id> is ready yet.`
+   Expected behavior: Claude calls `get_video_status` and reports the current processing state or failure reason.
+
+3. `Search video <video_id> for the moment they explain the model and give me timestamps.`
+   Expected behavior: Claude calls `search_video` and returns timestamped matches from the indexed video.
+
+4. `Upload this MP4 to Video Moment Finder and then poll until processing starts.`
+   Expected behavior: Claude uses `upload_video(action="start")`, writes the file to the presigned upload URL, then uses `upload_video(action="complete")` and `get_video_status`.
+
+## Local Validation
+
+Start the API:
 
 ```bash
 uv run uvicorn src.api.app:app --reload --port 8000
 ```
 
-2. Use a real `vmf_` API key.
-
-3. Run a transport smoke test:
+Run the targeted backend test suite:
 
 ```bash
-uv run python - <<'PY'
-import asyncio
-import httpx
-
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
-
-MCP_URL = "http://127.0.0.1:8000/mcp"
-API_KEY = "vmf_YOUR_KEY"
-
-
-async def main():
-    async with httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {API_KEY}"},
-    ) as http_client:
-        async with streamable_http_client(MCP_URL, http_client=http_client) as (
-            read_stream,
-            write_stream,
-            _,
-        ):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                tools = await session.list_tools()
-                print([tool.name for tool in tools.tools])
-                result = await session.call_tool(
-                    "upload_video",
-                    {
-                        "action": "start",
-                        "filename": "sample.mp4",
-                        "content_type": "video/mp4",
-                    },
-                )
-                print(result.structuredContent)
-
-
-asyncio.run(main())
-PY
+.venv/bin/pytest -q \
+  tests/api/test_mcp.py \
+  tests/api/test_mcp_oauth.py \
+  tests/api/test_api_billing.py \
+  tests/api/test_openapi.py \
+  tests/billing/test_lemonsqueezy.py
 ```
-
-4. Upload the file bytes to the returned `upload_url` with a plain `PUT`.
-   Do not forward the `Authorization` header to the presigned upload URL.
-
-5. Finalize and search:
-
-```bash
-uv run python - <<'PY'
-import asyncio
-import httpx
-
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
-
-MCP_URL = "http://127.0.0.1:8000/mcp"
-API_KEY = "vmf_YOUR_KEY"
-VIDEO_ID = "VIDEO_ID_FROM_START"
-
-
-async def main():
-    async with httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {API_KEY}"},
-    ) as http_client:
-        async with streamable_http_client(MCP_URL, http_client=http_client) as (
-            read_stream,
-            write_stream,
-            _,
-        ):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                completed = await session.call_tool(
-                    "upload_video",
-                    {
-                        "action": "complete",
-                        "video_id": VIDEO_ID,
-                        "filename": "sample.mp4",
-                    },
-                )
-                print(completed.structuredContent)
-                status = await session.call_tool("get_video_status", {"video_id": VIDEO_ID})
-                print(status.structuredContent)
-
-
-asyncio.run(main())
-PY
-```
-
-## Production Test After Merge
-
-Once the Railway API deploy is live, test production with the same flow against:
-
-- `https://api.videomomentfinder.com/mcp`
-
-Recommended smoke test:
-
-1. Connect with a valid `vmf_` API key
-2. Confirm tool discovery returns exactly:
-   - `upload_video`
-   - `get_video_status`
-   - `list_videos`
-   - `search_video`
-3. Run `upload_video` with `action="start"`
-4. `PUT` a small test file to the returned `upload_url`
-5. Run `upload_video` with `action="complete"`
-6. Poll with `get_video_status`
-7. Run `search_video` after the video reaches `ready`
-
-Recommended clients:
-
-- Anthropic Messages API with a remote MCP server definition and bearer auth
-- A generic MCP inspector/client for transport debugging
-
-## Validation Included In This PR
-
-Targeted validation:
-
-- `uv run pytest -q tests/api/test_mcp.py tests/api/test_openapi.py tests/api/v1/test_router.py`
 
 Full validation before merge:
 
-- `./scripts/workflow/check_all.sh`
+```bash
+./scripts/workflow/check_all.sh
+```
 
-The MCP tests cover:
+## Submission Gates
 
-- missing auth -> `401`
-- invalid `vmf_` key -> `401`
-- Clerk-style bearer token rejection on `/mcp`
-- tool discovery
-- upload start
-- upload complete
-- status lookup
-- video listing
-- text search
-- representative tool error paths
-- `/mcp` exclusion from the curated REST OpenAPI schema
+These checks must pass before Anthropic directory submission:
 
-## Merge and Deploy Notes
+- Claude.ai custom connector completes connect/auth successfully
+- Claude Desktop completes connect/auth successfully
+- MCP Inspector or Claude Code completes connect/auth successfully
+- `upload_video`, `get_video_status`, `list_videos`, and `search_video` all work end to end
+- Privacy and support URLs are reachable over HTTPS
+- Public docs contain no preview, deferred, or manual-auth wording
 
-Merge path:
+## Upload Validation Gate
 
-- Normal squash merge is fine once validation is green.
+The current MCP upload path remains the two-step presigned flow.
 
-Deploy effects after merge:
+Before submission, verify in a real Claude client that:
 
-- Railway API must rebuild because backend code and Python dependencies changed
-- Frontend redeploy is needed if the docs pages changed in the same PR
+- Claude can complete `upload_video(action="start")`
+- Claude can write the file bytes to the returned `upload_url` without forwarding `Authorization`
+- Claude can call `upload_video(action="complete")` and continue with status + search
 
-What is *not* required for this PR:
-
-- no Supabase migrations
-- no new environment variables
-- no Modal redeploy
-
-If deployment fails after merge, investigate:
-
-- Python dependency install/build on Railway
-- MCP route wiring or transport behavior
-- existing auth/storage/billing runtime config already used by the API
+If that end-to-end upload experience is not reliable in Claude, replace the MCP write path with a frontend upload handoff flow before submission.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from supabase import create_client, Client
 from src.utils.logging import get_logger
@@ -15,6 +15,7 @@ VideoStatus = Literal["queued", "processing", "ready", "failed"]
 SourceType = Literal["youtube", "upload"]
 JobStatus = Literal["queued", "processing", "completed", "failed"]
 TerminalJobStatus = Literal["completed", "failed"]
+McpOAuthRequestStatus = Literal["pending", "approved", "denied"]
 logger = get_logger(__name__)
 
 
@@ -126,6 +127,106 @@ class ApiKeyRecord:
     last_used_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
+
+
+@dataclass
+class McpOAuthAuthorizationRequestRecord:
+    """Stored OAuth authorization request for MCP connector linking."""
+
+    id: str
+    client_id: str
+    redirect_uri: str
+    redirect_uri_provided_explicitly: bool
+    state: str | None
+    scopes: list[str]
+    code_challenge: str
+    resource: str
+    status: McpOAuthRequestStatus
+    user_id: str | None = None
+    expires_at: str | None = None
+    approved_at: str | None = None
+    denied_at: str | None = None
+    resolved_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class McpOAuthClientRecord:
+    """Stored OAuth client metadata for MCP dynamic registration."""
+
+    client_id: str
+    client_secret: str | None = None
+    client_id_issued_at: int | None = None
+    client_secret_expires_at: int | None = None
+    redirect_uris: list[str] | None = None
+    token_endpoint_auth_method: str | None = None
+    grant_types: list[str] | None = None
+    response_types: list[str] | None = None
+    scope: str | None = None
+    client_name: str | None = None
+    client_uri: str | None = None
+    logo_uri: str | None = None
+    contacts: list[str] | None = None
+    tos_uri: str | None = None
+    policy_uri: str | None = None
+    jwks_uri: str | None = None
+    jwks: Any | None = None
+    software_id: str | None = None
+    software_version: str | None = None
+    created_at: str | None = None
+
+
+@dataclass
+class McpOAuthAuthorizationCodeRecord:
+    """Stored OAuth authorization code."""
+
+    id: str
+    user_id: str
+    client_id: str
+    code_hash: str
+    redirect_uri: str
+    redirect_uri_provided_explicitly: bool
+    scopes: list[str]
+    code_challenge: str
+    resource: str
+    authorization_request_id: str | None = None
+    expires_at: str | None = None
+    used_at: str | None = None
+    revoked_at: str | None = None
+    created_at: str | None = None
+
+
+@dataclass
+class McpOAuthAccessTokenRecord:
+    """Stored OAuth access token."""
+
+    id: str
+    connection_id: str
+    user_id: str
+    client_id: str
+    token_hash: str
+    scopes: list[str]
+    resource: str
+    expires_at: str | None = None
+    revoked_at: str | None = None
+    created_at: str | None = None
+
+
+@dataclass
+class McpOAuthRefreshTokenRecord:
+    """Stored OAuth refresh token."""
+
+    id: str
+    connection_id: str
+    user_id: str
+    client_id: str
+    token_hash: str
+    scopes: list[str]
+    resource: str
+    expires_at: str | None = None
+    revoked_at: str | None = None
+    created_at: str | None = None
 
 
 @dataclass
@@ -254,6 +355,101 @@ def _row_to_video_job(row: dict) -> VideoJobRecord:
         completed_at=row.get("completed_at"),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
+    )
+
+
+def _row_to_mcp_oauth_authorization_request(row: dict) -> McpOAuthAuthorizationRequestRecord:
+    return McpOAuthAuthorizationRequestRecord(
+        id=row["id"],
+        client_id=row["client_id"],
+        redirect_uri=row["redirect_uri"],
+        redirect_uri_provided_explicitly=bool(row.get("redirect_uri_provided_explicitly")),
+        state=row.get("state"),
+        scopes=list(row.get("scopes") or []),
+        code_challenge=row["code_challenge"],
+        resource=row["resource"],
+        status=row.get("status", "pending"),
+        user_id=row.get("user_id"),
+        expires_at=row.get("expires_at"),
+        approved_at=row.get("approved_at"),
+        denied_at=row.get("denied_at"),
+        resolved_at=row.get("resolved_at"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _row_to_mcp_oauth_authorization_code(row: dict) -> McpOAuthAuthorizationCodeRecord:
+    return McpOAuthAuthorizationCodeRecord(
+        id=row["id"],
+        authorization_request_id=row.get("authorization_request_id"),
+        user_id=row["user_id"],
+        client_id=row["client_id"],
+        code_hash=row["code_hash"],
+        redirect_uri=row["redirect_uri"],
+        redirect_uri_provided_explicitly=bool(row.get("redirect_uri_provided_explicitly")),
+        scopes=list(row.get("scopes") or []),
+        code_challenge=row["code_challenge"],
+        resource=row["resource"],
+        expires_at=row.get("expires_at"),
+        used_at=row.get("used_at"),
+        revoked_at=row.get("revoked_at"),
+        created_at=row.get("created_at"),
+    )
+
+
+def _row_to_mcp_oauth_client(row: dict) -> McpOAuthClientRecord:
+    return McpOAuthClientRecord(
+        client_id=row["client_id"],
+        client_secret=row.get("client_secret"),
+        client_id_issued_at=row.get("client_id_issued_at"),
+        client_secret_expires_at=row.get("client_secret_expires_at"),
+        redirect_uris=list(row.get("redirect_uris") or []),
+        token_endpoint_auth_method=row.get("token_endpoint_auth_method"),
+        grant_types=list(row.get("grant_types") or []),
+        response_types=list(row.get("response_types") or []),
+        scope=row.get("scope"),
+        client_name=row.get("client_name"),
+        client_uri=row.get("client_uri"),
+        logo_uri=row.get("logo_uri"),
+        contacts=list(row.get("contacts") or []) if row.get("contacts") is not None else None,
+        tos_uri=row.get("tos_uri"),
+        policy_uri=row.get("policy_uri"),
+        jwks_uri=row.get("jwks_uri"),
+        jwks=row.get("jwks"),
+        software_id=row.get("software_id"),
+        software_version=row.get("software_version"),
+        created_at=row.get("created_at"),
+    )
+
+
+def _row_to_mcp_oauth_access_token(row: dict) -> McpOAuthAccessTokenRecord:
+    return McpOAuthAccessTokenRecord(
+        id=row["id"],
+        connection_id=row["connection_id"],
+        user_id=row["user_id"],
+        client_id=row["client_id"],
+        token_hash=row["token_hash"],
+        scopes=list(row.get("scopes") or []),
+        resource=row["resource"],
+        expires_at=row.get("expires_at"),
+        revoked_at=row.get("revoked_at"),
+        created_at=row.get("created_at"),
+    )
+
+
+def _row_to_mcp_oauth_refresh_token(row: dict) -> McpOAuthRefreshTokenRecord:
+    return McpOAuthRefreshTokenRecord(
+        id=row["id"],
+        connection_id=row["connection_id"],
+        user_id=row["user_id"],
+        client_id=row["client_id"],
+        token_hash=row["token_hash"],
+        scopes=list(row.get("scopes") or []),
+        resource=row["resource"],
+        expires_at=row.get("expires_at"),
+        revoked_at=row.get("revoked_at"),
+        created_at=row.get("created_at"),
     )
 
 
@@ -951,6 +1147,334 @@ def touch_api_key_last_used(key_id: str) -> None:
         ).eq("id", key_id).execute()
     except Exception as exc:
         logger.debug("Failed to update api_key last_used_at: %s", exc, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# MCP OAuth CRUD
+# ---------------------------------------------------------------------------
+
+
+def create_mcp_oauth_client(
+    *,
+    client_id: str,
+    client_secret: str | None,
+    client_id_issued_at: int | None,
+    client_secret_expires_at: int | None,
+    redirect_uris: list[str],
+    token_endpoint_auth_method: str,
+    grant_types: list[str],
+    response_types: list[str],
+    scope: str | None = None,
+    client_name: str | None = None,
+    client_uri: str | None = None,
+    logo_uri: str | None = None,
+    contacts: list[str] | None = None,
+    tos_uri: str | None = None,
+    policy_uri: str | None = None,
+    jwks_uri: str | None = None,
+    jwks: Any | None = None,
+    software_id: str | None = None,
+    software_version: str | None = None,
+) -> McpOAuthClientRecord:
+    client = get_client()
+    result = client.table("mcp_oauth_clients").insert(
+        {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "client_id_issued_at": client_id_issued_at,
+            "client_secret_expires_at": client_secret_expires_at,
+            "redirect_uris": redirect_uris,
+            "token_endpoint_auth_method": token_endpoint_auth_method,
+            "grant_types": grant_types,
+            "response_types": response_types,
+            "scope": scope,
+            "client_name": client_name,
+            "client_uri": client_uri,
+            "logo_uri": logo_uri,
+            "contacts": contacts,
+            "tos_uri": tos_uri,
+            "policy_uri": policy_uri,
+            "jwks_uri": jwks_uri,
+            "jwks": jwks,
+            "software_id": software_id,
+            "software_version": software_version,
+        }
+    ).execute()
+    if not result.data:
+        raise RuntimeError("Failed to create MCP OAuth client")
+    return _row_to_mcp_oauth_client(result.data[0])
+
+
+def get_mcp_oauth_client(
+    client_id: str,
+) -> McpOAuthClientRecord | None:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_clients")
+        .select("*")
+        .eq("client_id", client_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_client(result.data[0])
+
+
+def create_mcp_oauth_authorization_request(
+    *,
+    client_id: str,
+    redirect_uri: str,
+    redirect_uri_provided_explicitly: bool,
+    state: str | None,
+    scopes: list[str],
+    code_challenge: str,
+    resource: str,
+    expires_at: str,
+) -> McpOAuthAuthorizationRequestRecord:
+    client = get_client()
+    result = client.table("mcp_oauth_authorization_requests").insert(
+        {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "redirect_uri_provided_explicitly": redirect_uri_provided_explicitly,
+            "state": state,
+            "scopes": scopes,
+            "code_challenge": code_challenge,
+            "resource": resource,
+            "expires_at": expires_at,
+        }
+    ).execute()
+    if not result.data:
+        raise RuntimeError("Failed to create MCP OAuth authorization request")
+    return _row_to_mcp_oauth_authorization_request(result.data[0])
+
+
+def delete_expired_mcp_oauth_authorization_requests(expires_before: str) -> None:
+    client = get_client()
+    client.table("mcp_oauth_authorization_requests").delete().eq(
+        "status", "pending"
+    ).lt("expires_at", expires_before).execute()
+
+
+def get_mcp_oauth_authorization_request(
+    request_id: str,
+) -> McpOAuthAuthorizationRequestRecord | None:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_authorization_requests")
+        .select("*")
+        .eq("id", request_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_authorization_request(result.data[0])
+
+
+def update_mcp_oauth_authorization_request_resolution(
+    request_id: str,
+    *,
+    status: McpOAuthRequestStatus,
+    user_id: str | None = None,
+) -> McpOAuthAuthorizationRequestRecord | None:
+    now = _utc_now_iso()
+    update: dict[str, object] = {
+        "status": status,
+        "resolved_at": now,
+    }
+    if user_id is not None:
+        update["user_id"] = user_id
+    if status == "approved":
+        update["approved_at"] = now
+    if status == "denied":
+        update["denied_at"] = now
+
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_authorization_requests")
+        .update(update)
+        .eq("id", request_id)
+        .eq("status", "pending")
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_authorization_request(result.data[0])
+
+
+def create_mcp_oauth_authorization_code(
+    *,
+    authorization_request_id: str | None,
+    user_id: str,
+    client_id: str,
+    code_hash: str,
+    redirect_uri: str,
+    redirect_uri_provided_explicitly: bool,
+    scopes: list[str],
+    code_challenge: str,
+    resource: str,
+    expires_at: str,
+) -> McpOAuthAuthorizationCodeRecord:
+    client = get_client()
+    result = client.table("mcp_oauth_authorization_codes").insert(
+        {
+            "authorization_request_id": authorization_request_id,
+            "user_id": user_id,
+            "client_id": client_id,
+            "code_hash": code_hash,
+            "redirect_uri": redirect_uri,
+            "redirect_uri_provided_explicitly": redirect_uri_provided_explicitly,
+            "scopes": scopes,
+            "code_challenge": code_challenge,
+            "resource": resource,
+            "expires_at": expires_at,
+        }
+    ).execute()
+    if not result.data:
+        raise RuntimeError("Failed to create MCP OAuth authorization code")
+    return _row_to_mcp_oauth_authorization_code(result.data[0])
+
+
+def get_mcp_oauth_authorization_code_by_hash(
+    code_hash: str,
+) -> McpOAuthAuthorizationCodeRecord | None:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_authorization_codes")
+        .select("*")
+        .eq("code_hash", code_hash)
+        .is_("used_at", "null")
+        .is_("revoked_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_authorization_code(result.data[0])
+
+
+def mark_mcp_oauth_authorization_code_used(code_id: str) -> None:
+    client = get_client()
+    client.table("mcp_oauth_authorization_codes").update(
+        {"used_at": _utc_now_iso()}
+    ).eq("id", code_id).execute()
+
+
+def consume_mcp_oauth_authorization_code(code_id: str) -> bool:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_authorization_codes")
+        .update({"used_at": _utc_now_iso()})
+        .eq("id", code_id)
+        .is_("used_at", "null")
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return bool(result.data)
+
+
+def create_mcp_oauth_tokens(
+    *,
+    connection_id: str,
+    user_id: str,
+    client_id: str,
+    access_token_hash: str,
+    refresh_token_hash: str,
+    scopes: list[str],
+    resource: str,
+    access_expires_at: str,
+    refresh_expires_at: str,
+) -> tuple[McpOAuthAccessTokenRecord, McpOAuthRefreshTokenRecord]:
+    client = get_client()
+    access_result = client.table("mcp_oauth_access_tokens").insert(
+        {
+            "connection_id": connection_id,
+            "user_id": user_id,
+            "client_id": client_id,
+            "token_hash": access_token_hash,
+            "scopes": scopes,
+            "resource": resource,
+            "expires_at": access_expires_at,
+        }
+    ).execute()
+    refresh_result = client.table("mcp_oauth_refresh_tokens").insert(
+        {
+            "connection_id": connection_id,
+            "user_id": user_id,
+            "client_id": client_id,
+            "token_hash": refresh_token_hash,
+            "scopes": scopes,
+            "resource": resource,
+            "expires_at": refresh_expires_at,
+        }
+    ).execute()
+    if not access_result.data or not refresh_result.data:
+        raise RuntimeError("Failed to create MCP OAuth tokens")
+    return (
+        _row_to_mcp_oauth_access_token(access_result.data[0]),
+        _row_to_mcp_oauth_refresh_token(refresh_result.data[0]),
+    )
+
+
+def get_mcp_oauth_access_token_by_hash(
+    token_hash: str,
+) -> McpOAuthAccessTokenRecord | None:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_access_tokens")
+        .select("*")
+        .eq("token_hash", token_hash)
+        .is_("revoked_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_access_token(result.data[0])
+
+
+def get_mcp_oauth_refresh_token_by_hash(
+    token_hash: str,
+) -> McpOAuthRefreshTokenRecord | None:
+    client = get_client()
+    result = (
+        client.table("mcp_oauth_refresh_tokens")
+        .select("*")
+        .eq("token_hash", token_hash)
+        .is_("revoked_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    return _row_to_mcp_oauth_refresh_token(result.data[0])
+
+
+def revoke_mcp_oauth_access_tokens_for_connection(connection_id: str) -> None:
+    client = get_client()
+    client.table("mcp_oauth_access_tokens").update(
+        {"revoked_at": _utc_now_iso()}
+    ).eq("connection_id", connection_id).is_("revoked_at", "null").execute()
+
+
+def revoke_mcp_oauth_refresh_token(refresh_token_id: str) -> None:
+    client = get_client()
+    client.table("mcp_oauth_refresh_tokens").update(
+        {"revoked_at": _utc_now_iso()}
+    ).eq("id", refresh_token_id).is_("revoked_at", "null").execute()
+
+
+def revoke_mcp_oauth_tokens_by_connection_id(connection_id: str) -> None:
+    now = _utc_now_iso()
+    client = get_client()
+    client.table("mcp_oauth_access_tokens").update({"revoked_at": now}).eq(
+        "connection_id", connection_id
+    ).is_("revoked_at", "null").execute()
+    client.table("mcp_oauth_refresh_tokens").update({"revoked_at": now}).eq(
+        "connection_id", connection_id
+    ).is_("revoked_at", "null").execute()
 
 
 # ---------------------------------------------------------------------------

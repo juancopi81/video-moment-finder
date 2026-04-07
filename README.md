@@ -8,11 +8,14 @@ Process a video, run text or image queries, and jump to matching timestamps.
 Public agent entrypoints:
 
 - [developers](https://www.videomomentfinder.com/developers)
+- [Claude connector approval](https://www.videomomentfinder.com/connectors/claude)
 - [skill.md](https://www.videomomentfinder.com/skill.md)
 - [openapi.json](https://api.videomomentfinder.com/openapi.json)
 
-Today the primary external integration surface is an agent-ready REST API plus CLI.
-A remote MCP endpoint is also available at `https://api.videomomentfinder.com/mcp` for manual `vmf_` API-key testing, but the clean OAuth install/connect flow is not shipped yet.
+Video Moment Finder exposes two external integration surfaces:
+
+- REST API + CLI, authenticated with `vmf_` API keys
+- Remote MCP at `https://api.videomomentfinder.com/mcp`, authenticated with OAuth 2.0 authorization-code + PKCE for Claude-compatible clients
 
 ## What It Does
 
@@ -32,6 +35,34 @@ Current transcript scope:
 - YouTube videos use existing subtitle tracks or automatic caption tracks when available and index them for semantic transcript retrieval.
 - YouTube videos currently do not fall back to Whisper when no caption track is available.
 - Direct uploads extract speech with Whisper large-v3-turbo via `faster-whisper` and index those transcript segments for spoken-text queries.
+
+## Claude Connector
+
+- Remote MCP endpoint: `https://api.videomomentfinder.com/mcp`
+- Auth flow: OAuth 2.0 authorization-code + PKCE
+- Approval page: `https://www.videomomentfinder.com/connectors/claude`
+- Billing path: Developer Pack API units
+- Current MCP tools:
+  - `upload_video`
+  - `get_video_status`
+  - `list_videos`
+  - `search_video`
+
+Important auth split:
+
+- `/mcp` is OAuth-only.
+- REST API and CLI keep their current `vmf_` API-key flow.
+
+Current MCP upload behavior:
+
+- `upload_video` uses a two-step presigned upload:
+  - `action="start"` returns `video_id` + `upload_url`
+  - `action="complete"` finalizes after the upload bytes are written
+
+Privacy and support:
+
+- [Privacy policy](https://www.videomomentfinder.com/privacy)
+- [Support](https://www.videomomentfinder.com/support)
 
 ## Quick Start (Local)
 
@@ -126,7 +157,7 @@ YouTube URL import remains best effort and may be blocked by server-side restric
 - [STATUS.md](./STATUS.md): execution history only.
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
 - [docs/CLI_API_GUIDE.md](./docs/CLI_API_GUIDE.md): public CLI and external API happy-path guide.
-- [docs/MCP_GUIDE.md](./docs/MCP_GUIDE.md): remote MCP scope, test flow, and merge/deploy notes.
+- [docs/MCP_GUIDE.md](./docs/MCP_GUIDE.md): OAuth connect flow, reviewer setup, validation gates, and submission notes.
 - [frontend/public/skill.md](./frontend/public/skill.md): public agent bootstrap with canonical URLs and security rules.
 
 ## Deployment (At a Glance)

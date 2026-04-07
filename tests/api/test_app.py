@@ -2725,9 +2725,15 @@ def test_allowed_cors_origin_regex_supports_explicit_regex(monkeypatch) -> None:
     assert not re.match(regex, "https://api.example.com")
 
 
-def test_allowed_cors_origins_defaults_to_localhost(monkeypatch) -> None:
+def test_allowed_cors_origins_defaults_to_claude_compatible_set(monkeypatch) -> None:
     monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
-    assert _allowed_cors_origins() == ["http://localhost:3000"]
+    assert _allowed_cors_origins() == [
+        "http://localhost:3000",
+        "http://localhost:6274",
+        "http://127.0.0.1:6274",
+        "https://claude.ai",
+        "https://claude.com",
+    ]
 
 
 def test_video_record_to_response_with_malformed_created_at(caplog) -> None:

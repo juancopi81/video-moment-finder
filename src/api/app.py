@@ -19,11 +19,32 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from mcp.server.auth.handlers.authorize import AuthorizationHandler
+from mcp.server.auth.handlers.metadata import MetadataHandler, ProtectedResourceMetadataHandler
+from mcp.server.auth.handlers.register import RegistrationHandler
+from mcp.server.auth.handlers.revoke import RevocationHandler
+from mcp.server.auth.handlers.token import TokenHandler
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
 
 from src.analytics.events import track
 from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id, hash_api_key
-from src.api.mcp import build_mcp_asgi_app, shutdown_mcp_session_manager, startup_mcp_session_manager
+from src.api.mcp import (
+    build_mcp_asgi_app,
+    mcp_tool_approval_items,
+    shutdown_mcp_session_manager,
+    startup_mcp_session_manager,
+)
+from src.api.mcp_oauth import (
+    FlexibleClientAuthenticator,
+    McpOAuthConfigError,
+    McpOAuthFlowError,
+    get_mcp_oauth_settings,
+    get_mcp_oauth_provider,
+    mcp_oauth_authorization_metadata,
+    mcp_oauth_client_registration_options,
+    mcp_oauth_protected_resource_metadata,
+    mcp_oauth_request_public_payload,
+)
 from src.api.rate_limit import SlidingWindowRateLimiter
 from src.api.search import (
     QueryImageValidationError,
@@ -88,7 +109,13 @@ INSUFFICIENT_API_UNITS_DETAIL = {
     "code": "insufficient_api_units",
     "message": "Insufficient API units. Purchase a Developer Pack to add units.",
 }
-DEFAULT_CORS_ORIGINS = ["http://localhost:3000"]
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:6274",
+    "http://127.0.0.1:6274",
+    "https://claude.ai",
+    "https://claude.com",
+]
 DEFAULT_BILLING_PLAN_CREDITS: dict[BillingPlanType, int] = {
     "starter": 5,
     "pro": 20,
@@ -98,6 +125,7 @@ DEFAULT_RATE_LIMIT_WINDOW_S = 60
 DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW = 12
 DEFAULT_RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW = 30
 DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW = 60
+DEFAULT_RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW = 60
 MAX_QUERY_IMAGE_BYTES = 10 * 1024 * 1024
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
@@ -107,6 +135,7 @@ BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
 WEBHOOK_RATE_LIMITER = SlidingWindowRateLimiter()
+OAUTH_RATE_LIMITER = SlidingWindowRateLimiter()
 YOUTUBE_SERVER_BLOCKED_ERROR_CODE = "youtube_server_blocked"
 YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL = (
     "Upload a video file instead. If this is your own YouTube video, "
@@ -361,6 +390,16 @@ API_UNIT_COST_INDEX_VIDEO = get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
 API_UNIT_COST_TEXT_QUERY = get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
 
 
+def _uses_api_unit_billing(identity: AuthIdentity) -> bool:
+    return identity.auth_method in {"api_key", "mcp_oauth"}
+
+
+def _api_usage_key_id(identity: AuthIdentity) -> str | None:
+    if identity.auth_method == "api_key":
+        return identity.api_key_id
+    return None
+
+
 def _consume_api_units_or_raise(
     user_id: str,
     api_key_id: str | None,
@@ -382,6 +421,24 @@ def _consume_api_units_or_raise(
             status_code=402,
             detail=INSUFFICIENT_API_UNITS_DETAIL,
         )
+
+
+def _mcp_oauth_provider_or_raise():
+    try:
+        get_mcp_oauth_settings()
+        return get_mcp_oauth_provider()
+    except McpOAuthConfigError as exc:
+        raise HTTPException(status_code=503, detail="MCP OAuth is not configured") from exc
+
+
+def _frontend_url_for_path(path: str) -> str:
+    try:
+        frontend_base = get_mcp_oauth_settings().frontend_base_url
+    except McpOAuthConfigError:
+        frontend_base = os.environ.get("FRONTEND_BASE_URL", "").strip().rstrip("/")
+        if not frontend_base:
+            raise HTTPException(status_code=503, detail="MCP OAuth is not configured")
+    return f"{frontend_base}{path}"
 
 
 def _source_url_ttl_s() -> int:
@@ -414,6 +471,13 @@ def _webhook_rate_limit() -> int:
     return get_env_int(
         "RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW",
         DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW,
+    )
+
+
+def _oauth_rate_limit() -> int:
+    return get_env_int(
+        "RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW",
+        DEFAULT_RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW,
     )
 
 
@@ -474,6 +538,15 @@ def _enforce_webhook_rate_limit(request: Request) -> None:
         limiter=WEBHOOK_RATE_LIMITER,
         key=ip,
         limit=_webhook_rate_limit(),
+    )
+
+
+def _enforce_oauth_rate_limit(request: Request) -> None:
+    ip = _request_ip(request)
+    _enforce_rate_limit(
+        limiter=OAUTH_RATE_LIMITER,
+        key=ip,
+        limit=_oauth_rate_limit(),
     )
 
 
@@ -538,6 +611,15 @@ def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int, str] 
     if isinstance(cd.grant_target, str) and cd.grant_target.strip() in ("web", "api"):
         grant_target = cd.grant_target.strip()
     return cd.user_id.strip(), credits, grant_target
+
+
+def _webhook_variant_id(payload: LemonSqueezyPayload) -> str | None:
+    custom_data = payload.meta.custom_data if payload.meta else None
+    variant_id = custom_data.variant_id if custom_data else None
+    if not isinstance(variant_id, str):
+        return None
+    cleaned = variant_id.strip()
+    return cleaned or None
 
 
 def _parse_lemonsqueezy_payload(payload_dict: dict) -> LemonSqueezyPayload:
@@ -774,6 +856,42 @@ class ApiUsageEventResponse(BaseModel):
 
 class ApiCheckoutRequest(BaseModel):
     plan: Literal["developer"]
+    return_path: str | None = None
+
+    @field_validator("return_path")
+    @classmethod
+    def validate_return_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not cleaned.startswith("/"):
+            raise ValueError("return_path must start with /")
+        if cleaned.startswith("//"):
+            raise ValueError("return_path must be a relative site path")
+        return cleaned
+
+
+class McpConnectorToolSummary(BaseModel):
+    name: str
+    title: str
+    description: str
+
+
+class McpConnectorRequestResponse(BaseModel):
+    request_id: str
+    client_id: str
+    resource: str
+    scope: str
+    scopes: list[str]
+    status: Literal["pending", "approved", "denied", "expired"]
+    expires_at: str | None = None
+    tools: list[McpConnectorToolSummary]
+
+
+class McpConnectorDecisionResponse(BaseModel):
+    redirect_url: str
 
 
 class LemonSqueezyCustomData(BaseModel):
@@ -782,6 +900,7 @@ class LemonSqueezyCustomData(BaseModel):
     user_id: str | None = None
     credits: Any = None
     grant_target: str | None = None
+    variant_id: str | None = None
 
 
 class LemonSqueezyMeta(BaseModel):
@@ -1057,6 +1176,123 @@ def analytics_event(
     if user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required for signup_complete")
     track(request.event_name, user_id=user_id, metadata=request.metadata)
+
+
+def _mcp_connector_request_status(
+    expires_at: str | None,
+    status: Literal["pending", "approved", "denied"],
+) -> Literal["pending", "approved", "denied", "expired"]:
+    if status != "pending":
+        return status
+    parsed = parse_iso_datetime(expires_at)
+    if parsed is not None and parsed <= datetime.now(timezone.utc):
+        return "expired"
+    return "pending"
+
+
+@app.get("/.well-known/oauth-authorization-server", include_in_schema=False)
+async def oauth_authorization_server_metadata(request: Request):
+    try:
+        return await MetadataHandler(mcp_oauth_authorization_metadata()).handle(request)
+    except McpOAuthConfigError as exc:
+        raise HTTPException(status_code=503, detail="MCP OAuth is not configured") from exc
+
+
+@app.api_route("/authorize", methods=["GET", "POST"], include_in_schema=False)
+async def oauth_authorize(request: Request):
+    _enforce_oauth_rate_limit(request)
+    provider = _mcp_oauth_provider_or_raise()
+    return await AuthorizationHandler(provider).handle(request)
+
+
+@app.post("/register", include_in_schema=False)
+async def oauth_register(request: Request):
+    _enforce_oauth_rate_limit(request)
+    provider = _mcp_oauth_provider_or_raise()
+    return await RegistrationHandler(
+        provider,
+        options=mcp_oauth_client_registration_options(),
+    ).handle(request)
+
+
+@app.post("/token", include_in_schema=False)
+async def oauth_token(request: Request):
+    _enforce_oauth_rate_limit(request)
+    provider = _mcp_oauth_provider_or_raise()
+    return await TokenHandler(provider, FlexibleClientAuthenticator(provider)).handle(request)
+
+
+@app.post("/revoke", include_in_schema=False)
+async def oauth_revoke(request: Request):
+    _enforce_oauth_rate_limit(request)
+    provider = _mcp_oauth_provider_or_raise()
+    return await RevocationHandler(provider, FlexibleClientAuthenticator(provider)).handle(request)
+
+
+@app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
+async def oauth_mcp_resource_metadata(request: Request):
+    try:
+        return await ProtectedResourceMetadataHandler(
+            mcp_oauth_protected_resource_metadata()
+        ).handle(request)
+    except McpOAuthConfigError as exc:
+        raise HTTPException(status_code=503, detail="MCP OAuth is not configured") from exc
+
+
+@app.get(
+    "/oauth/mcp/requests/{request_id}",
+    response_model=McpConnectorRequestResponse,
+    include_in_schema=False,
+)
+def get_mcp_connector_request(request_id: str) -> McpConnectorRequestResponse:
+    provider = _mcp_oauth_provider_or_raise()
+    record = provider.get_authorization_request(request_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Connector request not found")
+
+    payload = mcp_oauth_request_public_payload(record)
+    payload["status"] = _mcp_connector_request_status(record.expires_at, record.status)
+    payload["tools"] = [McpConnectorToolSummary(**tool) for tool in mcp_tool_approval_items()]
+    return McpConnectorRequestResponse(**payload)
+
+
+@app.post(
+    "/oauth/mcp/requests/{request_id}/approve",
+    response_model=McpConnectorDecisionResponse,
+    include_in_schema=False,
+)
+def approve_mcp_connector_request(
+    request_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> McpConnectorDecisionResponse:
+    api_credits = db_get_api_credits(user_id)
+    if api_credits is None or api_credits.balance <= 0:
+        raise HTTPException(status_code=402, detail=INSUFFICIENT_API_UNITS_DETAIL)
+
+    provider = _mcp_oauth_provider_or_raise()
+    try:
+        redirect_url = provider.approve_authorization_request(request_id, user_id=user_id)
+    except McpOAuthFlowError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return McpConnectorDecisionResponse(redirect_url=redirect_url)
+
+
+@app.post(
+    "/oauth/mcp/requests/{request_id}/deny",
+    response_model=McpConnectorDecisionResponse,
+    include_in_schema=False,
+)
+def deny_mcp_connector_request(
+    request_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> McpConnectorDecisionResponse:
+    _ = user_id
+    provider = _mcp_oauth_provider_or_raise()
+    try:
+        redirect_url = provider.deny_authorization_request(request_id)
+    except McpOAuthFlowError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return McpConnectorDecisionResponse(redirect_url=redirect_url)
 
 
 def _try_cleanup_r2(store: R2Store, key: str, user_id: str) -> None:
@@ -1484,18 +1720,25 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
     event_id = _lemonsqueezy_event_id(payload, raw_body, event_name)
 
     if grant_target == "api":
-        # Validate variant match when configured.
-        expected_variant_env = "LEMON_SQUEEZY_VARIANT_ID_DEVELOPER"
-        expected_variant = os.environ.get(expected_variant_env, "").strip()
-        if expected_variant and payload.data and payload.data.id is not None:
-            actual_id = str(payload.data.id).strip()
-            if actual_id and actual_id != expected_variant:
-                logger.warning(
-                    "API grant variant mismatch: expected=%s actual=%s event_id=%s",
-                    expected_variant,
-                    actual_id,
-                    event_id,
-                )
+        try:
+            expected_variant = _billing_plan_variant_id("developer")
+        except LemonSqueezyConfigError as exc:
+            raise HTTPException(status_code=503, detail="Billing checkout is not configured") from exc
+        actual_variant = _webhook_variant_id(payload)
+        if actual_variant != expected_variant:
+            logger.warning(
+                "API grant variant mismatch: expected=%s actual=%s event_id=%s",
+                expected_variant,
+                actual_variant,
+                event_id,
+            )
+            return BillingWebhookResponse(
+                received=True,
+                processed=False,
+                granted=False,
+                reason="API grant variant mismatch",
+            )
+        credits = DEFAULT_BILLING_PLAN_CREDITS["developer"]
         applied = db_apply_api_billing_credit_grant(
             provider="lemonsqueezy",
             event_id=event_id,
@@ -1640,7 +1883,7 @@ def v1_upload_video(
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> VideoResponse:
     if idempotency_key is None:
-        if identity.auth_method == "api_key":
+        if _uses_api_unit_billing(identity):
             # API-key upload: same flow as upload_video but with API unit billing
             # instead of web credit admission.
             user_id = identity.user_id
@@ -1675,7 +1918,7 @@ def v1_upload_video(
 
             try:
                 _consume_api_units_or_raise(
-                    user_id=user_id, api_key_id=identity.api_key_id,
+                    user_id=user_id, api_key_id=_api_usage_key_id(identity),
                     event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
                 )
             except HTTPException as exc:
@@ -1714,7 +1957,7 @@ def v1_upload_video(
 
     _enforce_user_write_rate_limit(user_id)
 
-    if identity.auth_method == "api_key":
+    if _uses_api_unit_billing(identity):
         # API-key idempotent upload: inline file validation to skip web
         # admission (_precheck_video_processing_admission).
         if not file.filename and not file.content_type:
@@ -1758,7 +2001,7 @@ def v1_upload_video(
 
         try:
             _consume_api_units_or_raise(
-                user_id=user_id, api_key_id=identity.api_key_id,
+                user_id=user_id, api_key_id=_api_usage_key_id(identity),
                 event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
                 video_id=video_id,
             )
@@ -1810,7 +2053,7 @@ def v1_init_upload(
     request: UploadInitRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> UploadInitResponse:
-    if identity.auth_method != "api_key":
+    if not _uses_api_unit_billing(identity):
         return init_upload(request, user_id=identity.user_id)
 
     # API-key path: soft-check API balance, skip web admission
@@ -1849,7 +2092,7 @@ def v1_complete_upload(
     request: UploadCompleteRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoResponse:
-    if identity.auth_method != "api_key":
+    if not _uses_api_unit_billing(identity):
         return complete_upload(request, user_id=identity.user_id)
 
     user_id = identity.user_id
@@ -1859,7 +2102,7 @@ def v1_complete_upload(
     def _bill_api_units(record: VideoRecord) -> None:
         try:
             _consume_api_units_or_raise(
-                user_id=user_id, api_key_id=identity.api_key_id,
+                user_id=user_id, api_key_id=_api_usage_key_id(identity),
                 event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
                 video_id=request.video_id,
             )
@@ -1889,7 +2132,7 @@ def v1_search_video(
     request: VideoSearchRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoSearchResponse:
-    if identity.auth_method != "api_key":
+    if not _uses_api_unit_billing(identity):
         return search_video(video_id, request, user_id=identity.user_id)
 
     # API-key path: validate, bill, then search (rate limiter runs once)
@@ -1901,7 +2144,7 @@ def v1_search_video(
     request_id = f"text_query:{uuid4()}"
     _consume_api_units_or_raise(
         user_id=user_id,
-        api_key_id=identity.api_key_id,
+        api_key_id=_api_usage_key_id(identity),
         event_type="text_query",
         units=API_UNIT_COST_TEXT_QUERY,
         video_id=video_id,
@@ -1974,12 +2217,14 @@ def v1_api_billing_checkout(
     """Create checkout session for Developer Pack (JWT-only)."""
     _enforce_user_write_rate_limit(user_id)
     credits = DEFAULT_BILLING_PLAN_CREDITS["developer"]
+    redirect_url = _frontend_url_for_path(body.return_path) if body.return_path else None
     try:
         session = create_checkout_session(
             user_id=user_id,
             plan="developer",
             credits=credits,
             variant_id=_billing_plan_variant_id("developer"),
+            redirect_url=redirect_url,
             grant_target="api",
         )
     except LemonSqueezyConfigError as exc:

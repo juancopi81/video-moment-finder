@@ -17,7 +17,7 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-AuthMethod = Literal["jwt", "api_key"]
+AuthMethod = Literal["jwt", "api_key", "mcp_oauth"]
 
 # Throttle last_used_at writes: at most one DB update per key per 60 s.
 _LAST_USED_WRITE_INTERVAL_S = 60

@@ -41,12 +41,15 @@ def _webhook_body(
     user_id: str = "user_123",
     credits: int = 10_000,
     grant_target: str | None = None,
+    variant_id: str | None = None,
     event_name: str = "order_created",
     data_id: str = "12345",
 ) -> dict:
     custom: dict = {"user_id": user_id, "credits": str(credits)}
     if grant_target is not None:
         custom["grant_target"] = grant_target
+    if variant_id is not None:
+        custom["variant_id"] = variant_id
     return {
         "meta": {
             "event_name": event_name,
@@ -70,17 +73,23 @@ def _signed_webhook(body_dict: dict) -> tuple[bytes, str]:
 class TestWebhookRoutingByGrantTarget:
     def test_grant_target_api_calls_api_billing(self, monkeypatch) -> None:
         monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", WEBHOOK_SECRET)
+        monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_DEVELOPER", "variant_dev")
         called_api = {"value": False}
 
         def mock_api_grant(**kwargs):
             called_api["value"] = True
+            assert kwargs["credits"] == 10_000
             return ApiBillingCreditGrantResult(applied=True)
 
         monkeypatch.setattr(
             "src.api.app.db_apply_api_billing_credit_grant", mock_api_grant
         )
 
-        body = _webhook_body(grant_target="api")
+        body = _webhook_body(
+            credits=1,
+            grant_target="api",
+            variant_id="variant_dev",
+        )
         raw, sig = _signed_webhook(body)
         response = client.post(
             "/webhooks/lemonsqueezy",
@@ -144,8 +153,10 @@ class TestWebhookRoutingByGrantTarget:
         monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_DEVELOPER", "expected_variant")
 
         warnings = []
+        called_api = {"value": False}
 
         def mock_api_grant(**kwargs):
+            called_api["value"] = True
             return ApiBillingCreditGrantResult(applied=True)
 
         monkeypatch.setattr(
@@ -159,7 +170,7 @@ class TestWebhookRoutingByGrantTarget:
             })(),
         )
 
-        body = _webhook_body(grant_target="api", data_id="wrong_variant")
+        body = _webhook_body(grant_target="api", variant_id="wrong_variant")
         raw, sig = _signed_webhook(body)
         response = client.post(
             "/webhooks/lemonsqueezy",
@@ -168,7 +179,14 @@ class TestWebhookRoutingByGrantTarget:
         )
 
         assert response.status_code == 200
+        assert response.json() == {
+            "received": True,
+            "processed": False,
+            "granted": False,
+            "reason": "API grant variant mismatch",
+        }
         assert len(warnings) > 0
+        assert called_api["value"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +370,51 @@ class TestApiCheckout:
 
         assert response.status_code == 200
         assert "checkout.example.com" in response.json()["checkout_url"]
+
+    def test_developer_plan_passes_return_path_as_redirect_url(self, monkeypatch) -> None:
+        _authenticate("user_123")
+        monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_DEVELOPER", "variant_dev")
+        monkeypatch.setenv("LEMON_SQUEEZY_API_KEY", "key")
+        monkeypatch.setenv("LEMON_SQUEEZY_STORE_ID", "store")
+        monkeypatch.setenv("LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL", "https://example.com")
+        monkeypatch.setenv("FRONTEND_BASE_URL", "https://www.videomomentfinder.com")
+
+        from src.billing.lemonsqueezy import LemonSqueezyCheckoutSession
+
+        def mock_checkout(**kwargs):
+            assert kwargs["redirect_url"] == (
+                "https://www.videomomentfinder.com/connectors/claude?request_id=req-123"
+            )
+            return LemonSqueezyCheckoutSession(
+                url="https://checkout.example.com",
+                test_mode=True,
+            )
+
+        monkeypatch.setattr("src.api.app.create_checkout_session", mock_checkout)
+
+        response = client.post(
+            "/api/v1/billing/units/checkout",
+            json={
+                "plan": "developer",
+                "return_path": "/connectors/claude?request_id=req-123",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "checkout.example.com" in response.json()["checkout_url"]
+
+    def test_developer_plan_rejects_non_relative_return_path(self) -> None:
+        _authenticate("user_123")
+
+        response = client.post(
+            "/api/v1/billing/units/checkout",
+            json={
+                "plan": "developer",
+                "return_path": "https://evil.example.com",
+            },
+        )
+
+        assert response.status_code == 422
 
     def test_non_developer_plan_rejected(self, monkeypatch) -> None:
         _authenticate("user_123")

@@ -59,14 +59,23 @@ export async function fetchApiUsageEvents(
   return (await response.json()) as ApiUsageEvent[];
 }
 
-export async function startApiCheckout(token: string): Promise<string> {
+export async function startApiCheckout(
+  token: string,
+  returnPath?: string,
+): Promise<string> {
+  const body: { plan: "developer"; return_path?: string } = {
+    plan: "developer",
+  };
+  if (returnPath) {
+    body.return_path = returnPath;
+  }
   const response = await fetch(`${API_URL}/api/v1/billing/units/checkout`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ plan: "developer" }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(
