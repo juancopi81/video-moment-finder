@@ -82,6 +82,7 @@ def _checkout_payload(
                         "credits": str(credits),
                         "plan": plan,
                         "grant_target": grant_target,
+                        "variant_id": variant_id,
                     }
                 },
                 "product_options": {

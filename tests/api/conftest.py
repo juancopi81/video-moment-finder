@@ -98,6 +98,7 @@ def _clear_dependency_overrides(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.USER_WRITE_RATE_LIMITER", SlidingWindowRateLimiter())
     monkeypatch.setattr("src.api.app.SEARCH_RATE_LIMITER", SlidingWindowRateLimiter())
     monkeypatch.setattr("src.api.app.WEBHOOK_RATE_LIMITER", SlidingWindowRateLimiter())
+    monkeypatch.setattr("src.api.app.OAUTH_RATE_LIMITER", SlidingWindowRateLimiter())
     monkeypatch.setattr("src.api.app.track", lambda *args, **kwargs: None)
     yield
     app.dependency_overrides.clear()
@@ -441,6 +442,10 @@ def mcp_oauth_store(monkeypatch) -> InMemoryMcpOAuthStore:
     monkeypatch.setattr(
         "src.api.mcp_oauth.create_mcp_oauth_authorization_request",
         store.create_request,
+    )
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.delete_expired_mcp_oauth_authorization_requests",
+        lambda _expires_before: None,
     )
     monkeypatch.setattr(
         "src.api.mcp_oauth.get_mcp_oauth_authorization_request",

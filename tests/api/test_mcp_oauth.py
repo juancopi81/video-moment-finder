@@ -12,6 +12,7 @@ from mcp.server.auth.provider import TokenError
 
 from src.api.app import app
 from src.api.mcp_oauth import get_mcp_oauth_provider
+from src.api.rate_limit import SlidingWindowRateLimiter
 from src.db.supabase import ApiCreditRecord
 from tests.api.conftest import InMemoryMcpOAuthStore, _authenticate
 
@@ -278,6 +279,60 @@ def test_authorize_creates_request_and_redirects_to_frontend(
         "search_video",
     }
 
+
+def test_authorize_cleans_up_expired_requests(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    cleaned: list[str] = []
+    _ = mcp_oauth_store
+    monkeypatch.setattr(
+        "src.api.mcp_oauth.delete_expired_mcp_oauth_authorization_requests",
+        lambda expires_before: cleaned.append(expires_before),
+    )
+
+    with TestClient(app) as client:
+        _start_authorization_request(client)
+
+    assert len(cleaned) == 1
+
+
+def test_oauth_authorize_rate_limited(monkeypatch) -> None:
+    monkeypatch.setattr("src.api.app.OAUTH_RATE_LIMITER", SlidingWindowRateLimiter())
+    monkeypatch.setenv("RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW", "1")
+    _verifier, challenge = _pkce_pair()
+
+    with TestClient(app) as client:
+        first = client.get(
+            "/authorize",
+            params={
+                "response_type": "code",
+                "client_id": CLIENT_ID,
+                "redirect_uri": CLAUDE_REDIRECT_URI,
+                "scope": "vmf:mcp",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "resource": MCP_RESOURCE_URL,
+                "state": "oauth-state",
+            },
+            follow_redirects=False,
+        )
+        second = client.get(
+            "/authorize",
+            params={
+                "response_type": "code",
+                "client_id": CLIENT_ID,
+                "redirect_uri": CLAUDE_REDIRECT_URI,
+                "scope": "vmf:mcp",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "resource": MCP_RESOURCE_URL,
+                "state": "oauth-state-2",
+            },
+            follow_redirects=False,
+        )
+    assert first.status_code == 302
+    assert second.status_code == 429
 
 def test_authorize_accepts_localhost_callback(
     mcp_oauth_store: InMemoryMcpOAuthStore,

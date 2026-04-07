@@ -101,6 +101,7 @@ def test_create_checkout_session_builds_expected_payload(
         "credits": str(credits),
         "plan": plan,
         "grant_target": "web",
+        "variant_id": variant_id,
     }
     assert (
         payload["data"]["attributes"]["product_options"]["redirect_url"]
@@ -170,6 +171,7 @@ def test_create_checkout_session_overrides_redirect_url(monkeypatch) -> None:
         == "https://www.videomomentfinder.com/connectors/claude?request_id=req-123"
     )
     assert payload["data"]["attributes"]["checkout_data"]["custom"]["grant_target"] == "api"
+    assert payload["data"]["attributes"]["checkout_data"]["custom"]["variant_id"] == "var_dev_1"
 
 
 def test_create_checkout_session_raises_for_non_json_response(monkeypatch) -> None:

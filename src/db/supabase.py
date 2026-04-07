@@ -1250,6 +1250,13 @@ def create_mcp_oauth_authorization_request(
     return _row_to_mcp_oauth_authorization_request(result.data[0])
 
 
+def delete_expired_mcp_oauth_authorization_requests(expires_before: str) -> None:
+    client = get_client()
+    client.table("mcp_oauth_authorization_requests").delete().eq(
+        "status", "pending"
+    ).lt("expires_at", expires_before).execute()
+
+
 def get_mcp_oauth_authorization_request(
     request_id: str,
 ) -> McpOAuthAuthorizationRequestRecord | None:

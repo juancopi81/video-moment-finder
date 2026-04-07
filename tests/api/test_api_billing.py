@@ -41,12 +41,15 @@ def _webhook_body(
     user_id: str = "user_123",
     credits: int = 10_000,
     grant_target: str | None = None,
+    variant_id: str | None = None,
     event_name: str = "order_created",
     data_id: str = "12345",
 ) -> dict:
     custom: dict = {"user_id": user_id, "credits": str(credits)}
     if grant_target is not None:
         custom["grant_target"] = grant_target
+    if variant_id is not None:
+        custom["variant_id"] = variant_id
     return {
         "meta": {
             "event_name": event_name,
@@ -70,17 +73,23 @@ def _signed_webhook(body_dict: dict) -> tuple[bytes, str]:
 class TestWebhookRoutingByGrantTarget:
     def test_grant_target_api_calls_api_billing(self, monkeypatch) -> None:
         monkeypatch.setenv("LEMON_SQUEEZY_WEBHOOK_SECRET", WEBHOOK_SECRET)
+        monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_DEVELOPER", "variant_dev")
         called_api = {"value": False}
 
         def mock_api_grant(**kwargs):
             called_api["value"] = True
+            assert kwargs["credits"] == 10_000
             return ApiBillingCreditGrantResult(applied=True)
 
         monkeypatch.setattr(
             "src.api.app.db_apply_api_billing_credit_grant", mock_api_grant
         )
 
-        body = _webhook_body(grant_target="api")
+        body = _webhook_body(
+            credits=1,
+            grant_target="api",
+            variant_id="variant_dev",
+        )
         raw, sig = _signed_webhook(body)
         response = client.post(
             "/webhooks/lemonsqueezy",
@@ -144,8 +153,10 @@ class TestWebhookRoutingByGrantTarget:
         monkeypatch.setenv("LEMON_SQUEEZY_VARIANT_ID_DEVELOPER", "expected_variant")
 
         warnings = []
+        called_api = {"value": False}
 
         def mock_api_grant(**kwargs):
+            called_api["value"] = True
             return ApiBillingCreditGrantResult(applied=True)
 
         monkeypatch.setattr(
@@ -159,7 +170,7 @@ class TestWebhookRoutingByGrantTarget:
             })(),
         )
 
-        body = _webhook_body(grant_target="api", data_id="wrong_variant")
+        body = _webhook_body(grant_target="api", variant_id="wrong_variant")
         raw, sig = _signed_webhook(body)
         response = client.post(
             "/webhooks/lemonsqueezy",
@@ -168,7 +179,14 @@ class TestWebhookRoutingByGrantTarget:
         )
 
         assert response.status_code == 200
+        assert response.json() == {
+            "received": True,
+            "processed": False,
+            "granted": False,
+            "reason": "API grant variant mismatch",
+        }
         assert len(warnings) > 0
+        assert called_api["value"] is False
 
 
 # ---------------------------------------------------------------------------

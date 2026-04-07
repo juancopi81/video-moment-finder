@@ -37,6 +37,7 @@ from src.db.supabase import (
     create_mcp_oauth_authorization_code,
     create_mcp_oauth_authorization_request,
     create_mcp_oauth_tokens,
+    delete_expired_mcp_oauth_authorization_requests,
     get_mcp_oauth_access_token_by_hash,
     get_mcp_oauth_client,
     get_mcp_oauth_authorization_code_by_hash,
@@ -412,6 +413,7 @@ class McpOAuthProvider(
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
         scopes = _normalize_scopes(params.scopes)
         resource = _normalize_resource(params.resource)
+        delete_expired_mcp_oauth_authorization_requests(_now_utc().isoformat())
         record = create_mcp_oauth_authorization_request(
             client_id=client.client_id or "",
             redirect_uri=str(params.redirect_uri),

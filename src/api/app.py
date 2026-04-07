@@ -125,6 +125,7 @@ DEFAULT_RATE_LIMIT_WINDOW_S = 60
 DEFAULT_RATE_LIMIT_USER_WRITE_REQUESTS_PER_WINDOW = 12
 DEFAULT_RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW = 30
 DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW = 60
+DEFAULT_RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW = 60
 MAX_QUERY_IMAGE_BYTES = 10 * 1024 * 1024
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
@@ -134,6 +135,7 @@ BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
 USER_WRITE_RATE_LIMITER = SlidingWindowRateLimiter()
 SEARCH_RATE_LIMITER = SlidingWindowRateLimiter()
 WEBHOOK_RATE_LIMITER = SlidingWindowRateLimiter()
+OAUTH_RATE_LIMITER = SlidingWindowRateLimiter()
 YOUTUBE_SERVER_BLOCKED_ERROR_CODE = "youtube_server_blocked"
 YOUTUBE_METADATA_BOT_CHALLENGE_DETAIL = (
     "Upload a video file instead. If this is your own YouTube video, "
@@ -472,6 +474,13 @@ def _webhook_rate_limit() -> int:
     )
 
 
+def _oauth_rate_limit() -> int:
+    return get_env_int(
+        "RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW",
+        DEFAULT_RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW,
+    )
+
+
 def _raise_rate_limit_exceeded(retry_after_s: float) -> None:
     retry_after_seconds = max(1, ceil(retry_after_s))
     raise HTTPException(
@@ -529,6 +538,15 @@ def _enforce_webhook_rate_limit(request: Request) -> None:
         limiter=WEBHOOK_RATE_LIMITER,
         key=ip,
         limit=_webhook_rate_limit(),
+    )
+
+
+def _enforce_oauth_rate_limit(request: Request) -> None:
+    ip = _request_ip(request)
+    _enforce_rate_limit(
+        limiter=OAUTH_RATE_LIMITER,
+        key=ip,
+        limit=_oauth_rate_limit(),
     )
 
 
@@ -593,6 +611,15 @@ def _extract_credit_grant(payload: LemonSqueezyPayload) -> tuple[str, int, str] 
     if isinstance(cd.grant_target, str) and cd.grant_target.strip() in ("web", "api"):
         grant_target = cd.grant_target.strip()
     return cd.user_id.strip(), credits, grant_target
+
+
+def _webhook_variant_id(payload: LemonSqueezyPayload) -> str | None:
+    custom_data = payload.meta.custom_data if payload.meta else None
+    variant_id = custom_data.variant_id if custom_data else None
+    if not isinstance(variant_id, str):
+        return None
+    cleaned = variant_id.strip()
+    return cleaned or None
 
 
 def _parse_lemonsqueezy_payload(payload_dict: dict) -> LemonSqueezyPayload:
@@ -873,6 +900,7 @@ class LemonSqueezyCustomData(BaseModel):
     user_id: str | None = None
     credits: Any = None
     grant_target: str | None = None
+    variant_id: str | None = None
 
 
 class LemonSqueezyMeta(BaseModel):
@@ -1172,12 +1200,14 @@ async def oauth_authorization_server_metadata(request: Request):
 
 @app.api_route("/authorize", methods=["GET", "POST"], include_in_schema=False)
 async def oauth_authorize(request: Request):
+    _enforce_oauth_rate_limit(request)
     provider = _mcp_oauth_provider_or_raise()
     return await AuthorizationHandler(provider).handle(request)
 
 
 @app.post("/register", include_in_schema=False)
 async def oauth_register(request: Request):
+    _enforce_oauth_rate_limit(request)
     provider = _mcp_oauth_provider_or_raise()
     return await RegistrationHandler(
         provider,
@@ -1187,12 +1217,14 @@ async def oauth_register(request: Request):
 
 @app.post("/token", include_in_schema=False)
 async def oauth_token(request: Request):
+    _enforce_oauth_rate_limit(request)
     provider = _mcp_oauth_provider_or_raise()
     return await TokenHandler(provider, FlexibleClientAuthenticator(provider)).handle(request)
 
 
 @app.post("/revoke", include_in_schema=False)
 async def oauth_revoke(request: Request):
+    _enforce_oauth_rate_limit(request)
     provider = _mcp_oauth_provider_or_raise()
     return await RevocationHandler(provider, FlexibleClientAuthenticator(provider)).handle(request)
 
@@ -1688,18 +1720,25 @@ async def lemonsqueezy_webhook(request: Request) -> BillingWebhookResponse:
     event_id = _lemonsqueezy_event_id(payload, raw_body, event_name)
 
     if grant_target == "api":
-        # Validate variant match when configured.
-        expected_variant_env = "LEMON_SQUEEZY_VARIANT_ID_DEVELOPER"
-        expected_variant = os.environ.get(expected_variant_env, "").strip()
-        if expected_variant and payload.data and payload.data.id is not None:
-            actual_id = str(payload.data.id).strip()
-            if actual_id and actual_id != expected_variant:
-                logger.warning(
-                    "API grant variant mismatch: expected=%s actual=%s event_id=%s",
-                    expected_variant,
-                    actual_id,
-                    event_id,
-                )
+        try:
+            expected_variant = _billing_plan_variant_id("developer")
+        except LemonSqueezyConfigError as exc:
+            raise HTTPException(status_code=503, detail="Billing checkout is not configured") from exc
+        actual_variant = _webhook_variant_id(payload)
+        if actual_variant != expected_variant:
+            logger.warning(
+                "API grant variant mismatch: expected=%s actual=%s event_id=%s",
+                expected_variant,
+                actual_variant,
+                event_id,
+            )
+            return BillingWebhookResponse(
+                received=True,
+                processed=False,
+                granted=False,
+                reason="API grant variant mismatch",
+            )
+        credits = DEFAULT_BILLING_PLAN_CREDITS["developer"]
         applied = db_apply_api_billing_credit_grant(
             provider="lemonsqueezy",
             event_id=event_id,
