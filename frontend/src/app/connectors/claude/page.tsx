@@ -38,6 +38,14 @@ function formatExpiresAt(value: string | null): string {
   return parsed.toLocaleString();
 }
 
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+      {message}
+    </div>
+  );
+}
+
 function statusTone(status: ConnectorRequest["status"]): string {
   switch (status) {
     case "approved":
@@ -219,29 +227,10 @@ function ClaudeConnectorContent() {
           className="mt-4"
         />
 
-        {requestError && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
-            {requestError}
-          </div>
-        )}
-
-        {apiBillingSummaryError && isSignedIn && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
-            {apiBillingSummaryError}
-          </div>
-        )}
-
-        {checkoutError && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
-            {checkoutError}
-          </div>
-        )}
-
-        {decisionError && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
-            {decisionError}
-          </div>
-        )}
+        {requestError && <ErrorBanner message={requestError} />}
+        {apiBillingSummaryError && isSignedIn && <ErrorBanner message={apiBillingSummaryError} />}
+        {checkoutError && <ErrorBanner message={checkoutError} />}
+        {decisionError && <ErrorBanner message={decisionError} />}
 
         {requestLoading ? (
           <div className="mt-6 flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
