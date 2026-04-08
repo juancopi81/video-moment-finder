@@ -36,28 +36,68 @@ Current transcript scope:
 - YouTube videos currently do not fall back to Whisper when no caption track is available.
 - Direct uploads extract speech with Whisper large-v3-turbo via `faster-whisper` and index those transcript segments for spoken-text queries.
 
-## Claude Connector
+## Use with Claude (MCP)
 
-- Remote MCP endpoint: `https://api.videomomentfinder.com/mcp`
-- Auth flow: OAuth 2.0 authorization-code + PKCE
-- Approval page: `https://www.videomomentfinder.com/connectors/claude`
-- Billing path: Developer Pack API units
-- Current MCP tools:
-  - `upload_video`
-  - `get_video_status`
-  - `list_videos`
-  - `search_video`
+Video Moment Finder ships a remote [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude upload, index, and search your videos directly from a conversation.
 
-Important auth split:
+| Surface | How to connect |
+|---------|---------------|
+| **Claude.ai / Claude Desktop** | Add a custom connector with server URL `https://api.videomomentfinder.com/mcp`. Claude handles OAuth automatically. |
+| **Claude Code (CLI)** | Add the MCP server in your project or global config. Claude Code runs locally, so it can also complete the full presigned-upload flow. |
 
-- `/mcp` is OAuth-only.
-- REST API and CLI keep their current `vmf_` API-key flow.
+### Available tools
 
-Current MCP upload behavior:
+| Tool | Access | Description |
+|------|--------|-------------|
+| `list_videos` | Read | List your recent videos with status, source, and upload date |
+| `get_video_status` | Read | Check whether a video is queued, processing, or ready |
+| `search_video` | Read | Search a video by text and get timestamped matches (visual + transcript) |
+| `upload_video` | Write | Upload a video file via two-step presigned URL flow |
 
-- `upload_video` uses a two-step presigned upload:
-  - `action="start"` returns `video_id` + `upload_url`
-  - `action="complete"` finalizes after the upload bytes are written
+### Claude.ai
+
+Ask Claude to work with your videos in natural language. The connector authenticates via OAuth and bills usage against your Developer Pack API units.
+
+<p align="center">
+  <img src="docs/images/claude-web-list-videos.png" alt="Claude.ai listing videos" width="600" />
+</p>
+<p align="center"><em>Listing videos &mdash; Claude returns a formatted table of your indexed videos with status and dates.</em></p>
+
+<p align="center">
+  <img src="docs/images/claude-web-search.png" alt="Claude.ai searching a video" width="600" />
+</p>
+<p align="center"><em>Searching a video &mdash; "find where 2 people are unpacking a box" returns ranked timestamps with confidence scores.</em></p>
+
+### Claude Code (CLI)
+
+Claude Code connects the same way but runs locally, which means it can also handle the full upload-process-search pipeline end to end.
+
+<p align="center">
+  <img src="docs/images/claude-code-auth.png" alt="Claude Code OAuth flow" width="600" />
+</p>
+<p align="center"><em>One-time OAuth &mdash; Claude Code opens a browser for approval, then stores the token for future sessions.</em></p>
+
+<p align="center">
+  <img src="docs/images/claude-code-list-videos.png" alt="Claude Code listing videos" width="600" />
+</p>
+<p align="center"><em>Listing videos &mdash; same data, terminal-native table formatting.</em></p>
+
+<p align="center">
+  <img src="docs/images/claude-code-search.png" alt="Claude Code searching a video" width="600" />
+</p>
+<p align="center"><em>Searching a video &mdash; visual and transcript matches with timestamps and scores.</em></p>
+
+<p align="center">
+  <img src="docs/images/claude-code-upload-flow.png" alt="Claude Code upload, process, and search flow" width="600" />
+</p>
+<p align="center"><em>Full pipeline &mdash; upload a video, poll until processing completes, then search it, all in one conversation.</em></p>
+
+### Auth and billing
+
+- The MCP endpoint (`/mcp`) uses OAuth 2.0 authorization-code + PKCE.
+- REST API and CLI keep their existing `vmf_` API-key flow.
+- Connector usage bills against [Developer Pack](https://www.videomomentfinder.com/developers) API units.
+- Approval page: [videomomentfinder.com/connectors/claude](https://www.videomomentfinder.com/connectors/claude)
 
 Privacy and support:
 
