@@ -137,7 +137,3 @@ Before submission, verify in a real Claude client that:
 - Claude can complete `upload_video(action="start")`
 - Claude can write the file bytes to the returned `upload_url` without forwarding `Authorization`
 - Claude can call `upload_video(action="complete")` and continue with status + search
-
-If that end-to-end upload experience is not reliable in Claude, replace the MCP write path with a frontend upload handoff flow before submission.
-
-Known limitation: Claude.ai cannot PUT file bytes to R2 presigned URLs because `*.r2.cloudflarestorage.com` is not in its outbound allowlist. Claude Code (runs locally) handles the full upload flow without restrictions. On Claude.ai, `upload_video(action="start")` succeeds but the presigned PUT fails; Claude falls back to giving the user a curl command or directing them to the web upload UI.
