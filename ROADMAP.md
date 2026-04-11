@@ -50,9 +50,9 @@
 
 ### 7.6 Agent Productization on Evidence
 
-- Improve the current API and CLI onboarding alongside the thin manual-auth MCP path.
+- Improve the current API, CLI, and OAuth MCP onboarding without adding broad new agent surface area.
 - Add non-repo-clone quickstarts and end-to-end examples for REST, CLI, and the four-tool MCP flow.
-- Add OAuth account linking and connector-specific docs before broad Claude promotion.
+- Validate repeated successful Claude connector sessions before broader promotion or MCP expansion.
 
 ---
 

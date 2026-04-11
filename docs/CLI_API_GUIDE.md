@@ -2,7 +2,7 @@
 
 Need a one-link public entrypoint for agents? Start with `https://www.videomomentfinder.com/skill.md`.
 This guide remains the detailed reference for the same happy path.
-The current external integration surface is a curated REST API plus CLI. It is not an MCP server.
+Video Moment Finder also ships a remote MCP connector, but this guide is specifically for the REST API plus CLI happy path. For the Claude connector flow, see `docs/MCP_GUIDE.md`.
 
 This guide covers the supported external happy path for Video Moment Finder:
 

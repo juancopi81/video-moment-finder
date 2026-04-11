@@ -38,12 +38,12 @@ Current transcript scope:
 
 ## Use with Claude (MCP)
 
-Video Moment Finder ships a remote [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude upload, index, and search your videos directly from a conversation.
+Video Moment Finder ships a Claude-compatible remote [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude list, upload, and search your videos directly from a conversation.
 
 | Surface | How to connect |
 |---------|---------------|
-| **Claude.ai / Claude Desktop** | Add a custom connector with server URL `https://api.videomomentfinder.com/mcp`. Claude handles OAuth automatically. |
-| **Claude Code (CLI)** | Add the MCP server in your project or global config. Claude Code runs locally, so it can also complete the full presigned-upload flow. |
+| **Claude.ai / Claude Desktop** | Add a custom connector with server URL `https://api.videomomentfinder.com/mcp`. Claude handles OAuth and opens the approval flow automatically. |
+| **Claude Code (CLI)** | Add the MCP server in your project or global config. Claude Code runs locally and can drive the same upload, status, and search flow end to end. |
 
 ### Available tools
 
@@ -98,6 +98,7 @@ Claude Code connects the same way but runs locally, which means it can also hand
 - REST API and CLI keep their existing `vmf_` API-key flow.
 - Connector usage bills against [Developer Pack](https://www.videomomentfinder.com/developers) API units.
 - Approval page: [videomomentfinder.com/connectors/claude](https://www.videomomentfinder.com/connectors/claude)
+- The approval flow handles sign-in, Developer Pack balance checks, and explicit tool approval for the connected account.
 
 Privacy and support:
 

@@ -125,11 +125,12 @@ There is a documented revenue hypothesis with a measured conversion path, not ju
 Goal: improve the agent path without outrunning demand.
 
 - [X] Ship the API, API keys, CLI, `/developers`, and `/skill.md`.
+- [X] Ship the OAuth-protected remote MCP connector with `/mcp`, the approval flow, and the four-tool Claude surface.
 - [ ] Add a copy-paste `curl` quickstart for users who did not clone the repo.
 - [ ] Add one canonical end-to-end agent example from prompt to result.
-- [ ] Gather 5 successful real-user API or agent sessions.
-- [ ] Review support burden and setup friction for the current agent flow.
-- [ ] Keep MCP out of scope unless the current API or CLI path shows repeated successful use.
+- [ ] Gather 5 successful real-user API, CLI, or Claude connector sessions.
+- [ ] Review support burden and setup friction for the current API, CLI, and Claude connector flows.
+- [ ] Keep the current four-tool MCP surface fixed unless real-user demand justifies expansion.
 
 Review gate:
 Real users can complete the agent or API happy path without repo-specific knowledge, and the setup friction is understood.
