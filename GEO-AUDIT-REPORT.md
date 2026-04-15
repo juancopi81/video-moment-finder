@@ -25,6 +25,43 @@ Video Moment Finder has an unusually mature *agent-integration* layer for a pre-
 | Platform Optimization | 24/100 | 10% | 2.40 |
 | **Overall GEO Score** | | | **36.75 → 37/100** |
 
+Scores above are the baseline snapshot from 2026-04-13 and are deliberately preserved as historical reference. See **Progress Update** below for what has shipped since.
+
+---
+
+## Progress Update — 2026-04-15
+
+Week 1 of the 30-Day Action Plan shipped in PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72) on branch `feat/geo-improvements`. Six of the seven Quick Wins are addressed; Quick Win #7 (Show HN / Product Hunt / YouTube demo) is a Week 3 brand-authority launch tracked separately.
+
+**Shipped**
+
+- **Critical #1 — Zero JSON-LD.** `Organization` + `SoftwareApplication` JSON-LD injected in the root layout (present on every page). `FAQPage` JSON-LD on `/support`, built from the existing FAQ array so schema cannot drift from visible content. Centralized in `frontend/src/lib/schema.ts`.
+- **Critical #2 — `/pricing` client-only.** `/pricing` is now fully prerendered (`○ Static`). Every tier name, price, and feature appears in the initial HTML that crawlers see. The signed-in UX is unchanged: clicking "Buy credits" on a paid tier still opens Stripe.
+- **Critical #3 — www ↔ apex canonical-flip.** `metadataBase`, `sitemap.ts`, `robots.ts`, and `public/llms.txt` are all aligned to `https://www.videomomentfinder.com` to match the existing Vercel apex→www edge redirect.
+- **High #4 — FAQPage schema.** Covered by the Critical #1 rollout.
+- **High #6 — Security headers.** Four added in `next.config.ts`: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, `X-Frame-Options: DENY`. Strict CSP is intentionally deferred (see below).
+- **High #7 — Sitemap incomplete.** Sitemap expanded from 5 → 9 URLs (added `/developers`, `/connectors/claude`, `/skill.md`, `/llms.txt`). Every entry now carries `<lastmod>`.
+- **Medium #9 — `llms.txt` under-described.** Link annotations expanded from one-word labels to short factual sentences; `/connectors/claude` added under `## Links`. `/skill.md` was already listed.
+- **Medium #11 — No `og:image` / `twitter:image`.** `og:image` set to the existing `preview-whiteboard-teaching.jpg` (1200×630); Twitter card upgraded from `summary` to `summary_large_image`.
+
+**Deferred (intentional, with reasons)**
+
+- **Strict Content-Security-Policy.** Clerk, Stripe, PostHog, and Vercel Analytics each need explicit source allowlists — a wrong CSP breaks auth in production. Plan: ship first as `Content-Security-Policy-Report-Only` to catch violations, then enforce.
+- **`vercel.json` 301 formalization** of apex → www. The existing Vercel edge 307 already satisfies the canonical-alignment goal; tightening to 301 is low-value follow-up.
+- **`llms-full.txt`.** Existing `llms.txt` + `skill.md` + SSR `/support` already surface the same content; adding a third variant is diminishing returns.
+
+**Still open (Week 2+)**
+
+- **High #5 — `/about` page with `Person` schema.** Biggest remaining E-E-A-T lift. Week 2.
+- **High #8 — Brand footprint.** External/marketing (Show HN, Product Hunt, Reddit, YouTube demo, dev.to, LinkedIn). Week 3.
+- **Medium #10** — per-bot `Allow` stanzas in `robots.txt` (Week 4).
+- **Medium #12** — `/how-it-works` page surfacing Qwen3-VL (Week 2).
+- **Medium #13** — edge `X-Robots-Tag: noindex` on `/dashboard/*` and `/video/*` (Week 4).
+- **Medium #14** — thicker SSR homepage copy outside the auth boundary (Week 2+).
+- **Low #15–#18** — freshness signals, `WebSite` + `SearchAction`, `speakable` — optimize-when-possible.
+
+**Impact estimate (not re-audited).** Week 1 alone should lift Schema & Structured Data (3 → ~75), Technical GEO (74 → ~85), and AI Citability (55 → ~65). A full re-audit is best run after `/about` lands in Week 2, so Brand Authority and E-E-A-T can be measured in the same pass.
+
 ---
 
 ## Critical Issues (Fix Immediately)
@@ -144,12 +181,12 @@ A raw-HTML scan of `/`, `/support`, `/developers`, and `/pricing` confirmed zero
 ## 30-Day Action Plan
 
 ### Week 1 — Schema, SSR, Canonical Cleanup
-- [ ] Deploy Organization + SoftwareApplication JSON-LD on homepage (§6.1, §6.2)
-- [ ] Deploy FAQPage JSON-LD on `/support` with verbatim Q&A (§6.3)
-- [ ] SSR `/pricing` with static plan tiles
-- [ ] Pick canonical host (www), add 301 for the other, align canonical + sitemap + llms.txt
-- [ ] Add `<lastmod>` and missing URLs to `sitemap.xml`
-- [ ] Add security headers in `next.config.js`
+- [x] Deploy Organization + SoftwareApplication JSON-LD on homepage (§6.1, §6.2) — _shipped in PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72)_
+- [x] Deploy FAQPage JSON-LD on `/support` with verbatim Q&A (§6.3) — _PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72)_
+- [x] SSR `/pricing` with static plan tiles — _PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72)_
+- [x] Pick canonical host (www), align canonical + sitemap + llms.txt — _PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72); 301 formalization deferred — existing Vercel 307 is sufficient_
+- [x] Add `<lastmod>` and missing URLs to `sitemap.xml` — _PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72)_
+- [x] Add security headers in `next.config.js` — _PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72); strict CSP deferred to follow-up_
 
 ### Week 2 — Author Identity & E-E-A-T
 - [ ] Create `/about` with creator bio, photo, credentials, and `Person` JSON-LD (`sameAs`: GitHub, LinkedIn, X)
