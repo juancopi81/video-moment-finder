@@ -6,6 +6,18 @@ import { Footer } from "@/components/footer";
 import { VercelAnalytics } from "@/components/vercel-analytics";
 import { PHProvider } from "@/components/posthog-provider";
 import { PostHogIdentify } from "@/components/posthog-identify";
+import {
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_PATH,
+  OG_IMAGE_WIDTH,
+  SITE_NAME,
+  SITE_TAGLINE,
+  SITE_URL,
+} from "@/lib/site-config";
+import {
+  organizationSchema,
+  softwareApplicationSchema,
+} from "@/lib/schema";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -21,18 +33,27 @@ const sourceSans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://videomomentfinder.com"),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Video Moment Finder",
-    template: "%s | Video Moment Finder",
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
   },
-  description: "Semantic video frame search. Find moments using text or images.",
+  description: SITE_TAGLINE,
   openGraph: {
     type: "website",
-    siteName: "Video Moment Finder",
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: OG_IMAGE_PATH,
+        width: OG_IMAGE_WIDTH,
+        height: OG_IMAGE_HEIGHT,
+        alt: SITE_NAME,
+      },
+    ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
+    images: [OG_IMAGE_PATH],
   },
 };
 
@@ -52,6 +73,12 @@ export default function RootLayout({
         <body
           className={`${sourceSans.className} ${outfit.variable} ${sourceSans.variable} flex min-h-screen flex-col antialiased`}
         >
+          <script type="application/ld+json">
+            {JSON.stringify(organizationSchema)}
+          </script>
+          <script type="application/ld+json">
+            {JSON.stringify(softwareApplicationSchema)}
+          </script>
           <PHProvider>
             <Header />
             <main className="flex-1">{children}</main>
