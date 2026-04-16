@@ -8,7 +8,7 @@ import { API_CARD } from "@/lib/pricing-constants";
 import { startApiCheckout } from "@/lib/api-billing";
 
 export function ApiPricingCardClient() {
-  const { userId, getToken } = useAuth();
+  const { userId, getToken, isLoaded } = useAuth();
   const isSignedIn = !!userId;
   const posthog = usePostHog();
   const [loading, setLoading] = useState(false);
@@ -32,6 +32,17 @@ export function ApiPricingCardClient() {
       );
       setLoading(false);
     }
+  }
+
+  if (!isLoaded) {
+    return (
+      <PricingCard
+        {...API_CARD}
+        onCtaClick={() => {}}
+        ctaDisabled
+        ctaLabel="Checking account..."
+      />
+    );
   }
 
   if (isSignedIn) {

@@ -107,6 +107,22 @@ export function PricingTiers({ tiers }: { tiers: ReadonlyArray<Tier> }) {
           const isCheckoutLoading =
             paidPlan !== null && checkoutPlanLoading === paidPlan;
 
+          if (!isLoaded && paidPlan) {
+            return (
+              <PricingCard
+                key={tier.name}
+                name={tier.name}
+                price={tier.price}
+                description={tier.description}
+                features={tier.features}
+                highlighted={tier.highlighted}
+                onCtaClick={() => {}}
+                ctaDisabled
+                ctaLabel="Checking account..."
+              />
+            );
+          }
+
           if (isSignedIn && paidPlan) {
             return (
               <PricingCard
