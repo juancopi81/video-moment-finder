@@ -77,7 +77,7 @@ export default function AboutPage() {
           </li>
           <li>
             <a
-              href="https://www.linkedin.com/in/REPLACE_ME"
+              href="https://www.linkedin.com/in/juancarlospinerosp/"
               target="_blank"
               rel="noreferrer"
               className="text-accent hover:underline"
@@ -87,7 +87,7 @@ export default function AboutPage() {
           </li>
           <li>
             <a
-              href="https://x.com/REPLACE_ME"
+              href="https://x.com/juancopi81"
               target="_blank"
               rel="noreferrer"
               className="text-accent hover:underline"

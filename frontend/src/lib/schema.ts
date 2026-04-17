@@ -82,8 +82,8 @@ export const personSchema = {
   worksFor: { "@id": `${SITE_URL}/#organization` },
   sameAs: [
     "https://github.com/juancopi81",
-    "https://www.linkedin.com/in/REPLACE_ME",
-    "https://x.com/REPLACE_ME",
+    "https://www.linkedin.com/in/juancarlospinerosp/",
+    "https://x.com/juancopi81",
   ],
 };
 
