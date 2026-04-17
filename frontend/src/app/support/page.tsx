@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { faqPageSchema } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Support",
@@ -58,6 +59,9 @@ const faqs = [
 export default function SupportPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16">
+      <script type="application/ld+json">
+        {JSON.stringify(faqPageSchema(faqs))}
+      </script>
       <h1 className="font-heading text-4xl font-bold">Support</h1>
       <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
         Have a question? Check our FAQ below or reach out directly.
