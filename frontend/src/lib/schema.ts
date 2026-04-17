@@ -71,6 +71,22 @@ export const softwareApplicationSchema = {
   publisher: { "@id": `${SITE_URL}/#organization` },
 };
 
+export const personSchema = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "@id": `${SITE_URL}/about#person`,
+  name: "Juan Piñeros",
+  url: `${SITE_URL}/about`,
+  image: "https://github.com/juancopi81.png",
+  jobTitle: "Creator, Video Moment Finder",
+  worksFor: { "@id": `${SITE_URL}/#organization` },
+  sameAs: [
+    "https://github.com/juancopi81",
+    "https://www.linkedin.com/in/REPLACE_ME",
+    "https://x.com/REPLACE_ME",
+  ],
+};
+
 export function faqPageSchema(faqs: ReadonlyArray<Faq>) {
   return {
     "@context": "https://schema.org",
