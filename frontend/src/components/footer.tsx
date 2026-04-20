@@ -18,6 +18,11 @@ export function Footer() {
             <p className="text-sm font-semibold">Product</p>
             <ul className="mt-2 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
               <li>
+                <Link href="/about" className="hover:text-foreground">
+                  About
+                </Link>
+              </li>
+              <li>
                 <Link href="/pricing" className="hover:text-foreground">
                   Pricing
                 </Link>
