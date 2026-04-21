@@ -87,7 +87,9 @@ export const personSchema = {
   ],
 };
 
-export function faqPageSchema(faqs: ReadonlyArray<Faq>) {
+export function faqPageSchema(
+  faqs: ReadonlyArray<Faq & { dateModified?: string }>,
+) {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -98,7 +100,40 @@ export function faqPageSchema(faqs: ReadonlyArray<Faq>) {
       acceptedAnswer: {
         "@type": "Answer",
         text: faq.answer,
+        ...(faq.dateModified ? { dateModified: faq.dateModified } : {}),
       },
     })),
+  };
+}
+
+export function howItWorksArticleSchema({
+  datePublished,
+  dateModified,
+}: {
+  datePublished: string;
+  dateModified: string;
+}) {
+  const url = `${SITE_URL}/how-it-works`;
+  return {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "@id": `${url}#article`,
+    headline: "How Video Moment Finder works",
+    description:
+      "Technical overview of the Video Moment Finder pipeline: frame extraction, Qwen3-VL multimodal embeddings, vector search, and accuracy tradeoffs.",
+    url,
+    mainEntityOfPage: url,
+    inLanguage: "en",
+    datePublished,
+    dateModified,
+    author: { "@id": `${SITE_URL}/about#person` },
+    publisher: { "@id": `${SITE_URL}/#organization` },
+    image: `${SITE_URL}${OG_IMAGE_PATH}`,
+    about: [
+      "Semantic video search",
+      "Multimodal embeddings",
+      "Qwen3-VL",
+      "Vector similarity search",
+    ],
   };
 }

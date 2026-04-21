@@ -28,6 +28,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/how-it-works" className="hover:text-foreground">
+                  How it works
+                </Link>
+              </li>
+              <li>
                 <Link href="/support" className="hover:text-foreground">
                   Support
                 </Link>
