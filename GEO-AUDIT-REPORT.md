@@ -52,15 +52,36 @@ Week 1 of the 30-Day Action Plan shipped in PR [#72](https://github.com/juancopi
 
 **Still open (Week 2+)**
 
-- **High #5 — `/about` page with `Person` schema.** Biggest remaining E-E-A-T lift. Week 2.
 - **High #8 — Brand footprint.** External/marketing (Show HN, Product Hunt, Reddit, YouTube demo, dev.to, LinkedIn). Week 3.
 - **Medium #10** — per-bot `Allow` stanzas in `robots.txt` (Week 4).
-- **Medium #12** — `/how-it-works` page surfacing Qwen3-VL (Week 2).
 - **Medium #13** — edge `X-Robots-Tag: noindex` on `/dashboard/*` and `/video/*` (Week 4).
 - **Medium #14** — thicker SSR homepage copy outside the auth boundary (Week 2+).
 - **Low #15–#18** — freshness signals, `WebSite` + `SearchAction`, `speakable` — optimize-when-possible.
 
 **Impact estimate (not re-audited).** Week 1 alone should lift Schema & Structured Data (3 → ~75), Technical GEO (74 → ~85), and AI Citability (55 → ~65). A full re-audit is best run after `/about` lands in Week 2, so Brand Authority and E-E-A-T can be measured in the same pass.
+
+---
+
+## Progress Update — 2026-04-21
+
+Week 2 is now closed out across two PRs.
+
+**Shipped in PR [#73](https://github.com/juancopi81/video-moment-finder/pull/73)**
+
+- **High #5 — `/about` page with `Person` schema.** Server-rendered creator page with bio, avatar, and `sameAs` links to GitHub, LinkedIn, and X. `Person` JSON-LD is linked to the Organization via `worksFor` `@id`, so the entity graph resolves. Linked from the footer on every page; added to `sitemap.ts`.
+
+**Shipped on branch `feat/how-it-works-and-faq-dates`** (this change)
+
+- **Medium #12 — Qwen3-VL buried in FAQ.** New server-rendered `/how-it-works` page covering the pipeline (upload → frame extraction → Qwen3-VL embeddings → vector store → search), an explicit "why Qwen3-VL" section, and an accuracy-tradeoffs section framing where the approach beats transcript search and where it doesn't. `TechArticle` JSON-LD with `author` pointing to the Person `@id` and `publisher` pointing to the Organization `@id`. Linked from the footer, added to `sitemap.ts` and `llms.txt`.
+- **Low #15 (partial) — Freshness signals on `/support`.** Every FAQ entry now carries a `dateModified` field, rendered as a small "Updated 2026-04-13" timestamp under each answer and echoed into each `Answer` in the `FAQPage` JSON-LD. Future FAQ edits bump the per-entry date.
+
+**Still deferred**
+
+- **Strict Content-Security-Policy.** Unchanged from Week 1 — needs a Report-Only rollout with real prod monitoring for Clerk/Stripe/PostHog/Vercel Analytics, handled as a standalone PR after Week 3.
+- **`vercel.json` 301.** Unchanged — the existing Vercel edge 307 still satisfies the canonical goal.
+- **`llms-full.txt`.** Unchanged — diminishing returns over the existing `llms.txt` + `skill.md` + SSR surfaces.
+
+**Next up (Week 3 — no code).** Brand-authority launch: Show HN, Product Hunt, r/SideProject + r/MachineLearning, 3-minute YouTube demo, dev.to post on the MCP connector, LinkedIn company page. `/about` and `/how-it-works` now exist as substantive pages to link to.
 
 ---
 
@@ -189,11 +210,11 @@ A raw-HTML scan of `/`, `/support`, `/developers`, and `/pricing` confirmed zero
 - [x] Add security headers in `next.config.js` — _PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72); strict CSP deferred to follow-up_
 
 ### Week 2 — Author Identity & E-E-A-T
-- [ ] Create `/about` with creator bio, photo, credentials, and `Person` JSON-LD (`sameAs`: GitHub, LinkedIn, X)
-- [ ] Link `/about` from header or footer on every page
-- [ ] Add `og:image` / `twitter:image` (1200×630) and upgrade Twitter card to `summary_large_image`
-- [ ] Add `/how-it-works` page surfacing Qwen3-VL, frame pipeline, accuracy tradeoffs
-- [ ] Add "Last updated" timestamps to `/support` answers
+- [x] Create `/about` with creator bio, photo, credentials, and `Person` JSON-LD (`sameAs`: GitHub, LinkedIn, X) — _PR [#73](https://github.com/juancopi81/video-moment-finder/pull/73)_
+- [x] Link `/about` from header or footer on every page — _PR [#73](https://github.com/juancopi81/video-moment-finder/pull/73)_
+- [x] Add `og:image` / `twitter:image` (1200×630) and upgrade Twitter card to `summary_large_image` — _shipped early in PR [#72](https://github.com/juancopi81/video-moment-finder/pull/72)_
+- [x] Add `/how-it-works` page surfacing Qwen3-VL, frame pipeline, accuracy tradeoffs — _branch `feat/how-it-works-and-faq-dates`_
+- [x] Add "Last updated" timestamps to `/support` answers — _branch `feat/how-it-works-and-faq-dates`_
 
 ### Week 3 — Brand Authority Launch
 - [ ] Show HN submission ("Show HN: Video Moment Finder — open-source semantic search for video, with MCP connector")

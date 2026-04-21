@@ -12,6 +12,7 @@
 - [Homepage](https://www.videomomentfinder.com/): Product landing page with feature overview and direct-upload demo
 - [Skill File](https://www.videomomentfinder.com/skill.md): Canonical public agent bootstrap describing OAuth 2.0 + PKCE, the supported happy path, API host, and REST/MCP tool names — read this first if you are integrating an agent
 - [Claude Connector](https://www.videomomentfinder.com/connectors/claude): Walkthrough for approving the Claude-compatible remote MCP server at api.videomomentfinder.com/mcp, including the four tools exposed (upload_video, get_video_status, list_videos, search_video)
+- [How It Works](https://www.videomomentfinder.com/how-it-works): Technical overview of the pipeline — frame extraction, Qwen3-VL multimodal embeddings, vector search, and accuracy tradeoffs
 - [Developers](https://www.videomomentfinder.com/developers): Human-readable REST API and CLI overview with setup and example prompts
 - [OpenAPI Schema](https://api.videomomentfinder.com/openapi.json): Machine-readable API contract for the public REST interface
 - [Swagger UI](https://api.videomomentfinder.com/docs): Interactive API reference
