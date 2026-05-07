@@ -9,7 +9,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.requests import Request
+from starlette.requests import ClientDisconnect, Request
 
 from src.api.app import (
     UploadDurationLimitExceededError,
@@ -2795,6 +2795,40 @@ def test_report_unhandled_exceptions_uses_to_thread(monkeypatch) -> None:
     assert len(to_thread_calls) == 1
     assert len(capture_calls) == 1
     assert capture_calls[0][1] == {"path": "/api/v1/videos", "method": "POST"}
+
+
+def test_report_unhandled_exceptions_ignores_client_disconnect(monkeypatch) -> None:
+    to_thread_calls: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+    capture_calls: list[tuple[BaseException, dict[str, object] | None]] = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        to_thread_calls.append((func, args, kwargs))
+        return func(*args, **kwargs)
+
+    def fake_capture_exception(exc: BaseException, *, context=None) -> None:
+        capture_calls.append((exc, context))
+
+    async def fake_call_next(_request: Request):
+        raise ClientDisconnect()
+
+    monkeypatch.setattr("src.api.app.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr("src.api.app.capture_exception", fake_capture_exception)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/register",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+
+    with pytest.raises(ClientDisconnect):
+        asyncio.run(report_unhandled_exceptions(request, fake_call_next))
+
+    assert to_thread_calls == []
+    assert capture_calls == []
 
 
 # ---------------------------------------------------------------------------
