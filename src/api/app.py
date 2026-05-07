@@ -25,6 +25,7 @@ from mcp.server.auth.handlers.register import RegistrationHandler
 from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationError, field_validator
+from starlette.requests import ClientDisconnect
 
 from src.analytics.events import track
 from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id, hash_api_key
@@ -1155,6 +1156,8 @@ app.add_middleware(
 async def report_unhandled_exceptions(request: Request, call_next):
     try:
         return await call_next(request)
+    except ClientDisconnect:
+        raise
     except Exception as exc:
         await asyncio.to_thread(
             capture_exception,
