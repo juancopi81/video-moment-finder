@@ -227,7 +227,7 @@ export default function HomeContent() {
           jump to the exact timestamp.
         </p>
         <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-          1 free video &middot; up to 30 min &middot; direct upload
+          1 free video &middot; up to 90 min &middot; direct upload
         </span>
         <div className="mt-8 flex items-center gap-4">
           <SignedOut>
@@ -436,7 +436,7 @@ export default function HomeContent() {
                 <p className="font-medium">{error}</p>
                 <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
                   Check that the file is a supported video format (MP4, MOV,
-                  WebM) and under 30 minutes. If this keeps happening,
+                  WebM) and under 90 minutes. If this keeps happening,
                   contact support@videomomentfinder.com.
                 </p>
               </div>

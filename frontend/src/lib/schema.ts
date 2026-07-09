@@ -55,7 +55,7 @@ export const softwareApplicationSchema = {
     "Semantic text-to-video search",
     "Image-to-video similarity search",
     "Multimodal embeddings (Qwen3-VL)",
-    "Direct video upload (up to 30 minutes)",
+    "Direct video upload (up to 90 minutes)",
     "YouTube URL import for owned videos",
     "Row-level security for user data",
   ],
@@ -64,7 +64,7 @@ export const softwareApplicationSchema = {
     price: "0",
     priceCurrency: "USD",
     description:
-      "Free tier includes 1 credit (1 video up to 30 minutes). Paid credit packs available; credits do not expire.",
+      "Free tier includes 1 credit (1 video up to 90 minutes). Paid credit packs available; credits do not expire.",
   },
   license: "https://www.gnu.org/licenses/agpl-3.0.html",
   codeRepository: GITHUB_URL,

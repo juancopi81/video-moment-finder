@@ -41,7 +41,18 @@ from src.video.transcripts import (
 
 logger = get_logger(__name__)
 
-MAX_FRAMES = 1800  # 30 min at 1fps
+FRAME_SAMPLE_FPS = 1.0
+
+
+def _max_frames_for_duration_limit() -> int:
+    """Max sampled frames allowed, derived from the configured max video duration.
+
+    Frame extraction samples at FRAME_SAMPLE_FPS (1 fps), so frame count and
+    duration in seconds are numerically equivalent. Deriving this from
+    max_video_duration_s() keeps it in lockstep with VIDEO_MAX_DURATION_S
+    instead of duplicating the value as a hardcoded literal.
+    """
+    return int(max_video_duration_s() * FRAME_SAMPLE_FPS)
 
 
 class VideoProcessingError(RuntimeError):
@@ -189,18 +200,21 @@ def _process_visual_branch(
     frames = extract_frames(
         video_path,
         frames_dir,
-        fps=1.0,
+        fps=FRAME_SAMPLE_FPS,
         thumbnail_dir=thumbnails_dir,
     )
     logger.info("Extracted %d frames", len(frames))
 
-    if len(frames) > MAX_FRAMES:
+    max_frames = _max_frames_for_duration_limit()
+    if len(frames) > max_frames:
         logger.warning(
-            "Truncating frames from %d to %d (30-min limit)",
+            "Truncating frames from %d to %d (%d-minute limit at %.0f fps)",
             len(frames),
-            MAX_FRAMES,
+            max_frames,
+            int(max_frames / FRAME_SAMPLE_FPS) // 60,
+            FRAME_SAMPLE_FPS,
         )
-        frames = frames[:MAX_FRAMES]
+        frames = frames[:max_frames]
 
     logger.info("Embedding %d frames via Modal", len(frames))
     frame_bytes = [frame.path.read_bytes() for frame in frames]

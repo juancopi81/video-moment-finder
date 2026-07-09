@@ -7,13 +7,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/support" },
 };
 
-const FAQ_BASELINE_REVIEWED = "2026-04-13";
+const FAQ_BASELINE_REVIEWED = "2026-07-09";
 
 const faqs = [
   {
     question: "What video sources work best?",
     answer:
-      "Direct upload is the reliable path. You can upload video files you own or are authorized to use, and videos must be 30 minutes or shorter. YouTube URL import is also available for owned videos, but server-side restrictions can block it.",
+      "Direct upload is the reliable path. You can upload video files you own or are authorized to use, and videos must be 90 minutes or shorter. YouTube URL import is also available for owned videos, but server-side restrictions can block it.",
     dateModified: FAQ_BASELINE_REVIEWED,
   },
   {
@@ -32,7 +32,7 @@ const faqs = [
   {
     question: "How long does processing take?",
     answer:
-      "Processing time depends on the video length. A 30-minute video typically takes around 7-8 minutes. You can leave the page and come back — processing continues in the background.",
+      "Processing time depends on the video length: roughly 7-8 minutes per 30 minutes of video, so a 90-minute video typically takes around 22-25 minutes. You can leave the page and come back — processing continues in the background.",
     dateModified: FAQ_BASELINE_REVIEWED,
   },
   {
@@ -44,7 +44,7 @@ const faqs = [
   {
     question: "How do credits work?",
     answer:
-      "Each credit allows you to process one video (up to 30 minutes). Free accounts include 1 credit to try the service. Paid credit packs are available on the pricing page for signed-in users. Credits do not expire.",
+      "Each credit allows you to process one video (up to 90 minutes). Free accounts include 1 credit to try the service. Paid credit packs are available on the pricing page for signed-in users. Credits do not expire.",
     dateModified: FAQ_BASELINE_REVIEWED,
   },
   {

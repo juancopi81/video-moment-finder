@@ -6,7 +6,7 @@ import subprocess
 from src.utils.env import get_env_int
 from src.utils.subprocess import format_subprocess_error
 
-DEFAULT_MAX_VIDEO_DURATION_S = 30 * 60
+DEFAULT_MAX_VIDEO_DURATION_S = 90 * 60
 
 
 class VideoMetadataProbeError(RuntimeError):

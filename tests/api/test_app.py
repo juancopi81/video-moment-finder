@@ -1153,7 +1153,7 @@ def test_upload_video_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) 
     enqueue_calls: list[str] = []
 
     def _raise_duration(_file) -> None:
-        raise UploadDurationLimitExceededError("Video exceeds 30-minute limit")
+        raise UploadDurationLimitExceededError("Video exceeds 90-minute limit")
 
     monkeypatch.setattr(
         "src.api.app.R2Config.from_env",
@@ -1185,7 +1185,7 @@ def test_upload_video_rejects_when_uploaded_duration_exceeds_limit(monkeypatch) 
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Video exceeds 30-minute limit"
+    assert response.json()["detail"] == "Video exceeds 90-minute limit"
     assert consume_calls == []
     assert create_called["value"] is False
     assert enqueue_calls == []
@@ -1313,7 +1313,7 @@ def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatc
             return None
 
     def _raise_duration(*_args, **_kwargs) -> None:
-        raise UploadDurationLimitExceededError("Video exceeds 30-minute limit")
+        raise UploadDurationLimitExceededError("Video exceeds 90-minute limit")
 
     monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
     monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
@@ -1342,7 +1342,7 @@ def test_complete_upload_rejects_when_uploaded_duration_exceeds_limit(monkeypatc
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Video exceeds 30-minute limit"
+    assert response.json()["detail"] == "Video exceeds 90-minute limit"
     assert consume_calls == []
     assert create_called["value"] is False
     assert enqueue_calls == []

@@ -1,7 +1,7 @@
 export const SITE_URL = "https://www.videomomentfinder.com";
 export const SITE_NAME = "Video Moment Finder";
 export const SITE_DESCRIPTION =
-  "AI-powered semantic video frame search. Process videos up to 30 minutes, extract frames, generate multimodal embeddings with Qwen3-VL, and search by text query or example image to find specific moments.";
+  "AI-powered semantic video frame search. Process videos up to 90 minutes, extract frames, generate multimodal embeddings with Qwen3-VL, and search by text query or example image to find specific moments.";
 export const SITE_TAGLINE =
   "Semantic video frame search. Find moments using text or images.";
 export const OG_IMAGE_PATH = "/preview-whiteboard-teaching.jpg";
