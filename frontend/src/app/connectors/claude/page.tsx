@@ -349,7 +349,7 @@ function ClaudeConnectorContent() {
                   Approve Claude access
                 </h2>
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  Claude will only be able to use the four tools shown above for your account. Uploads and searches consume API units from your Developer Pack balance.
+                  Claude will only be able to use the tools shown above for your account. Uploads and searches consume API units from your Developer Pack balance.
                 </p>
                 {apiBillingSummary && (
                   <p className="mt-3 text-sm text-zinc-500">
