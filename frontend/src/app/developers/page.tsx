@@ -5,7 +5,7 @@ const connectorSteps = [
   "Use guided OAuth. Claude surfaces that support dynamic client registration can self-register, and internal review flows may still use provided static credentials.",
   "Click Connect, then sign in to Video Moment Finder if needed.",
   "Buy a Developer Pack if your API-unit balance is zero.",
-  "Review the four MCP tools and approve access.",
+  "Review the six MCP tools and approve access.",
 ];
 
 const promptExamples = [
@@ -24,6 +24,11 @@ const promptExamples = [
       "Search video <video_id> for the moment they explain the model and give me timestamps.",
     expectation:
       "Claude uses search_video and returns timestamped text-search matches.",
+  },
+  {
+    prompt: "Turn this lecture video into study notes.",
+    expectation:
+      "Claude runs the lecture_notes prompt: get_transcript for the full transcript, then get_frames for the key board moments, and returns Markdown notes with LaTeX math and a Main Takeaways section.",
   },
 ];
 
@@ -52,6 +57,29 @@ const tools = [
     title: "Search Video",
     summary: "Runs text search against a ready video and returns timestamps.",
     tone: "Read",
+  },
+  {
+    name: "get_transcript",
+    title: "Get Transcript",
+    summary:
+      "Fetches the full spoken transcript with per-segment timestamps.",
+    tone: "Read",
+  },
+  {
+    name: "get_frames",
+    title: "Get Frames",
+    summary:
+      "Fetches frame images at given timestamps as image content, defaulting to high resolution.",
+    tone: "Read",
+  },
+];
+
+const prompts = [
+  {
+    name: "lecture_notes",
+    title: "Lecture Notes",
+    summary:
+      "Guided workflow that turns an indexed lecture video into polished Markdown study notes: transcript, then board-moment frames, then structured LaTeX notes.",
   },
 ];
 
@@ -127,6 +155,26 @@ export default function DevelopersPage() {
               </div>
             ))}
           </div>
+
+          <h3 className="mt-6 font-heading text-lg font-bold">MCP Prompts</h3>
+          <div className="mt-3 space-y-3">
+            {prompts.map((prompt) => (
+              <div
+                key={prompt.name}
+                className="rounded-2xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/40"
+              >
+                <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {prompt.title}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  <code>{prompt.name}</code>
+                </p>
+                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+                  {prompt.summary}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
@@ -138,9 +186,31 @@ export default function DevelopersPage() {
           <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
             <li>500 units per indexed video</li>
             <li>1 unit per text query</li>
+            <li>1 unit per transcript fetch</li>
+            <li>1 unit per thumbnail frame call (up to 25 timestamps)</li>
+            <li>5 units per high-res frame call (up to 8 timestamps)</li>
             <li>Required for Claude connector usage</li>
             <li>Also powers REST API and CLI indexing/search calls</li>
           </ul>
+
+          <div className="mt-5 rounded-xl border border-zinc-200 bg-white/80 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950/40">
+            <p className="font-medium text-zinc-900 dark:text-zinc-100">
+              What a workflow costs
+            </p>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+              Index a video once for ~500 units. After that, each search or
+              transcript fetch is 1 unit, and each frame call is 1 unit
+              (thumbnail) or 5 units (high-res) &mdash; billed per call, not
+              per frame.
+            </p>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+              Example &mdash; turning a lecture into study notes: ~500 units
+              the first time you index it, then about 5-20 units per notes
+              session (one transcript fetch plus a few frame calls),
+              regardless of video length.
+            </p>
+          </div>
+
           <Link
             href="/dashboard/api"
             className="mt-5 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
@@ -175,6 +245,20 @@ export default function DevelopersPage() {
             </code>{" "}
             API keys.
           </p>
+          <ul className="mt-4 space-y-1 text-xs text-zinc-500">
+            <li>
+              <code>POST /api/v1/videos/upload</code>
+            </li>
+            <li>
+              <code>POST /api/v1/videos/{"{"}id{"}"}/search</code>
+            </li>
+            <li>
+              <code>GET /api/v1/videos/{"{"}id{"}"}/transcript</code>
+            </li>
+            <li>
+              <code>POST /api/v1/videos/{"{"}id{"}"}/frames</code>
+            </li>
+          </ul>
           <div className="mt-5 space-y-3 text-sm">
             <a
               href="https://api.videomomentfinder.com/docs"
@@ -200,7 +284,7 @@ export default function DevelopersPage() {
 
       <section className="mt-12">
         <h2 className="font-heading text-2xl font-bold">Example Prompts</h2>
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {promptExamples.map((example) => (
             <div
               key={example.prompt}

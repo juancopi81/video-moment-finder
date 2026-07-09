@@ -24,6 +24,8 @@ def test_public_openapi_exposes_only_curated_routes() -> None:
     assert "/api/v1/videos" in paths
     assert "/api/v1/videos/{video_id}" in paths
     assert "/api/v1/videos/{video_id}/search" in paths
+    assert "/api/v1/videos/{video_id}/transcript" in paths
+    assert "/api/v1/videos/{video_id}/frames" in paths
 
     assert set(paths["/api/v1/videos"]) == {"get"}
 

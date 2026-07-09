@@ -1,9 +1,12 @@
 """Remote MCP server mounted into the main FastAPI app."""
 from __future__ import annotations
 
+import base64
 from typing import Annotated, Any, Literal
 
+from fastapi import HTTPException
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 from starlette.datastructures import Headers
@@ -11,6 +14,14 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.api.auth import AuthIdentity
+from src.api.frames import (
+    FramePlanItem,
+    build_high_res_frame_plan,
+    build_thumb_frame_plan,
+    extract_high_res_frames,
+    unique_dedupe_keys,
+    validate_frame_request,
+)
 from src.api.mcp_oauth import (
     McpOAuthConfigError,
     load_mcp_oauth_access_token,
@@ -19,6 +30,11 @@ from src.api.mcp_oauth import (
     mcp_oauth_www_authenticate,
 )
 from src.db.supabase import SourceType, VideoStatus
+from src.storage.config import R2Config, StorageConfigError
+from src.storage.r2 import R2Store, R2StorageError, thumbnail_key
+from src.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 _IDENTITY_STATE_KEY = "vmf_mcp_identity"
 _mcp_session_manager_cm: Any | None = None
@@ -65,6 +81,21 @@ class SearchVideoResult(BaseModel):
     source_url: str | None = None
     status: VideoStatus
     results: list[McpSearchResult]
+
+
+class McpTranscriptSegment(BaseModel):
+    segment_index: int
+    start_s: float
+    end_s: float
+    text: str
+
+
+class GetTranscriptResult(BaseModel):
+    video_id: str
+    has_transcript: bool
+    language_code: str | None = None
+    segment_count: int
+    segments: list[McpTranscriptSegment]
 
 
 def _auth_error(*, status_code: int, error: str, description: str) -> JSONResponse:
@@ -213,7 +244,8 @@ vmf_mcp = FastMCP(
     instructions=(
         "OAuth-protected remote MCP server for Video Moment Finder. "
         "Supports presigned upload bootstrap, upload completion, video status, "
-        "video listing, and text search for your connected account."
+        "video listing, text search, full transcript retrieval, and frame "
+        "retrieval (returned as image content) for your connected account."
     ),
     website_url="https://www.videomomentfinder.com",
     host="0.0.0.0",
@@ -244,6 +276,16 @@ def mcp_tool_approval_items() -> list[dict[str, str]]:
             "name": "search_video",
             "title": "Search Video",
             "description": "Run a text search against a ready video and return timestamped matches.",
+        },
+        {
+            "name": "get_transcript",
+            "title": "Get Transcript",
+            "description": "Fetch the full spoken transcript with per-segment timestamps for a ready video.",
+        },
+        {
+            "name": "get_frames",
+            "title": "Get Frames",
+            "description": "Fetch video frames as images at specific timestamps for visual inspection.",
         },
     ]
 
@@ -400,6 +442,374 @@ def search_video(
         identity=identity,
     )
     return _search_result_from_response(response)
+
+
+@vmf_mcp.tool(
+    title="Get Transcript",
+    annotations=ToolAnnotations(
+        title="Get Transcript",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=False,
+    ),
+)
+def get_transcript(
+    video_id: Annotated[str, Field(min_length=1, description="Video UUID to fetch the transcript for.")],
+    start_s: Annotated[
+        float | None,
+        Field(default=None, description="Optional inclusive start time in seconds to filter segments."),
+    ] = None,
+    end_s: Annotated[
+        float | None,
+        Field(default=None, description="Optional inclusive end time in seconds to filter segments."),
+    ] = None,
+    ctx: Context | None = None,
+) -> GetTranscriptResult:
+    """Return the FULL spoken transcript for a ready video, with per-segment start/end timestamps.
+
+    Use this to read everything the speaker said. Segment ``start_s``/``end_s``
+    timestamps can be fed directly into ``get_frames`` to pull the visual
+    board/slide content that was on screen at that moment in the video.
+    """
+    if ctx is None:
+        raise RuntimeError("MCP context is required")
+
+    from src.api.app import v1_get_video_transcript
+
+    identity = _request_identity(ctx)
+    response = v1_get_video_transcript(
+        video_id=video_id, start_s=start_s, end_s=end_s, identity=identity,
+    )
+    return GetTranscriptResult(
+        video_id=response.video_id,
+        has_transcript=response.has_transcript,
+        language_code=response.language_code,
+        segment_count=response.segment_count,
+        segments=[
+            McpTranscriptSegment(
+                segment_index=segment.segment_index,
+                start_s=segment.start_s,
+                end_s=segment.end_s,
+                text=segment.text,
+            )
+            for segment in response.segments
+        ],
+    )
+
+
+def _frames_summary_content(
+    *,
+    video_id: str,
+    resolution_requested: str,
+    resolution_used: str,
+    fallback_used: bool,
+    note: str | None,
+    plan: list[FramePlanItem],
+    resolved_by_key: dict[int, tuple[bytes | None, str | None]],
+) -> list[Any]:
+    """Build the mixed [summary_dict, *images] tool result shared by both resolutions.
+
+    ``resolved_by_key`` maps each plan item's dedupe key to either
+    ``(jpeg_bytes, None)`` on success or ``(None, error_message)`` on failure.
+    Frames that share a dedupe key (duplicate rounded timestamps) reuse the same
+    image content block instead of duplicating image bytes.
+    """
+    frame_summaries: list[dict[str, Any]] = []
+    images: list[Image] = []
+    image_index_by_key: dict[int, int] = {}
+
+    for item in plan:
+        key = item.dedupe_key
+        if key in image_index_by_key:
+            frame_summaries.append(
+                {
+                    "requested_timestamp_s": item.requested_timestamp_s,
+                    "actual_timestamp_s": item.actual_timestamp_s,
+                    "image_index": image_index_by_key[key],
+                    "error": None,
+                }
+            )
+            continue
+
+        data, error = resolved_by_key.get(key, (None, "Frame not available"))
+        if data is not None:
+            image_index = len(images)
+            images.append(Image(data=data, format="jpeg"))
+            image_index_by_key[key] = image_index
+            frame_summaries.append(
+                {
+                    "requested_timestamp_s": item.requested_timestamp_s,
+                    "actual_timestamp_s": item.actual_timestamp_s,
+                    "image_index": image_index,
+                    "error": None,
+                }
+            )
+        else:
+            frame_summaries.append(
+                {
+                    "requested_timestamp_s": item.requested_timestamp_s,
+                    "actual_timestamp_s": item.actual_timestamp_s,
+                    "image_index": None,
+                    "error": error,
+                }
+            )
+
+    summary = {
+        "video_id": video_id,
+        "resolution_requested": resolution_requested,
+        "resolution_used": resolution_used,
+        "fallback_used": fallback_used,
+        "note": note,
+        "frames": frame_summaries,
+    }
+    return [summary, *images]
+
+
+def _resolved_high_res_frames(
+    source_url: str, dedupe_keys: list[int],
+) -> dict[int, tuple[bytes | None, str | None]]:
+    extracted_by_key = extract_high_res_frames(source_url, dedupe_keys)
+    resolved: dict[int, tuple[bytes | None, str | None]] = {}
+    for key, extracted in extracted_by_key.items():
+        if extracted.image_base64:
+            resolved[key] = (base64.b64decode(extracted.image_base64), None)
+        else:
+            resolved[key] = (None, extracted.error or "Frame extraction failed")
+    return resolved
+
+
+def _resolved_thumb_frames(
+    video_id: str, dedupe_keys: list[int],
+) -> dict[int, tuple[bytes | None, str | None]]:
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise RuntimeError("Frame storage is not configured") from exc
+    store = R2Store(r2_config)
+
+    resolved: dict[int, tuple[bytes | None, str | None]] = {}
+    for frame_index in dedupe_keys:
+        try:
+            resolved[frame_index] = (
+                store.download_object_bytes(thumbnail_key(video_id, frame_index)),
+                None,
+            )
+        except R2StorageError as exc:
+            logger.warning(
+                "Failed to download thumbnail bytes for video_id=%s frame_index=%d: %s",
+                video_id,
+                frame_index,
+                exc,
+            )
+            resolved[frame_index] = (None, "Failed to download stored thumbnail")
+    return resolved
+
+
+@vmf_mcp.tool(
+    title="Get Frames",
+    annotations=ToolAnnotations(
+        title="Get Frames",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=False,
+    ),
+    structured_output=False,
+)
+def get_frames(
+    video_id: Annotated[str, Field(min_length=1, description="Video UUID to fetch frames from.")],
+    timestamps: Annotated[
+        list[float],
+        Field(
+            min_length=1,
+            description=(
+                "Timestamps in seconds to extract frames at. Up to 8 for "
+                "resolution='high', up to 25 for resolution='thumb'."
+            ),
+        ),
+    ],
+    resolution: Annotated[
+        Literal["thumb", "high"],
+        Field(
+            default="high",
+            description=(
+                "'high' extracts sharp on-demand frames from the retained source "
+                "video (best for reading board/slide text; falls back to 'thumb' "
+                "automatically if the source isn't retained). 'thumb' returns the "
+                "lower-resolution 1-fps thumbnail already stored for the video."
+            ),
+        ),
+    ] = "high",
+    ctx: Context | None = None,
+) -> list[Any]:
+    """Return video frames as actual image content blocks (not URLs) for the model to view.
+
+    Returns a list of content blocks: first a JSON object with fields
+    ``video_id``, ``resolution_requested``, ``resolution_used``,
+    ``fallback_used``, ``note``, and ``frames`` (a list of
+    ``{requested_timestamp_s, actual_timestamp_s, image_index, error}`` in the
+    same order as the requested ``timestamps``). ``image_index`` is the
+    0-based position of that frame's image among the image content blocks
+    that follow this JSON object (``null`` when extraction/download failed for
+    that timestamp, with ``error`` describing why).
+
+    Board content accumulates while a speaker writes, so when illustrating a
+    transcript moment, prefer a timestamp a few seconds after the speaker
+    finishes describing the visual rather than the moment they start.
+    """
+    if ctx is None:
+        raise RuntimeError("MCP context is required")
+
+    from src.api.app import (
+        API_UNIT_COST_FRAMES_HIGH,
+        API_UNIT_COST_FRAMES_THUMB,
+        _api_usage_key_id,
+        _consume_api_units_or_raise,
+        _require_owned_video_or_404,
+        _require_retained_source_url,
+        _uses_api_unit_billing,
+    )
+
+    validate_frame_request(timestamps, resolution)
+
+    identity = _request_identity(ctx)
+    user_id = identity.user_id
+    record = _require_owned_video_or_404(video_id, user_id)
+
+    resolution_used = resolution
+    fallback_used = False
+    note: str | None = None
+
+    if resolution == "high":
+        try:
+            source_url = _require_retained_source_url(video_id, record)
+        except HTTPException as exc:
+            if exc.status_code != 409:
+                raise
+            resolution_used = "thumb"
+            fallback_used = True
+            note = (
+                "Source video is not retained for this video; served stored "
+                "thumbnails instead of extracting high-resolution frames."
+            )
+        else:
+            if _uses_api_unit_billing(identity):
+                _consume_api_units_or_raise(
+                    user_id=user_id,
+                    api_key_id=_api_usage_key_id(identity),
+                    event_type="frames_high",
+                    units=API_UNIT_COST_FRAMES_HIGH,
+                    video_id=video_id,
+                )
+            plan = build_high_res_frame_plan(timestamps)
+            resolved_by_key = _resolved_high_res_frames(source_url, unique_dedupe_keys(plan))
+            return _frames_summary_content(
+                video_id=video_id,
+                resolution_requested=resolution,
+                resolution_used="high",
+                fallback_used=False,
+                note=None,
+                plan=plan,
+                resolved_by_key=resolved_by_key,
+            )
+
+    if _uses_api_unit_billing(identity):
+        _consume_api_units_or_raise(
+            user_id=user_id,
+            api_key_id=_api_usage_key_id(identity),
+            event_type="frames_thumb",
+            units=API_UNIT_COST_FRAMES_THUMB,
+            video_id=video_id,
+        )
+    plan = build_thumb_frame_plan(timestamps)
+    resolved_by_key = _resolved_thumb_frames(video_id, unique_dedupe_keys(plan))
+    return _frames_summary_content(
+        video_id=video_id,
+        resolution_requested=resolution,
+        resolution_used=resolution_used,
+        fallback_used=fallback_used,
+        note=note,
+        plan=plan,
+        resolved_by_key=resolved_by_key,
+    )
+
+
+_LECTURE_NOTES_OWN_NOTES_DISCLOSURE = " and merged with the user's own notes"
+
+_LECTURE_NOTES_OWN_NOTES_STEP = (
+    "7. Treat the user's own notes below as the primary skeleton: use the video "
+    "to verify, correct, complete, and enrich them, and flag any conflict "
+    "between the notes and the video explicitly.\n\n"
+    "{own_notes}"
+)
+
+
+@vmf_mcp.prompt(
+    name="lecture_notes",
+    title="Lecture Notes",
+    description=(
+        "Turn an indexed lecture video into polished Markdown study notes, "
+        "using its transcript and board-moment frames."
+    ),
+)
+def lecture_notes(
+    video_id: Annotated[str, Field(description="Video UUID of the indexed lecture to turn into notes.")],
+    course_context: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Optional course name, lecture number, and/or related links.",
+        ),
+    ] = None,
+    own_notes: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=(
+                "Optional text of the user's own handwritten notes to merge in. "
+                "Leave empty if the user will paste photos of their notes in chat instead."
+            ),
+        ),
+    ] = None,
+) -> str:
+    """Workflow prompt: turn an indexed lecture video into polished Markdown study notes."""
+    course_context_block = f"\n{course_context}\n" if course_context else ""
+    own_notes_disclosure = _LECTURE_NOTES_OWN_NOTES_DISCLOSURE if own_notes else ""
+    own_notes_step = (
+        "\n" + _LECTURE_NOTES_OWN_NOTES_STEP.format(own_notes=own_notes) + "\n"
+        if own_notes
+        else ""
+    )
+
+    return (
+        f"Turn the indexed lecture video {video_id} into polished Markdown study notes.\n"
+        f"{course_context_block}\n"
+        "Workflow:\n"
+        "1. Call get_video_status to confirm the video is ready.\n"
+        "2. Call get_transcript for the full transcript.\n"
+        "3. Read the transcript and identify (a) the lecture's natural sections and "
+        "(b) \"board moments\" — places where the speaker references something "
+        "visual without fully describing it (\"let's draw...\", \"as you can see "
+        "here...\", \"this diagram...\", \"this picture of...\").\n"
+        "4. For the 5-15 most important board moments, call get_frames (default "
+        "high resolution). Board content accumulates while the speaker writes, so "
+        "request a timestamp near the END of each explanation, a few seconds after "
+        "the drawing is finished. If a frame is unclear, request 2-3 nearby "
+        "timestamps and use the clearest.\n"
+        "5. Describe each important visual faithfully in the notes as text, LaTeX, "
+        "or a described diagram — never as \"see figure\" references.\n"
+        "6. Write one Markdown document:\n"
+        "   - Title + lecture/source metadata at the top.\n"
+        "   - A source-status line disclosing the notes are AI-assisted, generated "
+        f"from the video transcript and frames{own_notes_disclosure}.\n"
+        "   - Numbered sections following the lecture's own structure.\n"
+        "   - All math in LaTeX ($$ blocks), with key results in \\boxed{}.\n"
+        "   - A final \"Main Takeaways\" bullet list.\n"
+        f"{own_notes_step}\n"
+        "Keep notation consistent throughout; clean up spoken-language artifacts; "
+        "do not invent content that is in neither the transcript nor the frames — "
+        "where you add a bridging explanation, make sure it is standard material "
+        "implied by the surrounding derivation."
+    )
 
 
 def build_mcp_asgi_app() -> ASGIApp:

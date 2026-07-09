@@ -17,11 +17,15 @@ This document covers the shipped Claude-compatible remote MCP server, its OAuth 
   - `POST /revoke`
 - Frontend approval page:
   - `https://www.videomomentfinder.com/connectors/claude?request_id=...`
-- Current MCP tools:
+- Current MCP tools (six):
   - `upload_video`
   - `get_video_status`
   - `list_videos`
   - `search_video`
+  - `get_transcript`
+  - `get_frames`
+- MCP prompts:
+  - `lecture_notes` — a guided workflow prompt that turns an indexed lecture video into polished Markdown study notes (transcript -> board moments -> high-res frames -> structured notes). See `docs/LECTURE_NOTES_RECIPE.md`.
 
 Behavior notes:
 
@@ -29,7 +33,7 @@ Behavior notes:
 - REST API and CLI keep their existing JWT + `vmf_` API-key behavior.
 - Connector usage bills against Developer Pack API units.
 - MCP tool execution records `api_usage_events.api_key_id = null` for OAuth calls.
-- `upload_video` is annotated as a write tool; the other three tools are read-only.
+- `upload_video` is annotated as a write tool; the other five tools are read-only.
 
 ## Current Tool Scope
 
@@ -37,6 +41,11 @@ Behavior notes:
   - `action="start"` returns `video_id` + `upload_url`
   - `action="complete"` finalizes the upload after the file bytes are written
 - `search_video` is text-only in MCP
+- `get_transcript` returns the full spoken transcript with per-segment `start_s`/`end_s` timestamps, optionally filtered with `start_s`/`end_s` query bounds. Bills 1 API unit per call for API-key/OAuth callers.
+- `get_frames` returns **actual image content blocks**, not URLs: the tool result is a JSON summary block first (with per-requested-timestamp `image_index` mapping into the images that follow, or `error` when a frame couldn't be produced), then the image blocks themselves.
+  - Defaults to `resolution="high"` (on-demand ffmpeg extraction from the retained source video, up to 1280px wide, best for reading board/slide text), capped at 8 timestamps per call, 5 API units/call.
+  - Automatically falls back to `resolution="thumb"` (the stored 1-fps thumbnails) when the source video isn't retained (for example YouTube imports), noting the fallback in the summary's `note` field; only one billing event is recorded for the call either way.
+  - Explicit `resolution="thumb"` allows up to 25 timestamps per call, 1 API unit/call.
 - YouTube submit is not part of the MCP tool surface
 - REST remains the canonical public contract for one-shot multipart upload, image search, and non-MCP programmatic usage
 
@@ -48,7 +57,7 @@ Behavior notes:
 4. The user lands on `https://www.videomomentfinder.com/connectors/claude?request_id=...`.
 5. If signed out, they sign in or create an account.
 6. If `api_units_balance <= 0`, they buy a Developer Pack and return to the same connector page.
-7. They review the four MCP tools and explicitly approve access.
+7. They review the six MCP tools and explicitly approve access.
 8. Claude receives the authorization code callback, exchanges it for tokens, and begins using the connector.
 
 Supported redirect URIs:
@@ -92,6 +101,9 @@ Related public pages:
 4. `Upload this MP4 to Video Moment Finder and then poll until processing starts.`
    Expected behavior: Claude uses `upload_video(action="start")`, writes the file to the presigned upload URL, then uses `upload_video(action="complete")` and `get_video_status`.
 
+5. `Turn video <video_id> into study notes.` (or invoke the `lecture_notes` prompt directly with that video ID)
+   Expected behavior: Claude runs the `lecture_notes` workflow — `get_video_status` to confirm readiness, `get_transcript` for the full transcript, then `get_frames` for the 5-15 most important board moments (near the end of each explanation) — and returns one Markdown document with a source-status disclosure, LaTeX math, and a "Main Takeaways" section. See `docs/LECTURE_NOTES_RECIPE.md` for the full recipe.
+
 ## Local Validation
 
 Start the API:
@@ -124,7 +136,7 @@ These checks must pass before Anthropic directory submission:
 - Claude.ai custom connector completes connect/auth successfully
 - Claude Desktop completes connect/auth successfully
 - MCP Inspector or Claude Code completes connect/auth successfully
-- `upload_video`, `get_video_status`, `list_videos`, and `search_video` all work end to end
+- All six tools (`upload_video`, `get_video_status`, `list_videos`, `search_video`, `get_transcript`, `get_frames`) work end to end
 - Privacy and support URLs are reachable over HTTPS
 - Public docs contain no preview, deferred, or manual-auth wording
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 from urllib.parse import parse_qs, urlparse
 
 import anyio
@@ -12,10 +13,13 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from src.api.app import app
+from src.api.frames import ExtractedFrame
+from src.api.mcp import mcp_tool_approval_items
 from src.db.supabase import (
     ApiCreditRecord,
     ApiUnitConsumeResult,
     McpOAuthAccessTokenRecord,
+    TranscriptSegmentRecord,
     VideoRecord,
 )
 from src.storage.qdrant import SearchResult
@@ -24,6 +28,7 @@ from tests.api.conftest import (
     InMemoryMcpOAuthStore,
     _authenticate,
     _upload_video_record,
+    _video_record,
 )
 
 MCP_RESOURCE_URL = "https://api.videomomentfinder.com/mcp"
@@ -238,14 +243,20 @@ def test_mcp_lists_only_expected_tools(
         "get_video_status",
         "list_videos",
         "search_video",
+        "get_transcript",
+        "get_frames",
     }
 
     upload_tool = next(tool for tool in tools.tools if tool.name == "upload_video")
     search_tool = next(tool for tool in tools.tools if tool.name == "search_video")
+    transcript_tool = next(tool for tool in tools.tools if tool.name == "get_transcript")
+    frames_tool = next(tool for tool in tools.tools if tool.name == "get_frames")
     assert upload_tool.title == "Upload Video"
     assert upload_tool.annotations.destructiveHint is True
     assert upload_tool.annotations.readOnlyHint is False
     assert search_tool.annotations.readOnlyHint is True
+    assert transcript_tool.annotations.readOnlyHint is True
+    assert frames_tool.annotations.readOnlyHint is True
 
 
 def test_mcp_upload_video_start_returns_presigned_payload(
@@ -504,3 +515,431 @@ def test_mcp_search_video_surfaces_insufficient_units(
 
     assert result.isError is True
     assert "Insufficient API units" in result.content[0].text
+
+
+def test_mcp_tool_approval_items_lists_six_tools() -> None:
+    items = mcp_tool_approval_items()
+
+    assert [item["name"] for item in items] == [
+        "upload_video",
+        "get_video_status",
+        "list_videos",
+        "search_video",
+        "get_transcript",
+        "get_frames",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# get_transcript
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_get_transcript_returns_segments_and_bills_transcript_fetch(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_get_video_transcript_segments",
+        lambda video_id, start_s=None, end_s=None: [
+            TranscriptSegmentRecord(
+                video_id=video_id, segment_index=0, start_s=0.0, end_s=2.0,
+                text="Hello", language_code="en",
+            ),
+            TranscriptSegmentRecord(
+                video_id=video_id, segment_index=1, start_s=2.0, end_s=4.5,
+                text="World", language_code="en",
+            ),
+        ],
+    )
+    consumed: dict = {}
+
+    def mock_consume(**kwargs):
+        consumed.update(kwargs)
+        return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+    monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool("get_transcript", {"video_id": UPLOAD_VIDEO_ID})
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    payload = result.structuredContent
+    assert payload is not None
+    assert payload["video_id"] == UPLOAD_VIDEO_ID
+    assert payload["has_transcript"] is True
+    assert payload["language_code"] == "en"
+    assert payload["segment_count"] == 2
+    assert payload["segments"][0] == {
+        "segment_index": 0,
+        "start_s": 0.0,
+        "end_s": 2.0,
+        "text": "Hello",
+    }
+    assert consumed["event_type"] == "transcript_fetch"
+    assert consumed["units"] == 1
+
+
+def test_mcp_get_transcript_no_segments_returns_empty_not_error(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_get_video_transcript_segments",
+        lambda video_id, start_s=None, end_s=None: [],
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_api_units",
+        lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=99),
+    )
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool("get_transcript", {"video_id": UPLOAD_VIDEO_ID})
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    payload = result.structuredContent
+    assert payload["has_transcript"] is False
+    assert payload["segment_count"] == 0
+    assert payload["segments"] == []
+
+
+# ---------------------------------------------------------------------------
+# get_frames
+# ---------------------------------------------------------------------------
+
+
+class _FakeRetainedSourceR2Store:
+    """Fake for src.api.app.R2Store used by _require_retained_source_url."""
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        pass
+
+    def source_exists(self, key: str) -> bool:
+        return True
+
+    def generate_presigned_url(self, key: str, expires_in: int = 3600) -> str:
+        return "https://source.example.com/presigned"
+
+
+def _fake_thumb_bytes_r2_store(thumb_bytes: bytes):
+    class _FakeThumbBytesR2Store:
+        """Fake for src.api.mcp.R2Store used by _resolved_thumb_frames."""
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def download_object_bytes(self, key: str) -> bytes:
+            return thumb_bytes
+
+    return _FakeThumbBytesR2Store
+
+
+def test_mcp_get_frames_high_returns_image_content_and_bills_frames_high(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", _FakeRetainedSourceR2Store)
+
+    jpeg_bytes = b"\xff\xd8\xff\xe0fakejpegbytes"
+    monkeypatch.setattr(
+        "src.api.mcp.extract_high_res_frames",
+        lambda source_url, dedupe_keys: {
+            key: ExtractedFrame(
+                image_base64=base64.b64encode(jpeg_bytes).decode("ascii"),
+                width=640,
+                height=360,
+            )
+            for key in dedupe_keys
+        },
+    )
+    consumed: dict = {}
+
+    def mock_consume(**kwargs):
+        consumed.update(kwargs)
+        return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+    monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [3.2], "resolution": "high"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    assert result.structuredContent is None
+    assert len(result.content) == 2
+    summary_block, image_block = result.content
+    assert summary_block.type == "text"
+    payload = json.loads(summary_block.text)
+    assert payload["video_id"] == UPLOAD_VIDEO_ID
+    assert payload["resolution_requested"] == "high"
+    assert payload["resolution_used"] == "high"
+    assert payload["fallback_used"] is False
+    assert payload["frames"][0]["actual_timestamp_s"] == 3.0
+    assert payload["frames"][0]["image_index"] == 0
+    assert payload["frames"][0]["error"] is None
+    assert image_block.type == "image"
+    assert image_block.mimeType == "image/jpeg"
+    assert base64.b64decode(image_block.data) == jpeg_bytes
+    assert consumed["event_type"] == "frames_high"
+    assert consumed["units"] == 5
+
+
+def test_mcp_get_frames_thumb_returns_image_content_and_bills_frames_thumb(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.mcp.R2Config.from_env", lambda: object())
+    thumb_bytes = b"thumb-jpeg-bytes"
+    monkeypatch.setattr("src.api.mcp.R2Store", _fake_thumb_bytes_r2_store(thumb_bytes))
+    consumed: dict = {}
+
+    def mock_consume(**kwargs):
+        consumed.update(kwargs)
+        return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+    monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [1.0], "resolution": "thumb"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    summary_block, image_block = result.content
+    payload = json.loads(summary_block.text)
+    assert payload["resolution_requested"] == "thumb"
+    assert payload["resolution_used"] == "thumb"
+    assert payload["fallback_used"] is False
+    assert image_block.type == "image"
+    assert base64.b64decode(image_block.data) == thumb_bytes
+    assert consumed["event_type"] == "frames_thumb"
+    assert consumed["units"] == 1
+
+
+def test_mcp_get_frames_high_falls_back_to_thumb_when_source_not_retained(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    # Youtube-sourced video: no retained R2 source, so the high-res path 409s.
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.mcp.R2Config.from_env", lambda: object())
+    thumb_bytes = b"fallback-thumb-bytes"
+    monkeypatch.setattr("src.api.mcp.R2Store", _fake_thumb_bytes_r2_store(thumb_bytes))
+    consumed: dict = {}
+
+    def mock_consume(**kwargs):
+        consumed.update(kwargs)
+        return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+    monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [1.0], "resolution": "high"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    summary_block, image_block = result.content
+    payload = json.loads(summary_block.text)
+    assert payload["resolution_requested"] == "high"
+    assert payload["resolution_used"] == "thumb"
+    assert payload["fallback_used"] is True
+    assert payload["note"] is not None and "not retained" in payload["note"]
+    assert image_block.type == "image"
+    assert base64.b64decode(image_block.data) == thumb_bytes
+    # Only the (cheaper) thumb event is billed -- no double billing on fallback.
+    assert consumed["event_type"] == "frames_thumb"
+    assert consumed["units"] == 1
+
+
+def test_mcp_get_frames_high_cap_exceeded_is_tool_error(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {
+                "video_id": UPLOAD_VIDEO_ID,
+                "timestamps": [float(i) for i in range(9)],
+                "resolution": "high",
+            },
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is True
+    assert "At most 8 timestamps" in result.content[0].text
+
+
+def test_mcp_get_frames_thumb_cap_exceeded_is_tool_error(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {
+                "video_id": UPLOAD_VIDEO_ID,
+                "timestamps": [float(i) for i in range(26)],
+                "resolution": "thumb",
+            },
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is True
+    assert "At most 25 timestamps" in result.content[0].text
+
+
+def test_mcp_get_frames_per_frame_error_does_not_fail_whole_call(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", _FakeRetainedSourceR2Store)
+
+    jpeg_bytes = b"\xff\xd8\xff\xe0okframe"
+
+    def fake_extract(source_url, dedupe_keys):
+        result = {}
+        for key in dedupe_keys:
+            if key == 500:
+                result[key] = ExtractedFrame(
+                    image_base64=None, width=None, height=None,
+                    error="No frame was produced (timestamp may be past the end of the video)",
+                )
+            else:
+                result[key] = ExtractedFrame(
+                    image_base64=base64.b64encode(jpeg_bytes).decode("ascii"),
+                    width=100,
+                    height=50,
+                )
+        return result
+
+    monkeypatch.setattr("src.api.mcp.extract_high_res_frames", fake_extract)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_api_units",
+        lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=99),
+    )
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {
+                "video_id": UPLOAD_VIDEO_ID,
+                "timestamps": [5.0, 500.0],
+                "resolution": "high",
+            },
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    summary_block, image_block = result.content
+    payload = json.loads(summary_block.text)
+    assert payload["frames"][0]["image_index"] == 0
+    assert payload["frames"][0]["error"] is None
+    assert payload["frames"][1]["image_index"] is None
+    assert "past the end" in payload["frames"][1]["error"]
+    assert image_block.type == "image"
+
+
+# ---------------------------------------------------------------------------
+# lecture_notes prompt
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_lecture_notes_prompt_renders_without_optional_args(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+
+    async def _callback(session: ClientSession):
+        return await session.get_prompt("lecture_notes", {"video_id": UPLOAD_VIDEO_ID})
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert len(result.messages) == 1
+    text = result.messages[0].content.text
+    assert f"lecture video {UPLOAD_VIDEO_ID}" in text
+    assert "get_video_status" in text
+    assert "get_transcript" in text
+    assert "get_frames" in text
+    assert "Main Takeaways" in text
+    assert "primary skeleton" not in text
+    assert "merged with the user's own notes" not in text
+
+
+def test_mcp_lecture_notes_prompt_renders_with_optional_args(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+
+    async def _callback(session: ClientSession):
+        return await session.get_prompt(
+            "lecture_notes",
+            {
+                "video_id": UPLOAD_VIDEO_ID,
+                "course_context": "CS229, Lecture 3",
+                "own_notes": "Gradient descent notes from class.",
+            },
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    text = result.messages[0].content.text
+    assert "CS229, Lecture 3" in text
+    assert "merged with the user's own notes" in text
+    assert "primary skeleton" in text
+    assert "Gradient descent notes from class." in text

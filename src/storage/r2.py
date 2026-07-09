@@ -134,6 +134,18 @@ class R2Store:
         except Exception as exc:
             raise R2StorageError(f"Failed to download source video: {exc}") from exc
 
+    def download_object_bytes(self, key: str) -> bytes:
+        """Download a stored object's bytes directly (no presigned URL round trip).
+
+        Used server-side when a caller needs raw image bytes rather than a URL,
+        for example returning thumbnail JPEGs as MCP image content blocks.
+        """
+        try:
+            response = self._client.get_object(Bucket=self._config.bucket_name, Key=key)
+            return response["Body"].read()
+        except Exception as exc:
+            raise R2StorageError(f"Failed to download object: {exc}") from exc
+
     def generate_presigned_url(self, key: str, *, expires_in: int = 3600) -> str:
         """Generate a presigned URL for a stored object."""
         if expires_in <= 0:
