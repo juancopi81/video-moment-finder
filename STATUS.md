@@ -63,6 +63,7 @@ Authoring rules:
 | 2026-03-25 | Phase 7 | Activation and onboarding UX (7.2)                     | Done        | Added signed-out preview card, search suggestion chips, empty-results and error-state guidance, YouTube demotion to secondary link, dashboard empty-state copy. |
 | 2026-03-27 | Phase 7 | Remote MCP OAuth connector (7.6)                      | Done        | Shipped `/mcp` with four MCP tools, OAuth PKCE auth, connector approval flow, and public Claude-facing docs. |
 | 2026-07-09 | Phase 7 | Max video duration raised to 90 minutes               | Done        | Raised default duration cap with derived frame limit, extended stale-lock timeout to cover long jobs, and updated frontend copy truthfully. |
+| 2026-07-09 | Phase 7 | Lecture-notes primitives (transcript, frames, prompt) | Done        | Added transcript and frames REST endpoints, get_transcript/get_frames MCP tools with image content, the lecture_notes MCP prompt, per-call unit pricing, and published recipe docs. |
 
 ## Blockers
 
@@ -81,6 +82,7 @@ Authoring rules:
 - **Warm containers remain opt-in** to control default development and production cost.
 - **Direct upload is the primary ingest path**; YouTube URL import remains best effort.
 - **Phase 7 prioritizes acquisition, activation, and monetization learning** before broader platform expansion.
+- **Study-notes generation stays agent-side first**: transcript/frames primitives and the lecture_notes MCP prompt ship with flat per-call unit pricing; a web-UI notes feature waits for dogfooding evidence.
 
 ## Metrics / Measurements
 

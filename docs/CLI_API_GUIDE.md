@@ -18,6 +18,7 @@ Current scope:
 - text search only
 - no image-search CLI yet
 - no YouTube-submit CLI yet
+- no CLI wrapper yet for transcript or frame retrieval — REST only, see [Transcript and Frames](#transcript-and-frames)
 
 Public references:
 
@@ -262,6 +263,95 @@ Expected output:
 }
 ```
 
+## Transcript and Frames
+
+These two endpoints are REST-only today; there is no `vmf` CLI subcommand for them yet.
+
+### Get Transcript
+
+```text
+GET /api/v1/videos/{video_id}/transcript?start_s=&end_s=
+```
+
+`start_s` and `end_s` are optional floats that filter returned segments to a time range. Requires an API key or a signed-in bearer token that owns the video.
+
+Response shape:
+
+```json
+{
+  "video_id": "11111111-1111-4111-8111-111111111111",
+  "has_transcript": true,
+  "language_code": "en",
+  "segment_count": 2,
+  "segments": [
+    {
+      "segment_index": 0,
+      "start_s": 0.0,
+      "end_s": 4.2,
+      "text": "Welcome back to the lecture."
+    },
+    {
+      "segment_index": 1,
+      "start_s": 4.2,
+      "end_s": 9.8,
+      "text": "Today we'll derive the update rule."
+    }
+  ]
+}
+```
+
+Bills **1 API unit** per call (event `transcript_fetch`) for API-key/OAuth callers.
+
+### Get Frames
+
+```text
+POST /api/v1/videos/{video_id}/frames
+```
+
+Body:
+
+```json
+{
+  "timestamps": [12.5, 48.0],
+  "resolution": "thumb"
+}
+```
+
+`resolution` is `"thumb"` (default for this REST route) or `"high"`:
+
+- `"thumb"`: presigned URLs to the already-stored 1-fps thumbnail JPEGs. Up to **25 timestamps** per call, **1 API unit**/call.
+- `"high"`: on-demand ffmpeg extraction from the retained source video, up to 1280px wide, returned as base64 JPEG bytes. Up to **8 timestamps** per call, **5 API units**/call. Best for reading fine board/slide text.
+
+Response shape (per-frame `error` is set instead of `url`/`image_base64` when a frame couldn't be produced):
+
+```json
+{
+  "frames": [
+    {
+      "requested_timestamp_s": 12.5,
+      "actual_timestamp_s": 13.0,
+      "resolution": "thumb",
+      "url": "https://example.com/thumbnails/11111111.../13.jpg",
+      "image_base64": null,
+      "width": null,
+      "height": null,
+      "error": null
+    }
+  ]
+}
+```
+
+`"high"` requests require a **retained source video** (currently: direct uploads only — YouTube imports do not retain the source). If the source isn't retained, the endpoint returns `HTTP 409` with:
+
+```json
+{
+  "code": "source_not_retained",
+  "message": "Original source video is not retained for this video. Retry with resolution=\"thumb\"."
+}
+```
+
+Retry the same call with `"resolution": "thumb"` to fall back to stored thumbnails.
+
 ## Underlying API Contract
 
 The CLI wraps these existing `/api/v1` routes:
@@ -283,6 +373,8 @@ Additional public REST routes that are part of the curated schema:
 | API billing summary | `GET` | `/api/v1/billing/units/summary` | Clerk bearer token or API key |
 | API billing usage | `GET` | `/api/v1/billing/units/usage` | Clerk bearer token or API key |
 | Developer Pack checkout | `POST` | `/api/v1/billing/units/checkout` | Clerk bearer token |
+| Get transcript | `GET` | `/api/v1/videos/{video_id}/transcript` | API key |
+| Get frames | `POST` | `/api/v1/videos/{video_id}/frames` | API key |
 
 The direct upload API remains available for lower-level clients:
 
@@ -337,6 +429,8 @@ Exit codes:
   - Re-run the same command with `--yes`, or use `--dry-run` to preview it first.
 - `stdin uploads require --filename` / `--content-type`
   - When `videos upload` reads bytes from stdin, pass both flags so the API can name and validate the upload.
+- `HTTP 409: {"code": "source_not_retained", ...}`
+  - `POST /api/v1/videos/{video_id}/frames` with `resolution="high"` requires a retained source video (direct uploads only). Retry with `resolution="thumb"`.
 
 ## API Billing
 
@@ -344,6 +438,9 @@ API usage is billed in units, separate from web credits:
 
 - **500 units** per indexed video
 - **1 unit** per text query (launch pricing, configurable via `API_UNIT_COST_INDEX_VIDEO` / `API_UNIT_COST_TEXT_QUERY`)
+- **1 unit** per transcript fetch (`API_UNIT_COST_TRANSCRIPT_FETCH`)
+- **1 unit** per thumbnail-resolution frame call (`API_UNIT_COST_FRAMES_THUMB`)
+- **5 units** per high-resolution frame call (`API_UNIT_COST_FRAMES_HIGH`)
 
 Purchase a Developer Pack ($20, 10,000 units) from `/dashboard/api` or `/pricing`.
 

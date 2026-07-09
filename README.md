@@ -52,7 +52,14 @@ Video Moment Finder ships a Claude-compatible remote [Model Context Protocol](ht
 | `list_videos` | Read | List your recent videos with status, source, and upload date |
 | `get_video_status` | Read | Check whether a video is queued, processing, or ready |
 | `search_video` | Read | Search a video by text and get timestamped matches (visual + transcript) |
+| `get_transcript` | Read | Fetch the full spoken transcript with per-segment timestamps |
+| `get_frames` | Read | Fetch frame images at specific timestamps (image content, high-res by default) |
 | `upload_video` | Write | Upload a video file via two-step presigned URL flow |
+
+Video Moment Finder also ships a `lecture_notes` MCP prompt that chains
+`get_transcript` and `get_frames` into a guided workflow for turning an
+indexed lecture into Markdown study notes. See
+[docs/LECTURE_NOTES_RECIPE.md](./docs/LECTURE_NOTES_RECIPE.md).
 
 ### Claude.ai
 
@@ -199,6 +206,7 @@ YouTube URL import remains best effort and may be blocked by server-side restric
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md): deployment env ownership, webhook contract, and upload flow reference.
 - [docs/CLI_API_GUIDE.md](./docs/CLI_API_GUIDE.md): public CLI and external API happy-path guide.
 - [docs/MCP_GUIDE.md](./docs/MCP_GUIDE.md): OAuth connect flow, reviewer setup, validation gates, and submission notes.
+- [docs/LECTURE_NOTES_RECIPE.md](./docs/LECTURE_NOTES_RECIPE.md): recipe for turning an indexed lecture video into Markdown study notes.
 - [frontend/public/skill.md](./frontend/public/skill.md): public agent bootstrap with canonical URLs and security rules.
 
 ## Deployment (At a Glance)

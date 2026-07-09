@@ -35,8 +35,10 @@ Video Moment Finder exposes two integration surfaces:
 - wait for indexing
 - list videos
 - search a processed video by text
+- fetch the full transcript with per-segment timestamps
+- fetch frames at specific timestamps (stored thumbnails or on-demand high-resolution)
 
-REST and CLI remain the canonical public contract for one-shot upload, status polling, and search.
+REST and CLI remain the canonical public contract for one-shot upload, status polling, search, transcript fetch, and frame retrieval.
 
 ## Claude Connector
 
@@ -46,6 +48,10 @@ Remote MCP tools:
 - `get_video_status`
 - `list_videos`
 - `search_video`
+- `get_transcript`
+- `get_frames` (returns frames as image content; defaults to high resolution with automatic thumbnail fallback)
+
+The server also ships the `lecture_notes` MCP prompt, a guided workflow that turns an indexed lecture video into Markdown study notes from its transcript and board-moment frames.
 
 How the Claude connect flow works:
 
@@ -54,7 +60,7 @@ How the Claude connect flow works:
 3. Click `Connect`.
 4. Sign in to Video Moment Finder if needed.
 5. Buy a Developer Pack if your API-unit balance is zero.
-6. Review the four tools and approve access.
+6. Review the tools and approve access.
 
 Current MCP upload behavior:
 
@@ -96,6 +102,23 @@ Authorization: Bearer <vmf_api_key>
 {"query_text":"when do they explain the model?","limit":3}
 ```
 
+4. Fetch the full transcript (optionally range-filtered with `start_s`/`end_s`):
+
+```http
+GET https://api.videomomentfinder.com/api/v1/videos/<video_id>/transcript
+Authorization: Bearer <vmf_api_key>
+```
+
+5. Fetch frames at timestamps (`thumb` returns presigned thumbnail URLs, up to 25 timestamps; `high` returns base64 JPEG frames extracted from the retained source, up to 8 timestamps, 409 `source_not_retained` when no source is retained):
+
+```http
+POST https://api.videomomentfinder.com/api/v1/videos/<video_id>/frames
+Content-Type: application/json
+Authorization: Bearer <vmf_api_key>
+
+{"timestamps":[312.0, 754.5], "resolution":"high"}
+```
+
 ## CLI Happy Path
 
 ```bash
@@ -118,6 +141,9 @@ uv run vmf videos search <video_id> --query-text "when do they explain the model
 
 3. `Search video <video_id> for the moment they explain the model.`
    Expected behavior: timestamped text-search results from the indexed video.
+
+4. `Use the lecture_notes prompt to turn video <video_id> into study notes.`
+   Expected behavior: the connector's `lecture_notes` prompt guides the agent through transcript retrieval, board-moment frame inspection, and structured Markdown notes generation.
 
 ## Security Rules
 

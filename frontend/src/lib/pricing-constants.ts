@@ -72,6 +72,8 @@ export const API_CARD: ApiCard = {
   features: [
     "500 units per indexed video",
     "1 unit per text query (launch pricing)",
+    "1 unit per transcript fetch",
+    "1-5 units per frame call (thumbnail or high-res)",
     "Per-key usage dashboard",
     "CLI access",
   ],
