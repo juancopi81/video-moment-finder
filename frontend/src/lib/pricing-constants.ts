@@ -19,7 +19,7 @@ export const tiers: Tier[] = [
     description: "Try it out with one video",
     features: [
       "1 video credit",
-      "Up to 30-minute videos",
+      "Up to 90-minute videos",
       "Text & image moment search",
       "Thumbnail previews",
     ],
@@ -32,7 +32,7 @@ export const tiers: Tier[] = [
     description: "5 video credits",
     features: [
       "5 video credits",
-      "Up to 30-minute videos",
+      "Up to 90-minute videos",
       "Text & image moment search",
       "Thumbnail previews",
       "Direct upload (recommended)",
@@ -48,7 +48,7 @@ export const tiers: Tier[] = [
     description: "20 video credits",
     features: [
       "20 video credits",
-      "Up to 30-minute videos",
+      "Up to 90-minute videos",
       "Text & image moment search",
       "Thumbnail previews",
       "Direct upload (recommended)",

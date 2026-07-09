@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 };
 
 const DATE_PUBLISHED = "2026-04-21";
-const DATE_MODIFIED = "2026-04-21";
+const DATE_MODIFIED = "2026-07-09";
 
 const pipelineSteps = [
   {
     title: "1. Upload or import",
-    body: "You upload a video file up to 30 minutes, or import a YouTube video you own. The upload is direct-to-storage via a presigned URL, so the file never round-trips through our API servers.",
+    body: "You upload a video file up to 90 minutes, or import a YouTube video you own. The upload is direct-to-storage via a presigned URL, so the file never round-trips through our API servers.",
   },
   {
     title: "2. Frame extraction",

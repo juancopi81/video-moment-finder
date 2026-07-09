@@ -62,6 +62,7 @@ Authoring rules:
 | 2026-03-24 | Phase 7 | PostHog funnel instrumentation (7.1)                   | Done        | Added PostHog for client-side product analytics; added processing_failure backend event; kept existing Supabase backend events. |
 | 2026-03-25 | Phase 7 | Activation and onboarding UX (7.2)                     | Done        | Added signed-out preview card, search suggestion chips, empty-results and error-state guidance, YouTube demotion to secondary link, dashboard empty-state copy. |
 | 2026-03-27 | Phase 7 | Remote MCP OAuth connector (7.6)                      | Done        | Shipped `/mcp` with four MCP tools, OAuth PKCE auth, connector approval flow, and public Claude-facing docs. |
+| 2026-07-09 | Phase 7 | Max video duration raised to 90 minutes               | Done        | Raised default duration cap with derived frame limit, extended stale-lock timeout to cover long jobs, and updated frontend copy truthfully. |
 
 ## Blockers
 

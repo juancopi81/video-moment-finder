@@ -118,7 +118,7 @@ Graded preflight rule:
 ## Queue Reliability Defaults
 
 - `VIDEO_JOB_MAX_ATTEMPTS=3` controls terminal failure threshold.
-- `VIDEO_JOB_STALE_LOCK_TIMEOUT_S=600` controls stale `processing` lock recovery.
+- `VIDEO_JOB_STALE_LOCK_TIMEOUT_S=2700` controls stale `processing` lock recovery (comfortably exceeds worst-case processing time for a 90-minute video; no in-process lock heartbeat exists, so this must stay above worst-case job duration).
 - `VIDEO_JOB_IDLE_BACKOFF_MAX_S=15` caps empty-queue exponential polling backoff.
 - `VIDEO_JOB_DB_RETRY_BASE_DELAY_S=1` sets initial retry delay after transient DB transport errors.
 - `VIDEO_JOB_DB_RETRY_MAX_DELAY_S=30` caps transient DB transport retry delay.

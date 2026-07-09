@@ -47,7 +47,7 @@ type VideoSearchResponse = {
 };
 
 const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_ATTEMPTS = 300; // 10 minutes at 2s interval
+const MAX_POLL_ATTEMPTS = 1200; // 40 minutes at 2s interval (covers ~22-25 min worst-case processing for a 90-min video, plus queue wait buffer)
 const MAX_QUERY_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_QUERY_IMAGE_SIZE_LABEL = "10 MB";
 
@@ -326,7 +326,7 @@ export default function VideoPage({ params }: VideoPageProps) {
               <div className="w-1/2 h-full bg-zinc-900 dark:bg-zinc-100 animate-pulse" />
             </div>
             <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-              A 30-minute video typically takes about 7–8 minutes. You can leave and come back.
+              Processing scales with video length — about 7–8 minutes per 30 minutes of video (roughly 22–25 minutes for a 90-minute video). You can leave and come back.
             </p>
           </div>
         )}
