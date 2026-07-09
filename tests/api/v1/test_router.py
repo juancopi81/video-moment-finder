@@ -163,7 +163,7 @@ def test_v1_upload_complete(monkeypatch) -> None:
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr(
         "src.api.app.db_insert_uploaded_video_idempotent",
-        lambda video_id, user_id, source_r2_key, source_filename: (VideoRecord(
+        lambda video_id, user_id, source_r2_key, source_filename, duration_s=None: (VideoRecord(
             id=video_id,
             youtube_url=None,
             status="queued",

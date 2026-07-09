@@ -419,6 +419,8 @@ Exit codes:
   - Check whether you passed a valid Clerk bearer token for `keys ...` commands or a valid `vmf_` key for `videos ...` commands.
 - `HTTP 400: Video not ready for search (status: queued)` or `processing`
   - Wait for the video to reach `ready` before running `videos search`.
+- `HTTP 400: Video not ready (status: queued)` or `processing` or `failed`
+  - `GET .../transcript` and `POST .../frames` require the video to be `ready` too, same as search. No API units are consumed when this check fails.
 - `HTTP 503: Failed to verify upload`
   - The API could not confirm the uploaded object or inspect the uploaded video.
 - `HTTP 503: Search is temporarily unavailable. Please try again.`

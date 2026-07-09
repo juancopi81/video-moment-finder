@@ -23,7 +23,8 @@ Use those files as the canonical variable list and defaults. This document expla
 | `FRONTEND_BASE_URL`, `MCP_OAUTH_ISSUER_URL`, `MCP_OAUTH_RESOURCE_URL`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Required | - | - | Claude connector OAuth issuer, protected resource metadata, DCR support, optional static reviewer client validation, and approval-page redirects. |
 | `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`, `LEMON_SQUEEZY_VARIANT_ID_DEVELOPER`, `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`, `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`, `LEMON_SQUEEZY_WEBHOOK_SECRET`, `BILLING_GRANT_EVENT_NAMES`, `API_UNIT_COST_INDEX_VIDEO`, `API_UNIT_COST_TEXT_QUERY` | Required | - | - | API billing checkout, webhook handling, and API unit pricing. |
 | `API_UNIT_COST_TRANSCRIPT_FETCH`, `API_UNIT_COST_FRAMES_THUMB`, `API_UNIT_COST_FRAMES_HIGH` | Optional | - | - | API unit pricing for transcript fetch and frame retrieval (defaults 1, 1, 5). |
-| `RATE_LIMIT_*` | Optional | - | - | API rate limit tuning. |
+| `FRAMES_FFMPEG_MAX_CONCURRENCY` | Optional | - | - | Process-wide cap on concurrent high-res frame ffmpeg extractions (default 4), independent of the per-request thread pool. |
+| `RATE_LIMIT_*` | Optional | - | - | API rate limit tuning; the search limiter also covers transcript fetch and frame retrieval. |
 | `VIDEO_MAX_FREE_VIDEOS`, `VIDEO_UPLOAD_URL_TTL_S`, `VIDEO_SOURCE_URL_TTL_S` | Optional | - | - | API admission and signed URL behavior. |
 | `VIDEO_MAX_DURATION_S` | Optional | Optional | - | Duration checks are used in API admission and processing path validation. |
 | `VIDEO_JOB_MAX_ATTEMPTS`, `VIDEO_JOB_STALE_LOCK_TIMEOUT_S`, `VIDEO_JOB_IDLE_BACKOFF_MAX_S`, `VIDEO_JOB_DB_RETRY_BASE_DELAY_S`, `VIDEO_JOB_DB_RETRY_MAX_DELAY_S` | - | Optional | - | Worker queue behavior tuning. |

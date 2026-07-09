@@ -617,7 +617,9 @@ class TestApiKeyUploadBilling:
         monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
         monkeypatch.setattr(
             "src.api.app.db_insert_uploaded_video_idempotent",
-            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+            lambda vid, uid, key, fname, duration_s=None: (
+                _upload_video_record(vid, status="queued"), True,
+            ),
         )
         monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
 
@@ -657,7 +659,9 @@ class TestApiKeyUploadBilling:
         monkeypatch.setattr("src.api.app.update_video_status", mock_update_status)
         monkeypatch.setattr(
             "src.api.app.db_insert_uploaded_video_idempotent",
-            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+            lambda vid, uid, key, fname, duration_s=None: (
+                _upload_video_record(vid, status="queued"), True,
+            ),
         )
 
         response = client.post(
@@ -800,7 +804,9 @@ class TestApiKeyUploadBilling:
         monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
         monkeypatch.setattr(
             "src.api.app.db_insert_uploaded_video_idempotent",
-            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+            lambda vid, uid, key, fname, duration_s=None: (
+                _upload_video_record(vid, status="queued"), True,
+            ),
         )
         monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
 
@@ -847,7 +853,9 @@ class TestApiKeyUploadBilling:
         monkeypatch.setattr("src.api.app.db_get_video", lambda vid, user_id=None: None)
         monkeypatch.setattr(
             "src.api.app.db_insert_uploaded_video_idempotent",
-            lambda vid, uid, key, fname: (_upload_video_record(vid, status="queued"), True),
+            lambda vid, uid, key, fname, duration_s=None: (
+                _upload_video_record(vid, status="queued"), True,
+            ),
         )
         monkeypatch.setattr("src.api.app.enqueue_video_job", lambda vid: object())
 

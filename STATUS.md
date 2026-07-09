@@ -64,6 +64,7 @@ Authoring rules:
 | 2026-03-27 | Phase 7 | Remote MCP OAuth connector (7.6)                      | Done        | Shipped `/mcp` with four MCP tools, OAuth PKCE auth, connector approval flow, and public Claude-facing docs. |
 | 2026-07-09 | Phase 7 | Max video duration raised to 90 minutes               | Done        | Raised default duration cap with derived frame limit, extended stale-lock timeout to cover long jobs, and updated frontend copy truthfully. |
 | 2026-07-09 | Phase 7 | Lecture-notes primitives (transcript, frames, prompt) | Done        | Added transcript and frames REST endpoints, get_transcript/get_frames MCP tools with image content, the lecture_notes MCP prompt, per-call unit pricing, and published recipe docs. |
+| 2026-07-09 | Phase 7 | Retrieval hardening (review follow-up)                 | Done        | Paginated transcript fetch past PostgREST row caps, added bill-then-compensate to metered retrieval, ready-status gating, process-wide ffmpeg concurrency bound, rate limiting on retrieval routes, finite-timestamp validation, and per-video duration persistence for frame clamping. |
 
 ## Blockers
 

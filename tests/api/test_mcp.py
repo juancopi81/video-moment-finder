@@ -321,7 +321,7 @@ def test_mcp_upload_video_complete_returns_video_record(
     monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
     monkeypatch.setattr(
         "src.api.app.db_insert_uploaded_video_idempotent",
-        lambda video_id, user_id, source_r2_key, source_filename: (
+        lambda video_id, user_id, source_r2_key, source_filename, duration_s=None: (
             VideoRecord(
                 id=video_id,
                 youtube_url=None,
@@ -891,6 +891,205 @@ def test_mcp_get_frames_per_frame_error_does_not_fail_whole_call(
     assert payload["frames"][1]["image_index"] is None
     assert "past the end" in payload["frames"][1]["error"]
     assert image_block.type == "image"
+
+
+def test_mcp_get_frames_rate_limit_enforced_same_as_search(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+    monkeypatch.setenv("RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW", "1")
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.mcp.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.mcp.R2Store", _fake_thumb_bytes_r2_store(b"thumb-bytes"))
+    monkeypatch.setattr(
+        "src.api.app.db_consume_api_units",
+        lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=99),
+    )
+
+    async def _callback(session: ClientSession):
+        first = await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [1.0], "resolution": "thumb"},
+        )
+        second = await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [1.0], "resolution": "thumb"},
+        )
+        return first, second
+
+    first, second = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert first.isError is False
+    assert second.isError is True
+    assert "Rate limit exceeded" in second.content[0].text
+
+
+def test_mcp_get_frames_not_ready_video_is_tool_error_without_billing(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="processing"),
+    )
+    consumed = {"called": False}
+
+    def mock_consume(**kwargs):
+        consumed["called"] = True
+        return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+    monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [1.0], "resolution": "thumb"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is True
+    assert "Video not ready" in result.content[0].text
+    assert consumed["called"] is False
+
+
+def test_mcp_get_frames_wholesale_extraction_failure_compensates_units(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", _FakeRetainedSourceR2Store)
+
+    consumed: list[dict] = []
+    compensated: list[dict] = []
+
+    def mock_consume(**kwargs):
+        consumed.append(kwargs)
+        return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+    def mock_compensate(**kwargs):
+        compensated.append(kwargs)
+
+    def fake_extract(*_args, **_kwargs):
+        raise RuntimeError("extraction subsystem crashed")
+
+    monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+    monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+    monkeypatch.setattr("src.api.mcp.extract_high_res_frames", fake_extract)
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [1.0], "resolution": "high"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is True
+    assert len(consumed) == 1
+    assert len(compensated) == 1
+    assert consumed[0]["request_id"] == compensated[0]["request_id"]
+    assert compensated[0]["units"] == 5
+    assert compensated[0]["metadata"]["event_type"] == "frames_high_failed"
+
+
+def test_mcp_get_frames_per_frame_error_does_not_compensate_units(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready"),
+    )
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", _FakeRetainedSourceR2Store)
+
+    def fake_extract(source_url, dedupe_keys):
+        return {
+            key: (
+                ExtractedFrame(image_base64=None, width=None, height=None, error="No frame")
+                if key == 500
+                else ExtractedFrame(image_base64=base64.b64encode(b"jpeg").decode("ascii"), width=1, height=1)
+            )
+            for key in dedupe_keys
+        }
+
+    monkeypatch.setattr("src.api.mcp.extract_high_res_frames", fake_extract)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_api_units",
+        lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=99),
+    )
+    compensated = {"called": False}
+    monkeypatch.setattr(
+        "src.api.app.db_compensate_api_units",
+        lambda **kwargs: compensated.update(called=True),
+    )
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [5.0, 500.0], "resolution": "high"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    assert compensated["called"] is False
+
+
+def test_mcp_get_frames_thumb_clamps_to_video_duration_s(
+    monkeypatch,
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    access_token = _issue_access_token(monkeypatch)
+    monkeypatch.setattr(
+        "src.api.app.db_get_video",
+        lambda video_id, user_id=None: _upload_video_record(video_id, status="ready", duration_s=10.0),
+    )
+    monkeypatch.setattr("src.api.mcp.R2Config.from_env", lambda: object())
+    thumb_bytes = b"thumb-bytes"
+    downloaded_keys: list[str] = []
+
+    class _RecordingThumbStore:
+        def __init__(self, *_a, **_kw) -> None:
+            pass
+
+        def download_object_bytes(self, key: str) -> bytes:
+            downloaded_keys.append(key)
+            return thumb_bytes
+
+    monkeypatch.setattr("src.api.mcp.R2Store", _RecordingThumbStore)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_api_units",
+        lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=99),
+    )
+
+    async def _callback(session: ClientSession):
+        return await session.call_tool(
+            "get_frames",
+            {"video_id": UPLOAD_VIDEO_ID, "timestamps": [999999.0], "resolution": "thumb"},
+        )
+
+    result = _run_mcp_session(_authorized_headers(access_token), _callback)
+
+    assert result.isError is False
+    summary_block, _image_block = result.content
+    payload = json.loads(summary_block.text)
+    # A 10s video's last full sampled frame is index 9, not the global cap.
+    assert payload["frames"][0]["actual_timestamp_s"] == 9.0
+    assert downloaded_keys == [f"thumb/{UPLOAD_VIDEO_ID}/thumb_00009.jpg"]
 
 
 # ---------------------------------------------------------------------------
