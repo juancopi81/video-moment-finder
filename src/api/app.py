@@ -29,6 +29,14 @@ from starlette.requests import ClientDisconnect
 
 from src.analytics.events import track
 from src.api.auth import AuthIdentity, get_current_user, get_current_user_id, get_optional_user_id, hash_api_key
+from src.api.frames import (
+    FrameRequestValidationError,
+    build_high_res_frame_plan,
+    build_thumb_frame_plan,
+    extract_high_res_frames,
+    unique_dedupe_keys,
+    validate_frame_request,
+)
 from src.api.mcp import (
     build_mcp_asgi_app,
     mcp_tool_approval_items,
@@ -74,6 +82,7 @@ from src.db.supabase import (
     get_credits as db_get_credits,
     get_video_job as db_get_video_job,
     get_video as db_get_video,
+    get_video_transcript_segments as db_get_video_transcript_segments,
     insert_uploaded_video_idempotent as db_insert_uploaded_video_idempotent,
     insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
     has_unlimited_video_access as db_has_unlimited_video_access,
@@ -84,7 +93,7 @@ from src.db.supabase import (
     update_video_status,
 )
 from src.storage.config import R2Config, StorageConfigError
-from src.storage.r2 import R2Store, R2StorageError, source_key
+from src.storage.r2 import R2Store, R2StorageError, source_key, thumbnail_key
 from src.storage.qdrant import QdrantStorageError
 from src.utils.datetime import parse_iso_datetime
 from src.utils.env import get_env_int
@@ -389,6 +398,16 @@ def _consume_and_admit_video_processing(user_id: str) -> None:
 
 API_UNIT_COST_INDEX_VIDEO = get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
 API_UNIT_COST_TEXT_QUERY = get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
+API_UNIT_COST_TRANSCRIPT_FETCH = get_env_int("API_UNIT_COST_TRANSCRIPT_FETCH", 1)
+API_UNIT_COST_FRAMES_THUMB = get_env_int("API_UNIT_COST_FRAMES_THUMB", 1)
+API_UNIT_COST_FRAMES_HIGH = get_env_int("API_UNIT_COST_FRAMES_HIGH", 5)
+SOURCE_NOT_RETAINED_DETAIL = {
+    "code": "source_not_retained",
+    "message": (
+        "Original source video is not retained for this video. "
+        "Retry with resolution=\"thumb\"."
+    ),
+}
 
 
 def _uses_api_unit_billing(identity: AuthIdentity) -> bool:
@@ -804,6 +823,41 @@ class VideoSearchResponse(BaseModel):
     source_url: HttpUrl | None = None
     status: StatusType
     results: list[SearchResult]
+
+
+class TranscriptSegmentResponse(BaseModel):
+    segment_index: int
+    start_s: float
+    end_s: float
+    text: str
+
+
+class VideoTranscriptResponse(BaseModel):
+    video_id: str
+    has_transcript: bool
+    language_code: str | None = None
+    segment_count: int
+    segments: list[TranscriptSegmentResponse]
+
+
+class VideoFramesRequest(BaseModel):
+    timestamps: list[float]
+    resolution: Literal["thumb", "high"] = "thumb"
+
+
+class VideoFrameResult(BaseModel):
+    requested_timestamp_s: float
+    actual_timestamp_s: float | None = None
+    resolution: Literal["thumb", "high"]
+    url: HttpUrl | None = None
+    image_base64: str | None = None
+    width: int | None = None
+    height: int | None = None
+    error: str | None = None
+
+
+class VideoFramesResponse(BaseModel):
+    frames: list[VideoFrameResult]
 
 
 class BillingWebhookResponse(BaseModel):
@@ -2195,6 +2249,194 @@ def v1_search_video_by_image(
     )
 
 
+def _require_owned_video_or_404(video_id: str, user_id: str) -> VideoRecord:
+    """Return a video record only when it exists and belongs to the user."""
+    record = db_get_video(video_id, user_id=user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return record
+
+
+def v1_get_video_transcript(
+    video_id: str,
+    start_s: float | None = None,
+    end_s: float | None = None,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoTranscriptResponse:
+    """Return transcript segments for a video, optionally filtered to a time range."""
+    user_id = identity.user_id
+    _require_owned_video_or_404(video_id, user_id)
+
+    if _uses_api_unit_billing(identity):
+        _consume_api_units_or_raise(
+            user_id=user_id,
+            api_key_id=_api_usage_key_id(identity),
+            event_type="transcript_fetch",
+            units=API_UNIT_COST_TRANSCRIPT_FETCH,
+            video_id=video_id,
+        )
+
+    segments = db_get_video_transcript_segments(video_id, start_s=start_s, end_s=end_s)
+    language_code = segments[0].language_code if segments else None
+
+    return VideoTranscriptResponse(
+        video_id=video_id,
+        has_transcript=bool(segments),
+        language_code=language_code,
+        segment_count=len(segments),
+        segments=[
+            TranscriptSegmentResponse(
+                segment_index=segment.segment_index,
+                start_s=segment.start_s,
+                end_s=segment.end_s,
+                text=segment.text,
+            )
+            for segment in segments
+        ],
+    )
+
+
+def _thumb_frames_response(video_id: str, timestamps: list[float]) -> VideoFramesResponse:
+    plan = build_thumb_frame_plan(timestamps)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503, detail="Frame storage is not configured",
+        ) from exc
+    store = R2Store(r2_config)
+
+    urls_by_key: dict[int, str] = {}
+    errors_by_key: dict[int, str] = {}
+    for frame_index in unique_dedupe_keys(plan):
+        try:
+            urls_by_key[frame_index] = store.generate_presigned_url(
+                thumbnail_key(video_id, frame_index), expires_in=3600,
+            )
+        except R2StorageError as exc:
+            logger.warning(
+                "Failed to presign thumbnail URL for video_id=%s frame_index=%d: %s",
+                video_id,
+                frame_index,
+                exc,
+            )
+            errors_by_key[frame_index] = "Failed to generate thumbnail URL"
+
+    return VideoFramesResponse(
+        frames=[
+            VideoFrameResult(
+                requested_timestamp_s=item.requested_timestamp_s,
+                actual_timestamp_s=item.actual_timestamp_s,
+                resolution="thumb",
+                url=urls_by_key.get(item.dedupe_key),
+                error=errors_by_key.get(item.dedupe_key),
+            )
+            for item in plan
+        ]
+    )
+
+
+def _require_retained_source_url(video_id: str, record: VideoRecord) -> str:
+    """Return a presigned source URL, or raise 409/503 for missing retention."""
+    if record.source_type != "upload" or not record.source_r2_key:
+        raise HTTPException(status_code=409, detail=SOURCE_NOT_RETAINED_DETAIL)
+
+    try:
+        r2_config = R2Config.from_env()
+    except StorageConfigError as exc:
+        raise HTTPException(
+            status_code=503, detail="Video storage is not configured",
+        ) from exc
+    store = R2Store(r2_config)
+
+    try:
+        exists = store.source_exists(record.source_r2_key)
+    except R2StorageError as exc:
+        logger.exception(
+            "Failed to check retained source for video_id=%s: %s", video_id, exc,
+        )
+        raise HTTPException(
+            status_code=503, detail="Failed to verify retained source",
+        ) from exc
+
+    if not exists:
+        raise HTTPException(status_code=409, detail=SOURCE_NOT_RETAINED_DETAIL)
+
+    try:
+        return store.generate_presigned_url(record.source_r2_key, expires_in=3600)
+    except R2StorageError as exc:
+        logger.exception(
+            "Failed to presign source URL for video_id=%s: %s", video_id, exc,
+        )
+        raise HTTPException(
+            status_code=503, detail="Failed to prepare source video access",
+        ) from exc
+
+
+def _high_res_frames_response(source_url: str, timestamps: list[float]) -> VideoFramesResponse:
+    plan = build_high_res_frame_plan(timestamps)
+    extracted_by_key = extract_high_res_frames(source_url, unique_dedupe_keys(plan))
+
+    frames: list[VideoFrameResult] = []
+    for item in plan:
+        extracted = extracted_by_key.get(item.dedupe_key)
+        frames.append(
+            VideoFrameResult(
+                requested_timestamp_s=item.requested_timestamp_s,
+                actual_timestamp_s=item.actual_timestamp_s,
+                resolution="high",
+                image_base64=extracted.image_base64 if extracted else None,
+                width=extracted.width if extracted else None,
+                height=extracted.height if extracted else None,
+                error=(extracted.error if extracted else "Frame extraction failed"),
+            )
+        )
+    return VideoFramesResponse(frames=frames)
+
+
+def v1_get_video_frames(
+    video_id: str,
+    request: VideoFramesRequest,
+    identity: AuthIdentity = Depends(get_current_user),
+) -> VideoFramesResponse:
+    """Return frames for a video at the requested timestamps.
+
+    ``resolution="thumb"`` returns presigned URLs to already-stored 1-fps
+    thumbnails. ``resolution="high"`` extracts frames on demand from the
+    retained source video and returns them as base64 JPEG bytes.
+    """
+    user_id = identity.user_id
+    try:
+        validate_frame_request(request.timestamps, request.resolution)
+    except FrameRequestValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    record = _require_owned_video_or_404(video_id, user_id)
+
+    if request.resolution == "high":
+        source_url = _require_retained_source_url(video_id, record)
+        if _uses_api_unit_billing(identity):
+            _consume_api_units_or_raise(
+                user_id=user_id,
+                api_key_id=_api_usage_key_id(identity),
+                event_type="frames_high",
+                units=API_UNIT_COST_FRAMES_HIGH,
+                video_id=video_id,
+            )
+        return _high_res_frames_response(source_url, request.timestamps)
+
+    if _uses_api_unit_billing(identity):
+        _consume_api_units_or_raise(
+            user_id=user_id,
+            api_key_id=_api_usage_key_id(identity),
+            event_type="frames_thumb",
+            units=API_UNIT_COST_FRAMES_THUMB,
+            video_id=video_id,
+        )
+    return _thumb_frames_response(video_id, request.timestamps)
+
+
 def v1_billing_credits_summary(
     user_id: str = Depends(get_current_user_id),
 ) -> BillingSummaryResponse:
@@ -2407,6 +2649,18 @@ internal_v1_router.add_api_route(
     methods=["POST"],
     response_model=VideoSearchResponse,
     include_in_schema=False,
+)
+public_v1_router.add_api_route(
+    "/videos/{video_id}/transcript",
+    v1_get_video_transcript,
+    methods=["GET"],
+    response_model=VideoTranscriptResponse,
+)
+public_v1_router.add_api_route(
+    "/videos/{video_id}/frames",
+    v1_get_video_frames,
+    methods=["POST"],
+    response_model=VideoFramesResponse,
 )
 
 app.include_router(public_v1_router)

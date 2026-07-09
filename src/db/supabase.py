@@ -724,6 +724,36 @@ def replace_video_transcript_segments(
     return int(inserted_raw)
 
 
+def get_video_transcript_segments(
+    video_id: str,
+    *,
+    start_s: float | None = None,
+    end_s: float | None = None,
+) -> list[TranscriptSegmentRecord]:
+    """Fetch transcript segments for a video, ordered by segment_index.
+
+    When ``start_s``/``end_s`` are given, only segments overlapping that range
+    are returned (``segment.end_s >= start_s`` and ``segment.start_s <= end_s``).
+    """
+    if not video_id.strip():
+        raise ValueError("video_id must be non-empty")
+
+    client = get_client()
+    query = (
+        client.table("video_transcript_segments")
+        .select("*")
+        .eq("video_id", video_id)
+        .order("segment_index")
+    )
+    if start_s is not None:
+        query = query.gte("end_s", start_s)
+    if end_s is not None:
+        query = query.lte("start_s", end_s)
+
+    result = query.execute()
+    return [_row_to_transcript_segment(row) for row in result.data]
+
+
 def search_video_transcript_segments(
     video_id: str,
     query: str,

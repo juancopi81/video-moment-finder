@@ -19,6 +19,7 @@ from src.db.supabase import (
     count_videos_for_user,
     create_video,
     get_video,
+    get_video_transcript_segments,
     has_unlimited_video_access,
     insert_uploaded_video_idempotent,
     insert_youtube_video_idempotent,
@@ -349,6 +350,77 @@ def test_search_video_transcript_segments_calls_rpc(mock_get_client: MagicMock) 
             "p_limit": 3,
         },
     )
+
+
+@patch("src.db.supabase.get_client")
+def test_get_video_transcript_segments_orders_by_index(mock_get_client: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    mock_query = MagicMock()
+    mock_query.eq.return_value = mock_query
+    mock_query.order.return_value = mock_query
+    mock_query.execute.return_value.data = [
+        {
+            "video_id": "video_123",
+            "segment_index": 0,
+            "start_s": 0.0,
+            "end_s": 2.0,
+            "text": "Hello",
+            "language_code": "en",
+        },
+        {
+            "video_id": "video_123",
+            "segment_index": 1,
+            "start_s": 2.0,
+            "end_s": 4.5,
+            "text": "World",
+            "language_code": "en",
+        },
+    ]
+    mock_client.table.return_value.select.return_value = mock_query
+
+    segments = get_video_transcript_segments("video_123")
+
+    assert segments == [
+        TranscriptSegmentRecord(
+            video_id="video_123", segment_index=0, start_s=0.0, end_s=2.0,
+            text="Hello", language_code="en",
+        ),
+        TranscriptSegmentRecord(
+            video_id="video_123", segment_index=1, start_s=2.0, end_s=4.5,
+            text="World", language_code="en",
+        ),
+    ]
+    mock_client.table.assert_called_with("video_transcript_segments")
+    mock_query.eq.assert_called_once_with("video_id", "video_123")
+    mock_query.order.assert_called_once_with("segment_index")
+    mock_query.gte.assert_not_called()
+    mock_query.lte.assert_not_called()
+
+
+@patch("src.db.supabase.get_client")
+def test_get_video_transcript_segments_applies_range_filter(mock_get_client: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    mock_query = MagicMock()
+    mock_query.eq.return_value = mock_query
+    mock_query.order.return_value = mock_query
+    mock_query.gte.return_value = mock_query
+    mock_query.lte.return_value = mock_query
+    mock_query.execute.return_value.data = []
+    mock_client.table.return_value.select.return_value = mock_query
+
+    get_video_transcript_segments("video_123", start_s=10.0, end_s=20.0)
+
+    mock_query.gte.assert_called_once_with("end_s", 10.0)
+    mock_query.lte.assert_called_once_with("start_s", 20.0)
+
+
+def test_get_video_transcript_segments_rejects_empty_video_id() -> None:
+    with pytest.raises(ValueError, match="video_id"):
+        get_video_transcript_segments("")
 
 
 def test_update_credits_rejects_negative_balance() -> None:
