@@ -345,8 +345,10 @@ Response shape (per-frame `error` is set instead of `url`/`image_base64` when a 
 
 ```json
 {
-  "code": "source_not_retained",
-  "message": "Original source video is not retained for this video. Retry with resolution=\"thumb\"."
+  "detail": {
+    "code": "source_not_retained",
+    "message": "Original source video is not retained for this video. Retry with resolution=\"thumb\"."
+  }
 }
 ```
 
@@ -429,7 +431,7 @@ Exit codes:
   - Re-run the same command with `--yes`, or use `--dry-run` to preview it first.
 - `stdin uploads require --filename` / `--content-type`
   - When `videos upload` reads bytes from stdin, pass both flags so the API can name and validate the upload.
-- `HTTP 409: {"code": "source_not_retained", ...}`
+- `HTTP 409: {"detail": {"code": "source_not_retained", ...}}`
   - `POST /api/v1/videos/{video_id}/frames` with `resolution="high"` requires a retained source video (direct uploads only). Retry with `resolution="thumb"`.
 
 ## API Billing
@@ -444,7 +446,7 @@ API usage is billed in units, separate from web credits:
 
 Purchase a Developer Pack ($20, 10,000 units) from `/dashboard/api` or `/pricing`.
 
-When API units are insufficient, requests return `HTTP 402` with `{"code": "insufficient_api_units", ...}`.
+When API units are insufficient, requests return `HTTP 402` with `{"detail": {"code": "insufficient_api_units", ...}}`.
 
 ## Data Retention
 

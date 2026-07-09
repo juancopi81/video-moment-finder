@@ -103,15 +103,17 @@ one-liner is just a shortcut for connector users.
 | Step | Cost |
 | --- | --- |
 | Index the video (one time) | ~500 API units |
-| Each notes session | ~5-20 API units |
+| Each notes session | typically ~6-16 API units |
 
 A notes session is 1 transcript fetch (1 unit) plus 1-4 frame calls (1 unit
-for thumbnails, 5 units for high-res, per call — not per frame). That cost is
-**independent of video length**: a 10-minute clip and a 90-minute lecture both
-cost one transcript fetch and a handful of frame calls, because both are
-billed per API call, not per minute of footage. The video only needs to be
-indexed once; you can re-run the notes workflow as many times as you like
-afterward for the same ~5-20 units per run.
+for thumbnails, 5 units for high-res, per call — not per frame): typically
+~6-16 units (one transcript fetch plus one to three high-res frame calls);
+minimum ~2, maximum ~21. That cost is **independent of video length**: a
+10-minute clip and a 90-minute lecture both cost one transcript fetch and a
+handful of frame calls, because both are billed per API call, not per minute
+of footage. The video only needs to be indexed once; you can re-run the notes
+workflow as many times as you like afterward for the same typical ~6-16 units
+per run.
 
 None of the above includes the LLM tokens spent reading the transcript,
 reasoning about board moments, and writing the notes — those are spent by
