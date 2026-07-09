@@ -5,7 +5,7 @@
 - Public REST API, CLI, and Claude-compatible remote MCP connector for indexing videos and searching them by text or image
 - Primary documented agent flow: direct upload, wait for indexing, search by text
 - Additional capabilities include YouTube ingestion and image-based similarity search
-- Powered by multimodal Qwen3-VL embeddings; 30-minute maximum video length; credit-based pricing with a free starter credit
+- Powered by multimodal Qwen3-VL embeddings; 90-minute maximum video length; credit-based pricing with a free starter credit
 
 ## Links
 
@@ -16,7 +16,7 @@
 - [Developers](https://www.videomomentfinder.com/developers): Human-readable REST API and CLI overview with setup and example prompts
 - [OpenAPI Schema](https://api.videomomentfinder.com/openapi.json): Machine-readable API contract for the public REST interface
 - [Swagger UI](https://api.videomomentfinder.com/docs): Interactive API reference
-- [Pricing](https://www.videomomentfinder.com/pricing): Credit-based pricing, free starter credit (1 video up to 30 minutes), and Starter/Pro/Developer Pack details
+- [Pricing](https://www.videomomentfinder.com/pricing): Credit-based pricing, free starter credit (1 video up to 90 minutes), and Starter/Pro/Developer Pack details
 - [Support](https://www.videomomentfinder.com/support): FAQ covering supported sources, processing times, credit behavior, data handling, and contact information
 
 ## Optional

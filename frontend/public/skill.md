@@ -38,7 +38,7 @@ Video Moment Finder exposes two integration surfaces:
 - fetch the full transcript with per-segment timestamps
 - fetch frames at specific timestamps (stored thumbnails or on-demand high-resolution)
 
-REST and CLI remain the canonical public contract for one-shot upload, status polling, search, transcript fetch, and frame retrieval.
+REST is the canonical public contract for all five capabilities above: one-shot upload, status polling, search, transcript fetch, and frame retrieval. The CLI wraps only upload, status polling, and search — there is no CLI wrapper yet for transcript or frame retrieval; use REST directly for those two.
 
 ## Claude Connector
 

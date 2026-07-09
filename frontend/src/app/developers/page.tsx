@@ -205,9 +205,10 @@ export default function DevelopersPage() {
             </p>
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">
               Example &mdash; turning a lecture into study notes: ~500 units
-              the first time you index it, then about 5-20 units per notes
-              session (one transcript fetch plus a few frame calls),
-              regardless of video length.
+              the first time you index it, then typically ~6-16 units per
+              notes session (one transcript fetch plus one to three high-res
+              frame calls; minimum ~2, maximum ~21), regardless of video
+              length.
             </p>
           </div>
 
