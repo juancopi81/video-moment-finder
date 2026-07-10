@@ -13,7 +13,7 @@ const faqs = [
   {
     question: "What video sources work best?",
     answer:
-      "Direct upload is the reliable path. You can upload video files you own or are authorized to use, and videos must be 90 minutes or shorter. YouTube URL import is also available for owned videos, but server-side restrictions can block it.",
+      "Direct upload is the reliable path. You can upload video files you own or are authorized to use, and videos must be 90 minutes or shorter and under 8 GB. YouTube URL import is also available for owned videos, but server-side restrictions can block it.",
     dateModified: FAQ_BASELINE_REVIEWED,
   },
   {

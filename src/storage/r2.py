@@ -194,6 +194,19 @@ class R2Store:
             raise R2StorageError(f"Failed to check source object: {exc}") from exc
         return True
 
+    def object_size(self, key: str) -> int:
+        """Return the size in bytes of a stored object via a HEAD request.
+
+        Raises ``R2StorageError`` if the object cannot be inspected (including
+        when it does not exist). Callers that need existence semantics without
+        raising should check ``source_exists`` first.
+        """
+        try:
+            response = self._client.head_object(Bucket=self._config.bucket_name, Key=key)
+        except Exception as exc:
+            raise R2StorageError(f"Failed to check object size: {exc}") from exc
+        return int(response["ContentLength"])
+
     def delete_source_object(self, key: str) -> None:
         """Delete one uploaded source object."""
         try:

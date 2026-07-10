@@ -4,7 +4,9 @@ import asyncio
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import io
 import json
+import os
 import re
 
 import pytest
@@ -14,9 +16,16 @@ from starlette.requests import ClientDisconnect, Request
 from src.api.app import (
     UploadDurationLimitExceededError,
     UploadDurationProbeUnavailableError,
+    UploadSizeLimitExceededError,
+    UploadSizeProbeUnavailableError,
+    _copy_upload_stream_with_size_limit,
     _is_youtube_bot_challenge_error,
     _allowed_cors_origin_regex,
     _allowed_cors_origins,
+    _probe_upload_file_duration_s,
+    _upload_size_limit_detail,
+    _validate_uploaded_source_size_or_raise,
+    _validate_uploaded_source_size_with_cleanup,
     _video_record_to_response,
     app,
     report_unhandled_exceptions,
@@ -1218,6 +1227,115 @@ def test_upload_video_returns_503_when_duration_probe_unavailable(monkeypatch) -
     assert response.json()["detail"] == "Failed to verify upload"
 
 
+def test_upload_video_rejects_when_uploaded_size_exceeds_limit(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    consume_calls: list[str] = []
+    create_called = {"value": False}
+    enqueue_calls: list[str] = []
+
+    def _raise_size(_file) -> None:
+        raise UploadSizeLimitExceededError("Video exceeds 8 GiB upload size limit")
+
+    monkeypatch.setattr(
+        "src.api.app.R2Config.from_env",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("R2 config should not load when size validation fails")
+        ),
+    )
+    monkeypatch.setattr(
+        "src.api.app._validate_upload_file_duration_or_raise",
+        _raise_size,
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda user_id: consume_calls.append(user_id)
+        or ProcessingCreditConsumeResult(allowed=True, remaining_balance=0),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_create_uploaded_video",
+        lambda *args, **kwargs: create_called.update(value=True),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id),
+    )
+
+    response = client.post(
+        "/api/v1/videos/upload",
+        files={"file": ("upload.mp4", b"data", "video/mp4")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Video exceeds 8 GiB upload size limit"
+    assert consume_calls == []
+    assert create_called["value"] is False
+    assert enqueue_calls == []
+
+
+def test_copy_upload_stream_with_size_limit_admits_exact_boundary() -> None:
+    class FakeUploadFile:
+        def __init__(self, data: bytes) -> None:
+            self.file = io.BytesIO(data)
+
+    source = FakeUploadFile(b"x" * 10)
+    destination = io.BytesIO()
+
+    _copy_upload_stream_with_size_limit(source, destination, max_bytes=10, chunk_size=4)
+
+    assert destination.getvalue() == b"x" * 10
+
+
+def test_copy_upload_stream_with_size_limit_aborts_mid_stream() -> None:
+    class FakeUploadFile:
+        def __init__(self, data: bytes) -> None:
+            self.file = io.BytesIO(data)
+
+    source = FakeUploadFile(b"x" * 100)
+    destination = io.BytesIO()
+
+    with pytest.raises(UploadSizeLimitExceededError):
+        _copy_upload_stream_with_size_limit(source, destination, max_bytes=10, chunk_size=4)
+
+    # The copy must abort as soon as the running total crosses the limit
+    # (after the 3rd 4-byte chunk, total=12 > max_bytes=10) instead of
+    # buffering the entire 100-byte source stream first.
+    assert source.file.tell() == 12
+    assert destination.tell() == 8  # only the first two within-limit chunks were written
+
+
+def test_probe_upload_file_duration_s_cleans_temp_file_on_size_limit_violation(
+    monkeypatch,
+) -> None:
+    import tempfile as tempfile_module
+
+    monkeypatch.setattr("src.api.app.VIDEO_MAX_UPLOAD_BYTES", 10)
+
+    created_paths: list[str] = []
+    real_named_temp = tempfile_module.NamedTemporaryFile
+
+    def _tracking_named_temp(*args, **kwargs):
+        tmp = real_named_temp(*args, **kwargs)
+        created_paths.append(tmp.name)
+        return tmp
+
+    monkeypatch.setattr("src.api.app.tempfile.NamedTemporaryFile", _tracking_named_temp)
+
+    class FakeUploadFile:
+        filename = "big.mp4"
+
+        def __init__(self, data: bytes) -> None:
+            self.file = io.BytesIO(data)
+
+    upload = FakeUploadFile(b"x" * 100)
+
+    with pytest.raises(UploadSizeLimitExceededError):
+        _probe_upload_file_duration_s(upload)
+
+    assert len(created_paths) == 1
+    assert not os.path.exists(created_paths[0])
+
+
 def test_complete_upload_requires_authentication() -> None:
     client = TestClient(app)
     response = client.post(
@@ -1377,6 +1495,119 @@ def test_complete_upload_returns_503_when_duration_probe_unavailable(monkeypatch
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Failed to verify upload"
+
+
+def test_complete_upload_rejects_when_uploaded_size_exceeds_limit(monkeypatch) -> None:
+    client = TestClient(app)
+    _authenticate("user_123")
+    create_called = {"value": False}
+    enqueue_calls: list[str] = []
+    delete_calls: list[str] = []
+    consume_calls: list[str] = []
+
+    class FakeR2Store:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def source_exists(self, key: str) -> bool:
+            return key == f"source/{UPLOAD_VIDEO_ID}/upload.mp4"
+
+        def object_size(self, key: str) -> int:
+            return 101
+
+        def delete_source_object(self, key: str) -> None:
+            delete_calls.append(key)
+
+    monkeypatch.setattr("src.api.app.VIDEO_MAX_UPLOAD_BYTES", 100)
+    # Re-install the real size-validation-with-cleanup implementation for
+    # this test: the autouse `_mock_upload_duration_validation` fixture
+    # no-ops it by default so unrelated tests don't need an `object_size`
+    # stub on every FakeR2Store.
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_size_with_cleanup",
+        _validate_uploaded_source_size_with_cleanup,
+    )
+    monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+    monkeypatch.setattr("src.api.app.R2Store", FakeR2Store)
+    monkeypatch.setattr("src.api.app.db_get_video", lambda video_id, user_id=None: None)
+    monkeypatch.setattr(
+        "src.api.app.db_consume_processing_credit",
+        lambda user_id: consume_calls.append(user_id)
+        or ProcessingCreditConsumeResult(allowed=True, remaining_balance=0),
+    )
+    monkeypatch.setattr(
+        "src.api.app.db_insert_uploaded_video_idempotent",
+        lambda *args, **kwargs: create_called.update(value=True),
+    )
+    monkeypatch.setattr(
+        "src.api.app.enqueue_video_job",
+        lambda video_id: enqueue_calls.append(video_id),
+    )
+
+    response = client.post(
+        "/api/v1/videos/upload/complete",
+        json={"video_id": UPLOAD_VIDEO_ID, "filename": "upload.mp4"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == _upload_size_limit_detail()
+    assert delete_calls == [f"source/{UPLOAD_VIDEO_ID}/upload.mp4"]
+    assert create_called["value"] is False
+    assert enqueue_calls == []
+    assert consume_calls == []
+
+
+def test_validate_uploaded_source_size_or_raise_admits_exact_boundary(monkeypatch) -> None:
+    monkeypatch.setattr("src.api.app.VIDEO_MAX_UPLOAD_BYTES", 10)
+
+    class FakeStore:
+        def object_size(self, key: str) -> int:
+            return 10
+
+    assert _validate_uploaded_source_size_or_raise(FakeStore(), "source/video/upload.mp4") == 10
+
+
+def test_validate_uploaded_source_size_or_raise_rejects_over_limit(monkeypatch) -> None:
+    monkeypatch.setattr("src.api.app.VIDEO_MAX_UPLOAD_BYTES", 10)
+
+    class FakeStore:
+        def object_size(self, key: str) -> int:
+            return 11
+
+    with pytest.raises(UploadSizeLimitExceededError):
+        _validate_uploaded_source_size_or_raise(FakeStore(), "source/video/upload.mp4")
+
+
+def test_validate_uploaded_source_size_with_cleanup_deletes_object_over_limit(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("src.api.app.VIDEO_MAX_UPLOAD_BYTES", 100)
+    delete_calls: list[str] = []
+
+    class FakeStore:
+        def object_size(self, key: str) -> int:
+            return 101
+
+        def delete_source_object(self, key: str) -> None:
+            delete_calls.append(key)
+
+    with pytest.raises(UploadSizeLimitExceededError):
+        _validate_uploaded_source_size_with_cleanup(
+            FakeStore(), "source/video/upload.mp4", "user_123",
+        )
+
+    assert delete_calls == ["source/video/upload.mp4"]
+
+
+def test_validate_uploaded_source_size_or_raise_wraps_storage_errors(monkeypatch) -> None:
+    from src.storage.r2 import R2StorageError
+
+    class FakeStore:
+        def object_size(self, key: str) -> int:
+            raise R2StorageError("boom")
+
+    with pytest.raises(UploadSizeProbeUnavailableError):
+        _validate_uploaded_source_size_or_raise(FakeStore(), "source/video/upload.mp4")
 
 
 def test_complete_upload_enqueues_job(monkeypatch) -> None:

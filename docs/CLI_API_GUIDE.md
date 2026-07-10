@@ -423,6 +423,8 @@ Exit codes:
   - `GET .../transcript` and `POST .../frames` require the video to be `ready` too, same as search. No API units are consumed when this check fails.
 - `HTTP 503: Failed to verify upload`
   - The API could not confirm the uploaded object or inspect the uploaded video.
+- `HTTP 400: Video exceeds 8 GiB upload size limit`
+  - The upload exceeds the configured maximum size (`VIDEO_MAX_UPLOAD_BYTES`, default 8 GiB). Re-encode or trim the file and retry.
 - `HTTP 503: Search is temporarily unavailable. Please try again.`
   - The search backend is temporarily unavailable. Retry later.
 - `Request timed out after 120s`

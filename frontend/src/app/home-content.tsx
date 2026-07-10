@@ -17,6 +17,12 @@ import { trackEvent } from "@/lib/analytics";
 
 type SubmitMode = "youtube" | "upload";
 
+// Mirrors VIDEO_MAX_UPLOAD_BYTES default in src/api/app.py (8 GiB). Keep in
+// sync with the backend default so users get a fast, friendly rejection
+// instead of waiting for the upload to fail server-side.
+const MAX_UPLOAD_FILE_SIZE_BYTES = 8 * 1024 * 1024 * 1024;
+const MAX_UPLOAD_FILE_SIZE_LABEL = "8 GB";
+
 export default function HomeContent() {
   const router = useRouter();
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -111,6 +117,11 @@ export default function HomeContent() {
 
     if (!uploadFile) {
       setError("Please choose a video file to upload.");
+      return;
+    }
+
+    if (uploadFile.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+      setError(`Video must be ${MAX_UPLOAD_FILE_SIZE_LABEL} or smaller.`);
       return;
     }
 

@@ -12,7 +12,6 @@ from math import ceil
 import os
 from pathlib import Path
 import re
-import shutil
 import tempfile
 from typing import Any, Callable, Literal, TypeVar
 from urllib.parse import urlsplit
@@ -137,6 +136,9 @@ DEFAULT_RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW = 30
 DEFAULT_RATE_LIMIT_WEBHOOK_REQUESTS_PER_WINDOW = 60
 DEFAULT_RATE_LIMIT_OAUTH_REQUESTS_PER_WINDOW = 60
 MAX_QUERY_IMAGE_BYTES = 10 * 1024 * 1024
+# Comfortably admits a 90-minute 1080p H.264 upload (~4-6 GB at typical
+# bitrates; 8 GiB supports up to ~12.7 Mbps average bitrate over 5400s).
+VIDEO_MAX_UPLOAD_BYTES = get_env_int("VIDEO_MAX_UPLOAD_BYTES", 8 * 1024**3)
 BILLING_PLAN_VARIANT_ENV: dict[BillingPlanType, str] = {
     "starter": "LEMON_SQUEEZY_VARIANT_ID_STARTER",
     "pro": "LEMON_SQUEEZY_VARIANT_ID_PRO",
@@ -169,6 +171,14 @@ class UploadDurationLimitExceededError(UploadDurationValidationError):
 
 class UploadDurationProbeUnavailableError(UploadDurationValidationError):
     """Raised when uploaded source duration cannot be determined."""
+
+
+class UploadSizeLimitExceededError(RuntimeError):
+    """Raised when an uploaded source exceeds the configured max upload size."""
+
+
+class UploadSizeProbeUnavailableError(RuntimeError):
+    """Raised when an uploaded source's size cannot be determined."""
 
 
 def _normalize_cors_origin(origin: str) -> str:
@@ -228,6 +238,14 @@ def _upload_duration_limit_detail() -> str:
     return f"Video exceeds {max_minutes}-minute limit"
 
 
+def _upload_size_limit_detail() -> str:
+    limit_gib = VIDEO_MAX_UPLOAD_BYTES / (1024**3)
+    limit_label = (
+        f"{int(limit_gib)} GiB" if limit_gib == int(limit_gib) else f"{limit_gib:.2f} GiB"
+    )
+    return f"Video exceeds {limit_label} upload size limit"
+
+
 def _is_youtube_bot_challenge_error(message: str) -> bool:
     normalized = message.casefold()
     return (
@@ -284,13 +302,44 @@ def _rewind_upload_stream(file: UploadFile) -> None:
         ) from exc
 
 
+_UPLOAD_SIZE_CHECK_CHUNK_BYTES = 1024 * 1024
+
+
+def _copy_upload_stream_with_size_limit(
+    file: UploadFile,
+    destination,
+    max_bytes: int,
+    *,
+    chunk_size: int = _UPLOAD_SIZE_CHECK_CHUNK_BYTES,
+) -> None:
+    """Stream ``file`` into ``destination``, aborting as soon as the running
+    total exceeds ``max_bytes``.
+
+    Unlike ``shutil.copyfileobj``, the size limit is enforced after every
+    chunk rather than after buffering the entire upload — this keeps disk
+    usage for a rejected oversized upload bounded to a few chunks instead of
+    the full (potentially unbounded) file size.
+    """
+    total_bytes = 0
+    while True:
+        chunk = file.file.read(chunk_size)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > max_bytes:
+            raise UploadSizeLimitExceededError(_upload_size_limit_detail())
+        destination.write(chunk)
+
+
 def _probe_upload_file_duration_s(file: UploadFile) -> float:
     suffix = Path(file.filename or "").suffix or ".mp4"
     with tempfile.NamedTemporaryFile(suffix=suffix) as temp_file:
         _rewind_upload_stream(file)
         try:
-            shutil.copyfileobj(file.file, temp_file)
+            _copy_upload_stream_with_size_limit(file, temp_file, VIDEO_MAX_UPLOAD_BYTES)
             temp_file.flush()
+        except UploadSizeLimitExceededError:
+            raise
         except Exception as exc:
             raise UploadDurationProbeUnavailableError(
                 "Failed to read uploaded video for duration validation"
@@ -353,6 +402,34 @@ def _validate_uploaded_source_duration_with_cleanup(
     try:
         return _validate_uploaded_source_duration_or_raise(store, key)
     except UploadDurationLimitExceededError:
+        _delete_uploaded_source_best_effort(store, key, user_id)
+        raise
+
+
+def _validate_uploaded_source_size_or_raise(store: R2Store, key: str) -> int:
+    """Probe and validate a stored source's size via a cheap HEAD request.
+
+    Runs before duration validation so an oversized upload is rejected
+    without ever downloading the full object to probe it with ffprobe.
+    """
+    try:
+        size_bytes = store.object_size(key)
+    except R2StorageError as exc:
+        logger.exception("Failed to check uploaded source size: %s", exc)
+        raise UploadSizeProbeUnavailableError("Failed to verify upload") from exc
+    if size_bytes > VIDEO_MAX_UPLOAD_BYTES:
+        raise UploadSizeLimitExceededError(_upload_size_limit_detail())
+    return size_bytes
+
+
+def _validate_uploaded_source_size_with_cleanup(
+    store: R2Store,
+    key: str,
+    user_id: str,
+) -> int:
+    try:
+        return _validate_uploaded_source_size_or_raise(store, key)
+    except UploadSizeLimitExceededError:
         _delete_uploaded_source_best_effort(store, key, user_id)
         raise
 
@@ -1439,6 +1516,8 @@ def _validate_and_upload_file(
         duration_s = _validate_upload_file_duration_or_raise(file)
     except UploadDurationLimitExceededError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadSizeLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except UploadDurationProbeUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
@@ -1594,6 +1673,16 @@ def _complete_upload_core(
             status_code=503,
             detail="Failed to verify upload",
         ) from exc
+
+    # Check size via a cheap HEAD request before ffprobe, which downloads the
+    # full object — this avoids paying that download cost for an oversized
+    # upload we are about to reject anyway.
+    try:
+        _validate_uploaded_source_size_with_cleanup(store, key, user_id)
+    except UploadSizeLimitExceededError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UploadSizeProbeUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
     try:
         duration_s = _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
@@ -2019,6 +2108,8 @@ def v1_upload_video(
                 duration_s = _validate_upload_file_duration_or_raise(file)
             except UploadDurationLimitExceededError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except UploadSizeLimitExceededError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             except UploadDurationProbeUnavailableError as exc:
                 raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
 
@@ -2091,6 +2182,8 @@ def v1_upload_video(
         try:
             duration_s = _validate_upload_file_duration_or_raise(file)
         except UploadDurationLimitExceededError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except UploadSizeLimitExceededError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except UploadDurationProbeUnavailableError as exc:
             raise HTTPException(status_code=503, detail="Failed to verify upload") from exc
