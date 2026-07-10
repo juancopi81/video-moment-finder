@@ -321,6 +321,7 @@ class InMemoryMcpOAuthStore:
         scopes: list[str],
         code_challenge: str,
         resource: str,
+        approved_tools_version: int,
         expires_at: str,
     ) -> McpOAuthAuthorizationCodeRecord:
         record = McpOAuthAuthorizationCodeRecord(
@@ -334,6 +335,7 @@ class InMemoryMcpOAuthStore:
             scopes=scopes,
             code_challenge=code_challenge,
             resource=resource,
+            approved_tools_version=approved_tools_version,
             expires_at=expires_at,
             created_at=self._now(),
         )
@@ -371,6 +373,7 @@ class InMemoryMcpOAuthStore:
         refresh_token_hash: str,
         scopes: list[str],
         resource: str,
+        approved_tools_version: int,
         access_expires_at: str,
         refresh_expires_at: str,
     ) -> tuple[McpOAuthAccessTokenRecord, McpOAuthRefreshTokenRecord]:
@@ -383,6 +386,7 @@ class InMemoryMcpOAuthStore:
             token_hash=access_token_hash,
             scopes=scopes,
             resource=resource,
+            approved_tools_version=approved_tools_version,
             expires_at=access_expires_at,
             created_at=now,
         )
@@ -394,6 +398,7 @@ class InMemoryMcpOAuthStore:
             token_hash=refresh_token_hash,
             scopes=scopes,
             resource=resource,
+            approved_tools_version=approved_tools_version,
             expires_at=refresh_expires_at,
             created_at=now,
         )

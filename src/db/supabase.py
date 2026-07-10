@@ -192,6 +192,7 @@ class McpOAuthAuthorizationCodeRecord:
     code_challenge: str
     resource: str
     authorization_request_id: str | None = None
+    approved_tools_version: int = 1
     expires_at: str | None = None
     used_at: str | None = None
     revoked_at: str | None = None
@@ -209,6 +210,7 @@ class McpOAuthAccessTokenRecord:
     token_hash: str
     scopes: list[str]
     resource: str
+    approved_tools_version: int = 1
     expires_at: str | None = None
     revoked_at: str | None = None
     created_at: str | None = None
@@ -225,6 +227,7 @@ class McpOAuthRefreshTokenRecord:
     token_hash: str
     scopes: list[str]
     resource: str
+    approved_tools_version: int = 1
     expires_at: str | None = None
     revoked_at: str | None = None
     created_at: str | None = None
@@ -394,6 +397,7 @@ def _row_to_mcp_oauth_authorization_code(row: dict) -> McpOAuthAuthorizationCode
         scopes=list(row.get("scopes") or []),
         code_challenge=row["code_challenge"],
         resource=row["resource"],
+        approved_tools_version=int(row.get("approved_tools_version") or 1),
         expires_at=row.get("expires_at"),
         used_at=row.get("used_at"),
         revoked_at=row.get("revoked_at"),
@@ -435,6 +439,7 @@ def _row_to_mcp_oauth_access_token(row: dict) -> McpOAuthAccessTokenRecord:
         token_hash=row["token_hash"],
         scopes=list(row.get("scopes") or []),
         resource=row["resource"],
+        approved_tools_version=int(row.get("approved_tools_version") or 1),
         expires_at=row.get("expires_at"),
         revoked_at=row.get("revoked_at"),
         created_at=row.get("created_at"),
@@ -450,6 +455,7 @@ def _row_to_mcp_oauth_refresh_token(row: dict) -> McpOAuthRefreshTokenRecord:
         token_hash=row["token_hash"],
         scopes=list(row.get("scopes") or []),
         resource=row["resource"],
+        approved_tools_version=int(row.get("approved_tools_version") or 1),
         expires_at=row.get("expires_at"),
         revoked_at=row.get("revoked_at"),
         created_at=row.get("created_at"),
@@ -1372,6 +1378,7 @@ def create_mcp_oauth_authorization_code(
     scopes: list[str],
     code_challenge: str,
     resource: str,
+    approved_tools_version: int,
     expires_at: str,
 ) -> McpOAuthAuthorizationCodeRecord:
     client = get_client()
@@ -1386,6 +1393,7 @@ def create_mcp_oauth_authorization_code(
             "scopes": scopes,
             "code_challenge": code_challenge,
             "resource": resource,
+            "approved_tools_version": approved_tools_version,
             "expires_at": expires_at,
         }
     ).execute()
@@ -1441,6 +1449,7 @@ def create_mcp_oauth_tokens(
     refresh_token_hash: str,
     scopes: list[str],
     resource: str,
+    approved_tools_version: int,
     access_expires_at: str,
     refresh_expires_at: str,
 ) -> tuple[McpOAuthAccessTokenRecord, McpOAuthRefreshTokenRecord]:
@@ -1453,6 +1462,7 @@ def create_mcp_oauth_tokens(
             "token_hash": access_token_hash,
             "scopes": scopes,
             "resource": resource,
+            "approved_tools_version": approved_tools_version,
             "expires_at": access_expires_at,
         }
     ).execute()
@@ -1464,6 +1474,7 @@ def create_mcp_oauth_tokens(
             "token_hash": refresh_token_hash,
             "scopes": scopes,
             "resource": resource,
+            "approved_tools_version": approved_tools_version,
             "expires_at": refresh_expires_at,
         }
     ).execute()

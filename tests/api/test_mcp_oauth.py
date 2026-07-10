@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 from mcp.server.auth.provider import TokenError
 
 from src.api.app import app
-from src.api.mcp_oauth import get_mcp_oauth_provider
+from src.api.mcp_oauth import MCP_APPROVED_TOOLS_VERSION, get_mcp_oauth_provider
 from src.api.rate_limit import SlidingWindowRateLimiter
-from src.db.supabase import ApiCreditRecord
+from src.db.supabase import ApiCreditRecord, McpOAuthRefreshTokenRecord
 from tests.api.conftest import InMemoryMcpOAuthStore, _authenticate
 
 MCP_RESOURCE_URL = "https://api.videomomentfinder.com/mcp"
@@ -100,6 +100,29 @@ def _exchange_code(
     if client_secret is not None:
         payload["client_secret"] = client_secret
     return client.post("/token", data=payload)
+
+
+def _seed_refresh_token(
+    store: InMemoryMcpOAuthStore,
+    *,
+    raw_token: str,
+    approved_tools_version: int,
+    record_id: str = "refresh-seeded",
+    connection_id: str = "conn-seeded",
+) -> None:
+    store.refresh_tokens[record_id] = McpOAuthRefreshTokenRecord(
+        id=record_id,
+        connection_id=connection_id,
+        user_id="user_123",
+        client_id=CLIENT_ID,
+        token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+        scopes=["vmf:mcp"],
+        resource=MCP_RESOURCE_URL,
+        approved_tools_version=approved_tools_version,
+        expires_at=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        revoked_at=None,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
 
 
 def _register_public_client(client: TestClient, *, redirect_uri: str = LOCALHOST_REDIRECT_URI) -> str:
@@ -280,6 +303,7 @@ def test_authorize_creates_request_and_redirects_to_frontend(
         "get_transcript",
         "get_frames",
     }
+    assert all(tool["cost"] for tool in payload["tools"])
 
 
 def test_authorize_cleans_up_expired_requests(
@@ -493,6 +517,103 @@ def test_token_exchange_refresh_rotation_and_revoke(
         )
 
     assert mcp_response.status_code == 401
+
+
+def test_approval_persists_current_tools_version_through_token_exchange(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+) -> None:
+    with TestClient(app) as client:
+        _response, request_id, verifier = _start_authorization_request(client)
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+
+        token_response = _exchange_code(client, code=code, verifier=verifier)
+        assert token_response.status_code == 200
+
+        mcp_response = client.post(
+            "/mcp",
+            headers={"Authorization": f"Bearer {token_response.json()['access_token']}"},
+            json={},
+        )
+
+    assert [record.approved_tools_version for record in mcp_oauth_store.codes.values()] == [
+        MCP_APPROVED_TOOLS_VERSION
+    ]
+    assert [
+        record.approved_tools_version for record in mcp_oauth_store.access_tokens.values()
+    ] == [MCP_APPROVED_TOOLS_VERSION]
+    assert [
+        record.approved_tools_version for record in mcp_oauth_store.refresh_tokens.values()
+    ] == [MCP_APPROVED_TOOLS_VERSION]
+    # A current-version grant passes the /mcp bearer gate (no 401 re-consent loop).
+    assert mcp_response.status_code != 401
+
+
+def test_refresh_exchange_rejects_old_tools_version_grant(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    raw_refresh_token = "old-tools-version-refresh-token"
+    _seed_refresh_token(
+        mcp_oauth_store,
+        raw_token=raw_refresh_token,
+        approved_tools_version=MCP_APPROVED_TOOLS_VERSION - 1,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "refresh_token": raw_refresh_token,
+            },
+        )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"] == "invalid_grant"
+    assert "Reconnect Video Moment Finder" in payload["error_description"]
+    # No rotation happened: the old-version grant minted no fresh tokens.
+    assert mcp_oauth_store.access_tokens == {}
+    assert list(mcp_oauth_store.refresh_tokens) == ["refresh-seeded"]
+
+
+def test_refresh_exchange_accepts_and_preserves_current_tools_version(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    raw_refresh_token = "current-tools-version-refresh-token"
+    _seed_refresh_token(
+        mcp_oauth_store,
+        raw_token=raw_refresh_token,
+        approved_tools_version=MCP_APPROVED_TOOLS_VERSION,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "refresh_token": raw_refresh_token,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"]
+    rotated = [
+        record
+        for record in mcp_oauth_store.refresh_tokens.values()
+        if record.revoked_at is None
+    ]
+    assert [record.approved_tools_version for record in rotated] == [
+        MCP_APPROVED_TOOLS_VERSION
+    ]
+    assert [
+        record.approved_tools_version for record in mcp_oauth_store.access_tokens.values()
+    ] == [MCP_APPROVED_TOOLS_VERSION]
 
 
 def test_token_exchange_rejects_wrong_code_verifier(

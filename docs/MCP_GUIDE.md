@@ -49,6 +49,18 @@ Behavior notes:
 - YouTube submit is not part of the MCP tool surface
 - REST remains the canonical public contract for one-shot multipart upload, image search, and non-MCP programmatic usage
 
+## Tool Approval Versioning (One-Time Re-Consent)
+
+Connector grants record the version of the tool list the user approved (`approved_tools_version`; version 1 was the historical four-tool screen, version 2 is the current six-tool screen). The server-side constant `MCP_APPROVED_TOOLS_VERSION` in `src/api/mcp_oauth.py` is the single source of truth.
+
+Operational impact of deploying a version bump:
+
+- Every existing connection stops working immediately: access tokens from older-version grants get `401 invalid_token`, and refresh exchange returns `invalid_grant`, so refresh cannot resurrect an old consent. No tokens are deleted.
+- Claude clients react to the 401 by automatically re-running the OAuth flow. The user lands on the connector approval page, sees the updated tool list with per-tool unit costs, and approves once; after that the connection works normally.
+- The reviewer/test account is affected like any other user: reconnect it (and re-verify the submission-gate flows) after deploying a bump.
+
+Bump `MCP_APPROVED_TOOLS_VERSION` whenever the approval screen's tool surface changes in a way that requires fresh consent.
+
 ## Claude Connect Flow
 
 1. Add the custom connector in Claude with server URL `https://api.videomomentfinder.com/mcp`.

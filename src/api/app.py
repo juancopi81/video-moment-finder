@@ -994,6 +994,7 @@ class McpConnectorToolSummary(BaseModel):
     name: str
     title: str
     description: str
+    cost: str
 
 
 class McpConnectorRequestResponse(BaseModel):

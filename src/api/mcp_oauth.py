@@ -51,6 +51,20 @@ from src.db.supabase import (
 from src.utils.datetime import parse_iso_datetime
 
 DEFAULT_MCP_OAUTH_SCOPE = "vmf:mcp"
+# Version of the MCP tool surface shown on the connector approval screen.
+# Bump this whenever the displayed tool list changes in a way that requires
+# users to re-consent. Grants persisted with an older version are rejected at
+# token validation (401 invalid_token) and at refresh exchange (invalid_grant),
+# which forces Claude clients to re-run the OAuth flow once — no mass token
+# deletion is involved.
+#   1 = historical four-tool approval (upload_video, get_video_status,
+#       list_videos, search_video)
+#   2 = six-tool approval (adds get_transcript and get_frames)
+MCP_APPROVED_TOOLS_VERSION = 2
+MCP_TOOLS_REAPPROVAL_DESCRIPTION = (
+    "This connection was approved for an older tool list. "
+    "Reconnect Video Moment Finder in Claude to approve the updated tools."
+)
 AUTHORIZATION_REQUEST_TTL_S = 3600
 AUTHORIZATION_CODE_TTL_S = 600
 ACCESS_TOKEN_TTL_S = 3600
@@ -93,6 +107,7 @@ class StoredAuthorizationCode(AuthorizationCode):
     user_id: str
     authorization_request_id: str | None = None
     record_id: str
+    approved_tools_version: int = 1
 
 
 class StoredRefreshToken(RefreshToken):
@@ -100,12 +115,14 @@ class StoredRefreshToken(RefreshToken):
     connection_id: str
     resource: str
     record_id: str
+    approved_tools_version: int = 1
 
 
 class StoredAccessToken(AccessToken):
     user_id: str
     connection_id: str
     record_id: str
+    approved_tools_version: int = 1
 
 
 def _any_http_url(value: str) -> AnyHttpUrl:
@@ -449,6 +466,7 @@ class McpOAuthProvider(
             user_id=record.user_id,
             authorization_request_id=record.authorization_request_id,
             record_id=record.id,
+            approved_tools_version=record.approved_tools_version,
         )
 
     async def exchange_authorization_code(
@@ -472,6 +490,7 @@ class McpOAuthProvider(
             refresh_token_hash=_hash_secret(raw_refresh_token),
             scopes=authorization_code.scopes,
             resource=authorization_code.resource or mcp_oauth_resource_url(),
+            approved_tools_version=authorization_code.approved_tools_version,
             access_expires_at=_expiry_iso(ACCESS_TOKEN_TTL_S),
             refresh_expires_at=_expiry_iso(REFRESH_TOKEN_TTL_S),
         )
@@ -501,6 +520,7 @@ class McpOAuthProvider(
             connection_id=record.connection_id,
             resource=record.resource,
             record_id=record.id,
+            approved_tools_version=record.approved_tools_version,
         )
 
     async def exchange_refresh_token(
@@ -511,6 +531,11 @@ class McpOAuthProvider(
     ) -> OAuthToken:
         if refresh_token.client_id != client.client_id:
             raise TokenError("invalid_grant", "refresh token does not belong to this client")
+        if refresh_token.approved_tools_version < MCP_APPROVED_TOOLS_VERSION:
+            # Old-version grants must re-run the full authorization flow so the
+            # user re-consents to the updated tool list; refresh cannot
+            # resurrect an outdated consent.
+            raise TokenError("invalid_grant", MCP_TOOLS_REAPPROVAL_DESCRIPTION)
 
         revoke_mcp_oauth_access_tokens_for_connection(refresh_token.connection_id)
         revoke_mcp_oauth_refresh_token(refresh_token.record_id)
@@ -525,6 +550,7 @@ class McpOAuthProvider(
             refresh_token_hash=_hash_secret(raw_refresh_token),
             scopes=scopes,
             resource=refresh_token.resource,
+            approved_tools_version=refresh_token.approved_tools_version,
             access_expires_at=_expiry_iso(ACCESS_TOKEN_TTL_S),
             refresh_expires_at=_expiry_iso(REFRESH_TOKEN_TTL_S),
         )
@@ -550,6 +576,7 @@ class McpOAuthProvider(
             user_id=record.user_id,
             connection_id=record.connection_id,
             record_id=record.id,
+            approved_tools_version=record.approved_tools_version,
         )
 
     async def revoke_token(self, token: StoredAccessToken | StoredRefreshToken) -> None:
@@ -578,6 +605,7 @@ class McpOAuthProvider(
             scopes=record.scopes,
             code_challenge=record.code_challenge,
             resource=record.resource,
+            approved_tools_version=MCP_APPROVED_TOOLS_VERSION,
             expires_at=_expiry_iso(AUTHORIZATION_CODE_TTL_S),
         )
         updated = update_mcp_oauth_authorization_request_resolution(
