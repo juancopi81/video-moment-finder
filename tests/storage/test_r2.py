@@ -4,9 +4,10 @@ from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+import pytest
 
 from src.storage.config import R2Config
-from src.storage.r2 import R2Store, thumbnail_key
+from src.storage.r2 import R2Store, R2StorageError, thumbnail_key
 
 
 class FakePaginator:
@@ -196,6 +197,31 @@ def test_source_exists_checks_head_object(monkeypatch) -> None:
     store = R2Store(_make_config())
     assert store.source_exists("source/video_a/upload.mp4") is True
     assert store.source_exists("source/video_a/missing.mp4") is False
+
+
+def test_object_size_returns_content_length(monkeypatch) -> None:
+    fake_client = FakeClient(existing_keys={"source/video_a/upload.mp4"})
+
+    def fake_boto_client(*args, **kwargs):
+        return fake_client
+
+    monkeypatch.setattr(boto3, "client", fake_boto_client)
+
+    store = R2Store(_make_config())
+    assert store.object_size("source/video_a/upload.mp4") == 123
+
+
+def test_object_size_raises_for_missing_object(monkeypatch) -> None:
+    fake_client = FakeClient(existing_keys=set())
+
+    def fake_boto_client(*args, **kwargs):
+        return fake_client
+
+    monkeypatch.setattr(boto3, "client", fake_boto_client)
+
+    store = R2Store(_make_config())
+    with pytest.raises(R2StorageError):
+        store.object_size("source/video_a/missing.mp4")
 
 
 def test_delete_source_object(monkeypatch) -> None:

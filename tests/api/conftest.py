@@ -147,6 +147,10 @@ def _mock_upload_duration_validation(monkeypatch) -> None:
         "src.api.app._validate_uploaded_source_duration_with_cleanup",
         lambda store, key, user_id: None,
     )
+    monkeypatch.setattr(
+        "src.api.app._validate_uploaded_source_size_with_cleanup",
+        lambda store, key, user_id: None,
+    )
 
 
 def _make_api_key_record(

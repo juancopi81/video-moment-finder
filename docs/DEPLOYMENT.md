@@ -27,6 +27,7 @@ Use those files as the canonical variable list and defaults. This document expla
 | `RATE_LIMIT_*` | Optional | - | - | API rate limit tuning; the search limiter also covers transcript fetch and frame retrieval. |
 | `VIDEO_MAX_FREE_VIDEOS`, `VIDEO_UPLOAD_URL_TTL_S`, `VIDEO_SOURCE_URL_TTL_S` | Optional | - | - | API admission and signed URL behavior. |
 | `VIDEO_MAX_DURATION_S` | Optional | Optional | - | Duration checks are used in API admission and processing path validation. |
+| `VIDEO_MAX_UPLOAD_BYTES` | Optional | - | - | API-only: enforced at multipart upload (mid-stream) and presigned upload completion (HEAD size check), before the video is admitted for processing. Not read by the worker. |
 | `VIDEO_JOB_MAX_ATTEMPTS`, `VIDEO_JOB_STALE_LOCK_TIMEOUT_S`, `VIDEO_JOB_IDLE_BACKOFF_MAX_S`, `VIDEO_JOB_DB_RETRY_BASE_DELAY_S`, `VIDEO_JOB_DB_RETRY_MAX_DELAY_S` | - | Optional | - | Worker queue behavior tuning. |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | - | - | Required | Frontend runtime config in Vercel/frontend env. |
 | `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` | - | - | Required | PostHog client-side product analytics. |

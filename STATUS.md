@@ -66,6 +66,7 @@ Authoring rules:
 | 2026-07-09 | Phase 7 | Lecture-notes primitives (transcript, frames, prompt) | Done        | Added transcript and frames REST endpoints, get_transcript/get_frames MCP tools with image content, the lecture_notes MCP prompt, per-call unit pricing, and published recipe docs. |
 | 2026-07-09 | Phase 7 | Retrieval hardening (review follow-up)                 | Done        | Paginated transcript fetch past PostgREST row caps, added bill-then-compensate to metered retrieval, ready-status gating, process-wide ffmpeg concurrency bound, rate limiting on retrieval routes, finite-timestamp validation, and per-video duration persistence for frame clamping. |
 | 2026-07-09 | Phase 7 | MCP connector one-time re-consent                      | Done        | Versioned the approved tool list on OAuth grants, rejected pre-expansion tokens and refreshes so existing connections reconnect once, and disclosed exact per-tool unit costs on the approval screen. |
+| 2026-07-09 | Phase 7 | Upload size limit                                      | Done        | Added an 8 GiB upload cap enforced mid-stream on the multipart path and via HEAD check at presigned complete, with frontend pre-check and bounded temp-disk usage. |
 
 ## Blockers
 
