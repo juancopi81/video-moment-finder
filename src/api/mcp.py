@@ -23,6 +23,8 @@ from src.api.frames import (
     validate_frame_request,
 )
 from src.api.mcp_oauth import (
+    MCP_APPROVED_TOOLS_VERSION,
+    MCP_TOOLS_REAPPROVAL_DESCRIPTION,
     McpOAuthConfigError,
     load_mcp_oauth_access_token,
     mcp_oauth_resource_url,
@@ -167,6 +169,17 @@ class McpOAuthResourceApp:
             )(scope, receive, send)
             return
 
+        if access_token.approved_tools_version < MCP_APPROVED_TOOLS_VERSION:
+            # The grant behind this token was approved against an older tool
+            # list. Reject with invalid_token so Claude clients re-run the
+            # OAuth flow and the user re-consents to the current tools.
+            await _auth_error(
+                status_code=401,
+                error="invalid_token",
+                description=MCP_TOOLS_REAPPROVAL_DESCRIPTION,
+            )(scope, receive, send)
+            return
+
         if mcp_oauth_scope() not in access_token.scopes:
             await _auth_error(
                 status_code=403,
@@ -255,37 +268,68 @@ vmf_mcp = FastMCP(
 )
 
 
+def _unit_cost_label(units: int) -> str:
+    return f"{units} unit" if units == 1 else f"{units} units"
+
+
 def mcp_tool_approval_items() -> list[dict[str, str]]:
+    """Tool list shown on the connector approval screen.
+
+    The ``cost`` strings are derived from the same ``API_UNIT_COST_*``
+    constants that the billing paths consume, so the approval screen cannot
+    drift from what is actually metered. Changing this displayed surface in a
+    way that requires re-consent must bump ``MCP_APPROVED_TOOLS_VERSION``
+    (see src/api/mcp_oauth.py).
+    """
+    # Deferred import: src.api.app imports mcp_tool_approval_items at module
+    # load, so importing the cost constants at the top level would be circular.
+    from src.api.app import (
+        API_UNIT_COST_FRAMES_HIGH,
+        API_UNIT_COST_FRAMES_THUMB,
+        API_UNIT_COST_INDEX_VIDEO,
+        API_UNIT_COST_TEXT_QUERY,
+        API_UNIT_COST_TRANSCRIPT_FETCH,
+    )
+
     return [
         {
             "name": "upload_video",
             "title": "Upload Video",
             "description": "Start a presigned video upload or complete it after the file bytes are uploaded.",
+            "cost": f"{_unit_cost_label(API_UNIT_COST_INDEX_VIDEO)} per indexed video",
         },
         {
             "name": "get_video_status",
             "title": "Get Video Status",
             "description": "Check the processing status for one indexed video.",
+            "cost": "No units",
         },
         {
             "name": "list_videos",
             "title": "List Videos",
             "description": "List your recent indexed videos.",
+            "cost": "No units",
         },
         {
             "name": "search_video",
             "title": "Search Video",
             "description": "Run a text search against a ready video and return timestamped matches.",
+            "cost": f"{_unit_cost_label(API_UNIT_COST_TEXT_QUERY)} per search query",
         },
         {
             "name": "get_transcript",
             "title": "Get Transcript",
             "description": "Fetch the full spoken transcript with per-segment timestamps for a ready video.",
+            "cost": f"{_unit_cost_label(API_UNIT_COST_TRANSCRIPT_FETCH)} per call",
         },
         {
             "name": "get_frames",
             "title": "Get Frames",
             "description": "Fetch video frames as images at specific timestamps for visual inspection.",
+            "cost": (
+                f"{_unit_cost_label(API_UNIT_COST_FRAMES_THUMB)} per thumbnail call, "
+                f"{_unit_cost_label(API_UNIT_COST_FRAMES_HIGH)} per high-res call"
+            ),
         },
     ]
 

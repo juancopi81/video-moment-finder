@@ -15,6 +15,7 @@ from mcp.client.streamable_http import streamable_http_client
 from src.api.app import app
 from src.api.frames import ExtractedFrame
 from src.api.mcp import mcp_tool_approval_items
+from src.api.mcp_oauth import MCP_APPROVED_TOOLS_VERSION
 from src.db.supabase import (
     ApiCreditRecord,
     ApiUnitConsumeResult,
@@ -182,6 +183,7 @@ def test_mcp_rejects_insufficient_scope(mcp_oauth_store: InMemoryMcpOAuthStore) 
         token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
         scopes=["videos:read"],
         resource=MCP_RESOURCE_URL,
+        approved_tools_version=MCP_APPROVED_TOOLS_VERSION,
         expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
         revoked_at=None,
         created_at=datetime.now(timezone.utc).isoformat(),
@@ -199,6 +201,44 @@ def test_mcp_rejects_insufficient_scope(mcp_oauth_store: InMemoryMcpOAuthStore) 
         "error": "insufficient_scope",
         "error_description": "Required scope: vmf:mcp",
     }
+
+
+def test_mcp_rejects_access_token_from_old_tools_version_grant(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    raw_token = "old-tools-version-token"
+    mcp_oauth_store.access_tokens["access-old-version"] = McpOAuthAccessTokenRecord(
+        id="access-old-version",
+        connection_id="conn-old-version",
+        user_id="user_123",
+        client_id=CLAUDE_CLIENT_ID,
+        token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+        scopes=["vmf:mcp"],
+        resource=MCP_RESOURCE_URL,
+        approved_tools_version=MCP_APPROVED_TOOLS_VERSION - 1,
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        revoked_at=None,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/mcp",
+            headers={"Authorization": f"Bearer {raw_token}"},
+            json={},
+        )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["error"] == "invalid_token"
+    assert payload["error_description"] == (
+        "This connection was approved for an older tool list. "
+        "Reconnect Video Moment Finder in Claude to approve the updated tools."
+    )
+    www_authenticate = response.headers["WWW-Authenticate"]
+    assert 'error="invalid_token"' in www_authenticate
+    assert "Reconnect Video Moment Finder" in www_authenticate
+    assert "resource_metadata=" in www_authenticate
 
 
 def test_mcp_head_allows_tokenless_probe(mcp_oauth_store: InMemoryMcpOAuthStore) -> None:
@@ -528,6 +568,19 @@ def test_mcp_tool_approval_items_lists_six_tools() -> None:
         "get_transcript",
         "get_frames",
     ]
+
+
+def test_mcp_tool_approval_items_list_exact_unit_costs() -> None:
+    costs = {item["name"]: item["cost"] for item in mcp_tool_approval_items()}
+
+    assert costs == {
+        "upload_video": "500 units per indexed video",
+        "get_video_status": "No units",
+        "list_videos": "No units",
+        "search_video": "1 unit per search query",
+        "get_transcript": "1 unit per call",
+        "get_frames": "1 unit per thumbnail call, 5 units per high-res call",
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ type ConnectorTool = {
   name: string;
   title: string;
   description: string;
+  cost: string;
 };
 
 type ConnectorRequest = {
@@ -287,6 +288,9 @@ function ClaudeConnectorContent() {
                     <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
                       {tool.description}
                     </p>
+                    <p className="mt-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      Cost: {tool.cost}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -349,7 +353,7 @@ function ClaudeConnectorContent() {
                   Approve Claude access
                 </h2>
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  Claude will only be able to use the tools shown above for your account. Uploads and searches consume API units from your Developer Pack balance.
+                  Claude will only be able to use the tools shown above for your account. Uploads, searches, transcript fetches, and frame fetches consume API units from your Developer Pack balance at the per-call rates shown above. Status checks and video listing are free.
                 </p>
                 {apiBillingSummary && (
                   <p className="mt-3 text-sm text-zinc-500">
