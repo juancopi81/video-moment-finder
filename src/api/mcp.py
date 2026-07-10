@@ -663,8 +663,9 @@ def get_frames(
         API_UNIT_COST_FRAMES_HIGH,
         API_UNIT_COST_FRAMES_THUMB,
         _api_usage_key_id,
-        _consume_api_units_or_raise,
-        _require_owned_video_or_404,
+        _bill_metered_call,
+        _enforce_search_rate_limit,
+        _require_ready_owned_video_or_404,
         _require_retained_source_url,
         _uses_api_unit_billing,
     )
@@ -673,7 +674,8 @@ def get_frames(
 
     identity = _request_identity(ctx)
     user_id = identity.user_id
-    record = _require_owned_video_or_404(video_id, user_id)
+    _enforce_search_rate_limit(user_id)
+    record = _require_ready_owned_video_or_404(video_id, user_id)
 
     resolution_used = resolution
     fallback_used = False
@@ -692,16 +694,23 @@ def get_frames(
                 "thumbnails instead of extracting high-resolution frames."
             )
         else:
+            plan = build_high_res_frame_plan(timestamps)
+            dedupe_keys = unique_dedupe_keys(plan)
+
+            def _extract_high_res() -> dict[int, tuple[bytes | None, str | None]]:
+                return _resolved_high_res_frames(source_url, dedupe_keys)
+
             if _uses_api_unit_billing(identity):
-                _consume_api_units_or_raise(
+                resolved_by_key = _bill_metered_call(
                     user_id=user_id,
                     api_key_id=_api_usage_key_id(identity),
                     event_type="frames_high",
                     units=API_UNIT_COST_FRAMES_HIGH,
                     video_id=video_id,
+                    work=_extract_high_res,
                 )
-            plan = build_high_res_frame_plan(timestamps)
-            resolved_by_key = _resolved_high_res_frames(source_url, unique_dedupe_keys(plan))
+            else:
+                resolved_by_key = _extract_high_res()
             return _frames_summary_content(
                 video_id=video_id,
                 resolution_requested=resolution,
@@ -712,16 +721,23 @@ def get_frames(
                 resolved_by_key=resolved_by_key,
             )
 
+    plan = build_thumb_frame_plan(timestamps, duration_s=record.duration_s)
+    dedupe_keys = unique_dedupe_keys(plan)
+
+    def _resolve_thumbs() -> dict[int, tuple[bytes | None, str | None]]:
+        return _resolved_thumb_frames(video_id, dedupe_keys)
+
     if _uses_api_unit_billing(identity):
-        _consume_api_units_or_raise(
+        resolved_by_key = _bill_metered_call(
             user_id=user_id,
             api_key_id=_api_usage_key_id(identity),
             event_type="frames_thumb",
             units=API_UNIT_COST_FRAMES_THUMB,
             video_id=video_id,
+            work=_resolve_thumbs,
         )
-    plan = build_thumb_frame_plan(timestamps)
-    resolved_by_key = _resolved_thumb_frames(video_id, unique_dedupe_keys(plan))
+    else:
+        resolved_by_key = _resolve_thumbs()
     return _frames_summary_content(
         video_id=video_id,
         resolution_requested=resolution,

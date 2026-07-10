@@ -1398,6 +1398,7 @@ def test_complete_upload_enqueues_job(monkeypatch) -> None:
         user_id: str,
         source_r2_key: str,
         source_filename: str,
+        duration_s: float | None = None,
     ) -> tuple[VideoRecord, bool]:
         insert_calls.append((video_id, user_id, source_r2_key, source_filename))
         return VideoRecord(
@@ -1466,6 +1467,7 @@ def test_complete_upload_enqueues_job_with_paid_credit_when_free_limit_reached(m
         user_id: str,
         source_r2_key: str,
         source_filename: str,
+        duration_s: float | None = None,
     ) -> tuple[VideoRecord, bool]:
         insert_calls.append((video_id, user_id, source_r2_key, source_filename))
         return VideoRecord(
@@ -1791,6 +1793,7 @@ def test_upload_video_enqueues_job(monkeypatch) -> None:
         source_filename: str | None = None,
         user_id: str | None = None,
         status: str = "queued",
+        duration_s: float | None = None,
     ) -> VideoRecord:
         create_calls.append((video_id, source_r2_key, source_filename, status))
         return VideoRecord(

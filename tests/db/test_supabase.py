@@ -8,6 +8,7 @@ import pytest
 
 import src.db.supabase as supabase_module
 from src.db.supabase import (
+    TRANSCRIPT_SEGMENTS_PAGE_SIZE,
     VideoRecord,
     CreditRecord,
     TranscriptSegmentRecord,
@@ -17,6 +18,7 @@ from src.db.supabase import (
     apply_billing_credit_grant,
     consume_processing_credit,
     count_videos_for_user,
+    create_uploaded_video,
     create_video,
     get_video,
     get_video_transcript_segments,
@@ -51,6 +53,28 @@ def test_row_to_video_converts_correctly() -> None:
     assert video.status == "processing"
     assert video.user_id == "user_456"
     assert video.error_message is None
+    assert video.duration_s is None
+
+
+def test_row_to_video_converts_duration_s_when_present() -> None:
+    """Uploaded videos with a probed duration expose it as a float."""
+    row = {
+        "id": "abc-123",
+        "youtube_url": None,
+        "status": "ready",
+        "user_id": "user_456",
+        "error_message": None,
+        "source_type": "upload",
+        "source_r2_key": "source/abc-123/upload.mp4",
+        "source_filename": "upload.mp4",
+        "created_at": "2026-01-27T10:00:00Z",
+        "updated_at": "2026-01-27T10:00:00Z",
+        "duration_s": 342.5,
+    }
+
+    video = _row_to_video(row)
+
+    assert video.duration_s == 342.5
 
 
 def test_row_to_credit_converts_correctly() -> None:
@@ -184,6 +208,119 @@ def test_insert_uploaded_video_idempotent_handles_dict_rpc_output(
     assert record.id == "video-dict-shape"
     assert record.source_type == "upload"
     assert was_created is False
+
+
+@patch("src.db.supabase.get_client")
+def test_insert_uploaded_video_idempotent_passes_duration_s_to_rpc(
+    mock_get_client: MagicMock,
+) -> None:
+    """The probed duration is forwarded to the RPC so it's persisted at admission."""
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.rpc.return_value.execute.return_value.data = {
+        "row_data": {
+            "id": "video-dur",
+            "youtube_url": None,
+            "status": "queued",
+            "user_id": "user_123",
+            "error_message": None,
+            "source_type": "upload",
+            "source_r2_key": "source/video-dur/upload.mp4",
+            "source_filename": "upload.mp4",
+            "created_at": "2026-03-17T00:00:00Z",
+            "updated_at": "2026-03-17T00:00:00Z",
+            "duration_s": 125.0,
+        },
+        "was_created": True,
+    }
+
+    record, was_created = insert_uploaded_video_idempotent(
+        "video-dur",
+        "user_123",
+        "source/video-dur/upload.mp4",
+        "upload.mp4",
+        duration_s=125.0,
+    )
+
+    mock_client.rpc.assert_called_once_with(
+        "insert_uploaded_video_idempotent",
+        {
+            "p_video_id": "video-dur",
+            "p_user_id": "user_123",
+            "p_source_r2_key": "source/video-dur/upload.mp4",
+            "p_source_filename": "upload.mp4",
+            "p_duration_s": 125.0,
+        },
+    )
+    assert record.duration_s == 125.0
+    assert was_created is True
+
+
+@patch("src.db.supabase.get_client")
+def test_create_uploaded_video_includes_duration_s_when_provided(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.table.return_value.insert.return_value.execute.return_value.data = [
+        {
+            "id": "video-created",
+            "youtube_url": None,
+            "status": "queued",
+            "user_id": "user_123",
+            "error_message": None,
+            "source_type": "upload",
+            "source_r2_key": "source/video-created/upload.mp4",
+            "source_filename": "upload.mp4",
+            "created_at": "2026-03-17T00:00:00Z",
+            "updated_at": "2026-03-17T00:00:00Z",
+            "duration_s": 60.0,
+        }
+    ]
+
+    video = create_uploaded_video(
+        video_id="video-created",
+        source_r2_key="source/video-created/upload.mp4",
+        source_filename="upload.mp4",
+        user_id="user_123",
+        duration_s=60.0,
+    )
+
+    inserted_payload = mock_client.table.return_value.insert.call_args[0][0]
+    assert inserted_payload["duration_s"] == 60.0
+    assert video.duration_s == 60.0
+
+
+@patch("src.db.supabase.get_client")
+def test_create_uploaded_video_omits_duration_s_when_not_provided(
+    mock_get_client: MagicMock,
+) -> None:
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.table.return_value.insert.return_value.execute.return_value.data = [
+        {
+            "id": "video-no-dur",
+            "youtube_url": None,
+            "status": "queued",
+            "user_id": "user_123",
+            "error_message": None,
+            "source_type": "upload",
+            "source_r2_key": "source/video-no-dur/upload.mp4",
+            "source_filename": "upload.mp4",
+            "created_at": "2026-03-17T00:00:00Z",
+            "updated_at": "2026-03-17T00:00:00Z",
+        }
+    ]
+
+    create_uploaded_video(
+        video_id="video-no-dur",
+        source_r2_key="source/video-no-dur/upload.mp4",
+        source_filename="upload.mp4",
+        user_id="user_123",
+    )
+
+    inserted_payload = mock_client.table.return_value.insert.call_args[0][0]
+    assert "duration_s" not in inserted_payload
 
 
 @patch("src.db.supabase.get_client")
@@ -360,6 +497,7 @@ def test_get_video_transcript_segments_orders_by_index(mock_get_client: MagicMoc
     mock_query = MagicMock()
     mock_query.eq.return_value = mock_query
     mock_query.order.return_value = mock_query
+    mock_query.range.return_value = mock_query
     mock_query.execute.return_value.data = [
         {
             "video_id": "video_123",
@@ -395,6 +533,7 @@ def test_get_video_transcript_segments_orders_by_index(mock_get_client: MagicMoc
     mock_client.table.assert_called_with("video_transcript_segments")
     mock_query.eq.assert_called_once_with("video_id", "video_123")
     mock_query.order.assert_called_once_with("segment_index")
+    mock_query.range.assert_called_once_with(0, TRANSCRIPT_SEGMENTS_PAGE_SIZE - 1)
     mock_query.gte.assert_not_called()
     mock_query.lte.assert_not_called()
 
@@ -407,6 +546,7 @@ def test_get_video_transcript_segments_applies_range_filter(mock_get_client: Mag
     mock_query = MagicMock()
     mock_query.eq.return_value = mock_query
     mock_query.order.return_value = mock_query
+    mock_query.range.return_value = mock_query
     mock_query.gte.return_value = mock_query
     mock_query.lte.return_value = mock_query
     mock_query.execute.return_value.data = []
@@ -416,6 +556,57 @@ def test_get_video_transcript_segments_applies_range_filter(mock_get_client: Mag
 
     mock_query.gte.assert_called_once_with("end_s", 10.0)
     mock_query.lte.assert_called_once_with("start_s", 20.0)
+
+
+@patch("src.db.supabase.get_client")
+def test_get_video_transcript_segments_paginates_across_multiple_pages(
+    mock_get_client: MagicMock,
+) -> None:
+    """A transcript longer than one PostgREST page must not be truncated.
+
+    Simulates a page-sized first page (which alone would look "complete" to
+    a naive caller) followed by a smaller final page, and asserts every
+    segment across both pages is returned in order.
+    """
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    def _segment_row(idx: int) -> dict:
+        return {
+            "video_id": "video_123",
+            "segment_index": idx,
+            "start_s": float(idx),
+            "end_s": float(idx) + 1.0,
+            "text": f"segment {idx}",
+            "language_code": "en",
+        }
+
+    page_size = 3
+    with patch.object(supabase_module, "TRANSCRIPT_SEGMENTS_PAGE_SIZE", page_size):
+        first_page = [_segment_row(i) for i in range(page_size)]
+        second_page = [_segment_row(i) for i in range(page_size, page_size + 2)]
+
+        mock_query = MagicMock()
+        mock_query.eq.return_value = mock_query
+        mock_query.order.return_value = mock_query
+        range_calls: list[tuple[int, int]] = []
+
+        def _range(start: int, end: int):
+            range_calls.append((start, end))
+            return mock_query
+
+        mock_query.range.side_effect = _range
+        mock_query.execute.side_effect = [
+            MagicMock(data=first_page),
+            MagicMock(data=second_page),
+        ]
+        mock_client.table.return_value.select.return_value = mock_query
+
+        segments = get_video_transcript_segments("video_123")
+
+    assert range_calls == [(0, page_size - 1), (page_size, 2 * page_size - 1)]
+    assert [s.segment_index for s in segments] == [0, 1, 2, 3, 4]
+    assert [s.text for s in segments] == [f"segment {i}" for i in range(5)]
 
 
 def test_get_video_transcript_segments_rejects_empty_video_id() -> None:

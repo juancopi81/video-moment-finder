@@ -33,6 +33,7 @@ class VideoRecord:
     source_filename: str | None = None
     created_at: str | None = None  # ISO 8601 string from Supabase
     updated_at: str | None = None  # ISO 8601 string from Supabase
+    duration_s: float | None = None  # Probed source duration; null for older/YouTube rows
 
 
 @dataclass
@@ -301,6 +302,7 @@ def reset_client() -> None:
 
 def _row_to_video(row: dict) -> VideoRecord:
     """Convert database row to VideoRecord."""
+    duration_raw = row.get("duration_s")
     return VideoRecord(
         id=row["id"],
         youtube_url=row.get("youtube_url"),
@@ -312,6 +314,7 @@ def _row_to_video(row: dict) -> VideoRecord:
         source_filename=row.get("source_filename"),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
+        duration_s=float(duration_raw) if duration_raw is not None else None,
     )
 
 
@@ -510,6 +513,7 @@ def create_uploaded_video(
     source_filename: str | None = None,
     user_id: str | None = None,
     status: VideoStatus = "queued",
+    duration_s: float | None = None,
 ) -> VideoRecord:
     """Create a new uploaded-video record."""
     if not video_id.strip():
@@ -528,6 +532,8 @@ def create_uploaded_video(
     }
     if user_id is not None:
         data["user_id"] = user_id
+    if duration_s is not None:
+        data["duration_s"] = duration_s
 
     result = client.table("videos").insert(data).execute()
     if not result.data:
@@ -572,6 +578,7 @@ def insert_uploaded_video_idempotent(
     user_id: str,
     source_r2_key: str,
     source_filename: str,
+    duration_s: float | None = None,
 ) -> tuple[VideoRecord, bool]:
     """Atomically insert an uploaded video or return the existing record.
 
@@ -585,6 +592,7 @@ def insert_uploaded_video_idempotent(
             "p_user_id": user_id,
             "p_source_r2_key": source_r2_key,
             "p_source_filename": source_filename,
+            "p_duration_s": duration_s,
         },
     )
 
@@ -724,13 +732,22 @@ def replace_video_transcript_segments(
     return int(inserted_raw)
 
 
+TRANSCRIPT_SEGMENTS_PAGE_SIZE = 1000
+
+
 def get_video_transcript_segments(
     video_id: str,
     *,
     start_s: float | None = None,
     end_s: float | None = None,
 ) -> list[TranscriptSegmentRecord]:
-    """Fetch transcript segments for a video, ordered by segment_index.
+    """Fetch ALL transcript segments for a video, ordered by segment_index.
+
+    PostgREST caps unpaginated result sets (commonly at 1000 rows), so a
+    single ``.execute()`` would silently truncate the tail of a long (e.g.
+    90-minute) transcript. This pages through with ``.range()`` until a page
+    comes back smaller than ``TRANSCRIPT_SEGMENTS_PAGE_SIZE``, preserving
+    ``segment_index`` ordering across the concatenated pages.
 
     When ``start_s``/``end_s`` are given, only segments overlapping that range
     are returned (``segment.end_s >= start_s`` and ``segment.start_s <= end_s``).
@@ -739,19 +756,29 @@ def get_video_transcript_segments(
         raise ValueError("video_id must be non-empty")
 
     client = get_client()
-    query = (
-        client.table("video_transcript_segments")
-        .select("*")
-        .eq("video_id", video_id)
-        .order("segment_index")
-    )
-    if start_s is not None:
-        query = query.gte("end_s", start_s)
-    if end_s is not None:
-        query = query.lte("start_s", end_s)
+    rows: list[dict] = []
+    offset = 0
+    while True:
+        query = (
+            client.table("video_transcript_segments")
+            .select("*")
+            .eq("video_id", video_id)
+            .order("segment_index")
+        )
+        if start_s is not None:
+            query = query.gte("end_s", start_s)
+        if end_s is not None:
+            query = query.lte("start_s", end_s)
 
-    result = query.execute()
-    return [_row_to_transcript_segment(row) for row in result.data]
+        page = query.range(offset, offset + TRANSCRIPT_SEGMENTS_PAGE_SIZE - 1).execute()
+        page_rows = page.data or []
+        rows.extend(page_rows)
+
+        if len(page_rows) < TRANSCRIPT_SEGMENTS_PAGE_SIZE:
+            break
+        offset += TRANSCRIPT_SEGMENTS_PAGE_SIZE
+
+    return [_row_to_transcript_segment(row) for row in rows]
 
 
 def search_video_transcript_segments(

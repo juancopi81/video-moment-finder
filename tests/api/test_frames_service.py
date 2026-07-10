@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import subprocess
+import threading
+import time
 
 import pytest
 
 from src.api import frames as frames_module
 from src.api.frames import (
+    DEFAULT_FRAMES_FFMPEG_MAX_CONCURRENCY,
     FRAME_SAMPLE_FPS,
     FrameRequestValidationError,
     MAX_TIMESTAMPS_HIGH,
@@ -15,6 +18,7 @@ from src.api.frames import (
     build_thumb_frame_plan,
     extract_high_res_frame,
     extract_high_res_frames,
+    ffmpeg_max_concurrency,
     unique_dedupe_keys,
     validate_frame_request,
 )
@@ -51,6 +55,24 @@ class TestValidateFrameRequest:
         with pytest.raises(FrameRequestValidationError, match="At most 8"):
             validate_frame_request([float(i) for i in range(MAX_TIMESTAMPS_HIGH + 1)], "high")
 
+    def test_rejects_infinite_timestamp(self) -> None:
+        with pytest.raises(FrameRequestValidationError, match="finite"):
+            validate_frame_request([1.0, float("inf")], "thumb")
+
+    def test_rejects_negative_infinite_timestamp(self) -> None:
+        with pytest.raises(FrameRequestValidationError, match="finite"):
+            validate_frame_request([float("-inf")], "thumb")
+
+    def test_rejects_nan_timestamp(self) -> None:
+        with pytest.raises(FrameRequestValidationError, match="finite"):
+            validate_frame_request([float("nan")], "high")
+
+    def test_rejects_json_overflow_timestamp(self) -> None:
+        # JSON `1e1000` is valid syntax but overflows to `inf` when parsed to
+        # a Python float -- exactly the payload shape this guards against.
+        with pytest.raises(FrameRequestValidationError, match="finite"):
+            validate_frame_request([1e1000], "thumb")
+
 
 # ---------------------------------------------------------------------------
 # Frame plan building + dedupe
@@ -83,6 +105,33 @@ class TestFramePlan:
         # 2.4 and 2.3 both round to frame_index 2; 2.6 rounds to 3.
         assert [item.dedupe_key for item in plan] == [2, 2, 50, 3]
         assert unique_dedupe_keys(plan) == [2, 50, 3]
+
+    def test_thumb_plan_clamps_to_video_duration_when_provided(self) -> None:
+        # A 10s video's last full sampled frame is index 9, well below the
+        # global VIDEO_MAX_DURATION_S-derived ceiling.
+        plan = build_thumb_frame_plan([999999.0], duration_s=10.0)
+
+        assert plan[0].dedupe_key == 9
+        assert plan[0].actual_timestamp_s == 9.0
+
+    def test_thumb_plan_falls_back_to_global_cap_when_duration_none(self) -> None:
+        plan = build_thumb_frame_plan([999999.0], duration_s=None)
+
+        assert plan[0].dedupe_key == MAX_THUMB_FRAME_INDEX
+
+    def test_thumb_plan_clamp_never_goes_negative_for_sub_second_video(self) -> None:
+        plan = build_thumb_frame_plan([5.0], duration_s=0.2)
+
+        assert plan[0].dedupe_key == 0
+        assert plan[0].actual_timestamp_s == 0.0
+
+    def test_thumb_plan_ignores_non_positive_duration(self) -> None:
+        # Defensive: a non-positive duration_s (shouldn't happen in practice,
+        # since ffprobe rejects <= 0) falls back to the global cap instead of
+        # producing a negative clamp.
+        plan = build_thumb_frame_plan([999999.0], duration_s=0.0)
+
+        assert plan[0].dedupe_key == MAX_THUMB_FRAME_INDEX
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +201,71 @@ class TestExtractHighResFrame:
         assert result.width == 64
         assert result.height == 32
         assert result.image_base64 is not None
+
+    def test_bounds_process_wide_concurrent_extractions(self, monkeypatch) -> None:
+        """N+2 concurrent extractions must never exceed the semaphore's bound.
+
+        Replaces the module-level semaphore with a small bound and a fake
+        ``subprocess.run`` that blocks until released, then asserts the
+        observed in-flight count never exceeds that bound -- proving the
+        semaphore, not just the per-request ThreadPoolExecutor, is gating
+        concurrency process-wide.
+        """
+        bound = 2
+        monkeypatch.setattr(
+            frames_module, "_FFMPEG_CONCURRENCY_SEMAPHORE", threading.BoundedSemaphore(bound),
+        )
+
+        lock = threading.Lock()
+        in_flight = 0
+        max_observed = 0
+        release_event = threading.Event()
+
+        def fake_run(*_args, **_kwargs):
+            nonlocal in_flight, max_observed
+            with lock:
+                in_flight += 1
+                max_observed = max(max_observed, in_flight)
+            release_event.wait(timeout=5)
+            with lock:
+                in_flight -= 1
+            raise subprocess.CalledProcessError(returncode=1, cmd="ffmpeg", output="", stderr="boom")
+
+        monkeypatch.setattr(frames_module.subprocess, "run", fake_run)
+
+        threads = [
+            threading.Thread(
+                target=extract_high_res_frame,
+                args=("https://example.com/source.mp4", float(i)),
+            )
+            for i in range(bound + 2)
+        ]
+        for thread in threads:
+            thread.start()
+
+        # Give every thread a chance to either enter fake_run or block on the
+        # semaphore's acquire.
+        time.sleep(0.2)
+        assert max_observed == bound
+
+        release_event.set()
+        for thread in threads:
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+
+        assert max_observed == bound
+
+
+class TestFfmpegMaxConcurrency:
+    def test_default_is_four(self, monkeypatch) -> None:
+        monkeypatch.delenv("FRAMES_FFMPEG_MAX_CONCURRENCY", raising=False)
+
+        assert ffmpeg_max_concurrency() == DEFAULT_FRAMES_FFMPEG_MAX_CONCURRENCY == 4
+
+    def test_reads_env_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("FRAMES_FFMPEG_MAX_CONCURRENCY", "9")
+
+        assert ffmpeg_max_concurrency() == 9
 
 
 class TestExtractHighResFrames:

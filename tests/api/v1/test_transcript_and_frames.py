@@ -1,11 +1,13 @@
 """Tests for GET /api/v1/videos/{id}/transcript and POST /api/v1/videos/{id}/frames."""
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.api.app import app
 from src.api.frames import FRAME_SAMPLE_FPS, ExtractedFrame
 from src.db.supabase import ApiUnitConsumeResult, TranscriptSegmentRecord
+from src.storage.config import StorageConfigError
 from src.video.metadata import max_video_duration_s
 
 MAX_THUMB_FRAME_INDEX = int(max_video_duration_s() * FRAME_SAMPLE_FPS) - 1
@@ -219,6 +221,96 @@ class TestVideoTranscript:
         assert response.status_code == 402
         assert fetch_called["called"] is False
 
+    def test_not_ready_video_returns_400_without_billing(self, monkeypatch) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="processing"),
+        )
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+        response = client.get(
+            "/api/v1/videos/vid_1/transcript",
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 400
+        assert "not ready" in response.json()["detail"].lower()
+        assert consumed["called"] is False
+
+    def test_failed_video_returns_400_without_billing(self, monkeypatch) -> None:
+        _authenticate("user_123")
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="failed"),
+        )
+
+        response = client.get("/api/v1/videos/vid_1/transcript")
+
+        assert response.status_code == 400
+
+    def test_db_read_failure_after_billing_compensates_units(self, monkeypatch) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
+        consumed: list[dict] = []
+        compensated: list[dict] = []
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="ready"),
+        )
+
+        def mock_consume(**kwargs):
+            consumed.append(kwargs)
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+        def mock_compensate(**kwargs):
+            compensated.append(kwargs)
+
+        def fake_segments(*_a, **_kw):
+            raise RuntimeError("db unavailable")
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+        monkeypatch.setattr("src.api.app.db_get_video_transcript_segments", fake_segments)
+
+        response = client.get(
+            "/api/v1/videos/vid_1/transcript",
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 503
+        assert len(consumed) == 1
+        assert len(compensated) == 1
+        assert consumed[0]["request_id"] == compensated[0]["request_id"]
+        assert compensated[0]["units"] == 1
+        assert compensated[0]["video_id"] == "vid_1"
+        assert compensated[0]["metadata"]["event_type"] == "transcript_fetch_failed"
+
+    def test_rate_limit_enforced_same_as_search(self, monkeypatch) -> None:
+        _authenticate("user_123")
+        monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+        monkeypatch.setenv("RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW", "1")
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="ready"),
+        )
+        monkeypatch.setattr(
+            "src.api.app.db_get_video_transcript_segments",
+            lambda vid, start_s=None, end_s=None: [],
+        )
+
+        first = client.get("/api/v1/videos/vid_1/transcript")
+        second = client.get("/api/v1/videos/vid_1/transcript")
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
+
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/videos/{video_id}/frames -- validation
@@ -269,6 +361,63 @@ class TestVideoFramesValidation:
         )
 
         assert response.status_code == 404
+
+    def test_infinite_timestamp_400(self) -> None:
+        _authenticate("user_123")
+
+        # `1e1000` is valid JSON syntax but overflows to `inf` once parsed.
+        # httpx's own JSON encoder rejects out-of-range floats client-side
+        # (matching strict JSON), so send the raw wire bytes directly to
+        # exercise the server's (more permissive) JSON parsing of this exact
+        # payload shape.
+        response = client.post(
+            "/api/v1/videos/vid_1/frames",
+            content=b'{"timestamps": [1e1000]}',
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 400
+
+    def test_not_ready_video_returns_400_without_billing(self, monkeypatch) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
+        consumed = {"called": False}
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _upload_video_record(vid, status="queued"),
+        )
+
+        def mock_consume(**kwargs):
+            consumed["called"] = True
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+
+        response = client.post(
+            "/api/v1/videos/vid_1/frames",
+            json={"timestamps": [1.0]},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 400
+        assert consumed["called"] is False
+
+    def test_rate_limit_enforced_same_as_search(self, monkeypatch) -> None:
+        _authenticate("user_123")
+        monkeypatch.setenv("RATE_LIMIT_WINDOW_S", "60")
+        monkeypatch.setenv("RATE_LIMIT_SEARCH_REQUESTS_PER_WINDOW", "1")
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="ready"),
+        )
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeThumbR2Store)
+
+        first = client.post("/api/v1/videos/vid_1/frames", json={"timestamps": [1.0]})
+        second = client.post("/api/v1/videos/vid_1/frames", json={"timestamps": [1.0]})
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["detail"] == "Rate limit exceeded. Please retry later."
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +561,63 @@ class TestVideoFramesThumb:
         assert response.status_code == 200
         assert consumed["event_type"] == "frames_thumb"
         assert consumed["units"] == 1
+
+    def test_clamps_to_video_duration_s_when_present(self, monkeypatch) -> None:
+        # A 10s video's own duration should clamp tighter than the global
+        # VIDEO_MAX_DURATION_S-derived ceiling used when duration_s is null.
+        _authenticate("user_123")
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _upload_video_record(vid, status="ready", duration_s=10.0),
+        )
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeThumbR2Store)
+
+        response = client.post(
+            "/api/v1/videos/vid_1/frames",
+            json={"timestamps": [999999.0], "resolution": "thumb"},
+        )
+
+        assert response.status_code == 200
+        frame = response.json()["frames"][0]
+        assert frame["actual_timestamp_s"] == 9.0
+        assert frame["url"] == "https://signed.example.com/thumb/vid_1/thumb_00009.jpg"
+
+    def test_storage_config_failure_after_billing_compensates_units(self, monkeypatch) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
+        consumed: list[dict] = []
+        compensated: list[dict] = []
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _video_record(vid, status="ready"),
+        )
+
+        def mock_consume(**kwargs):
+            consumed.append(kwargs)
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+        def mock_compensate(**kwargs):
+            compensated.append(kwargs)
+
+        def fail_r2_config():
+            raise StorageConfigError("R2 is not configured")
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+        monkeypatch.setattr("src.api.app.R2Config.from_env", fail_r2_config)
+
+        response = client.post(
+            "/api/v1/videos/vid_1/frames",
+            json={"timestamps": [1.0], "resolution": "thumb"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 503
+        assert len(consumed) == 1
+        assert len(compensated) == 1
+        assert consumed[0]["request_id"] == compensated[0]["request_id"]
+        assert compensated[0]["units"] == 1
+        assert compensated[0]["metadata"]["event_type"] == "frames_thumb_failed"
 
 
 # ---------------------------------------------------------------------------
@@ -579,3 +785,90 @@ class TestVideoFramesHigh:
 
         assert response.status_code == 409
         assert consumed["called"] is False
+
+    def test_per_frame_error_does_not_compensate_units(self, monkeypatch) -> None:
+        """A partial (per-frame) extraction error is not a wholesale failure."""
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _upload_video_record(vid, status="ready"),
+        )
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeHighResR2Store(exists=True))
+
+        def fake_extract(source_url, dedupe_keys):
+            return {
+                key: (
+                    ExtractedFrame(
+                        image_base64=None, width=None, height=None,
+                        error="No frame was produced",
+                    )
+                    if key == 500
+                    else ExtractedFrame(image_base64="AA==", width=100, height=50)
+                )
+                for key in dedupe_keys
+            }
+
+        monkeypatch.setattr("src.api.app.extract_high_res_frames", fake_extract)
+
+        compensated = {"called": False}
+
+        def mock_compensate(**kwargs):
+            compensated["called"] = True
+
+        monkeypatch.setattr(
+            "src.api.app.db_consume_api_units",
+            lambda **kwargs: ApiUnitConsumeResult(allowed=True, remaining_balance=99),
+        )
+        monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+
+        response = client.post(
+            "/api/v1/videos/vid_1/frames",
+            json={"timestamps": [5.0, 500.0], "resolution": "high"},
+            headers={"Authorization": f"Bearer {raw_key}"},
+        )
+
+        assert response.status_code == 200
+        assert compensated["called"] is False
+
+    def test_wholesale_extraction_failure_after_billing_compensates_units(
+        self, monkeypatch,
+    ) -> None:
+        raw_key, _ = _setup_api_key_auth(monkeypatch)
+        consumed: list[dict] = []
+        compensated: list[dict] = []
+        monkeypatch.setattr(
+            "src.api.app.db_get_video",
+            lambda vid, user_id=None: _upload_video_record(vid, status="ready"),
+        )
+        monkeypatch.setattr("src.api.app.R2Config.from_env", lambda: object())
+        monkeypatch.setattr("src.api.app.R2Store", FakeHighResR2Store(exists=True))
+
+        def mock_consume(**kwargs):
+            consumed.append(kwargs)
+            return ApiUnitConsumeResult(allowed=True, remaining_balance=99)
+
+        def mock_compensate(**kwargs):
+            compensated.append(kwargs)
+
+        def fake_extract(*_args, **_kwargs):
+            # An unexpected, wholesale extraction failure (not a per-frame
+            # error the service already handles internally).
+            raise RuntimeError("extraction subsystem crashed")
+
+        monkeypatch.setattr("src.api.app.db_consume_api_units", mock_consume)
+        monkeypatch.setattr("src.api.app.db_compensate_api_units", mock_compensate)
+        monkeypatch.setattr("src.api.app.extract_high_res_frames", fake_extract)
+
+        with pytest.raises(RuntimeError, match="extraction subsystem crashed"):
+            client.post(
+                "/api/v1/videos/vid_1/frames",
+                json={"timestamps": [1.0], "resolution": "high"},
+                headers={"Authorization": f"Bearer {raw_key}"},
+            )
+
+        assert len(consumed) == 1
+        assert len(compensated) == 1
+        assert consumed[0]["request_id"] == compensated[0]["request_id"]
+        assert compensated[0]["units"] == 5
+        assert compensated[0]["metadata"]["event_type"] == "frames_high_failed"

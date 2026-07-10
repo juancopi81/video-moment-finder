@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, TypeVar
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, UploadFile, File, Form, Request
@@ -319,14 +319,18 @@ def _probe_uploaded_source_duration_s(store: R2Store, key: str) -> float:
             raise UploadDurationProbeUnavailableError(str(exc)) from exc
 
 
-def _validate_upload_file_duration_or_raise(file: UploadFile) -> None:
+def _validate_upload_file_duration_or_raise(file: UploadFile) -> float:
+    """Probe and validate an uploaded file's duration, returning it for persistence."""
     duration_s = _probe_upload_file_duration_s(file)
     _validate_duration_limit_or_raise(duration_s)
+    return duration_s
 
 
-def _validate_uploaded_source_duration_or_raise(store: R2Store, key: str) -> None:
+def _validate_uploaded_source_duration_or_raise(store: R2Store, key: str) -> float:
+    """Probe and validate a stored source's duration, returning it for persistence."""
     duration_s = _probe_uploaded_source_duration_s(store, key)
     _validate_duration_limit_or_raise(duration_s)
+    return duration_s
 
 
 def _delete_uploaded_source_best_effort(store: R2Store, key: str, user_id: str) -> None:
@@ -345,9 +349,9 @@ def _validate_uploaded_source_duration_with_cleanup(
     store: R2Store,
     key: str,
     user_id: str,
-) -> None:
+) -> float:
     try:
-        _validate_uploaded_source_duration_or_raise(store, key)
+        return _validate_uploaded_source_duration_or_raise(store, key)
     except UploadDurationLimitExceededError:
         _delete_uploaded_source_best_effort(store, key, user_id)
         raise
@@ -441,6 +445,64 @@ def _consume_api_units_or_raise(
             status_code=402,
             detail=INSUFFICIENT_API_UNITS_DETAIL,
         )
+
+
+_MeteredResult = TypeVar("_MeteredResult")
+
+
+def _bill_metered_call(
+    *,
+    user_id: str,
+    api_key_id: str | None,
+    event_type: str,
+    units: int,
+    video_id: str,
+    work: Callable[[], _MeteredResult],
+) -> _MeteredResult:
+    """Consume API units, run ``work``, and refund the units if it raises.
+
+    Mirrors the bill-then-compensate pattern already used for text search
+    (see ``v1_search_video``): a request-scoped ``request_id`` ties the
+    consume and compensate calls together, and any exception from ``work``
+    (DB reads, storage/presign failures, or an unexpected wholesale ffmpeg
+    failure) triggers a best-effort refund before re-raising, so the
+    caller's error response is unaffected. Per-item errors that ``work``
+    already handles internally (e.g. one bad frame timestamp among several)
+    must not raise here, so they are never compensated -- only a failure of
+    the call as a whole is.
+
+    Shared by both the REST handlers (``v1_get_video_transcript``,
+    ``v1_get_video_frames``) and the MCP ``get_frames`` tool, which runs its
+    own retrieval flow rather than delegating to the REST handler.
+    """
+    request_id = f"{event_type}:{uuid4()}"
+    _consume_api_units_or_raise(
+        user_id=user_id,
+        api_key_id=api_key_id,
+        event_type=event_type,
+        units=units,
+        video_id=video_id,
+        request_id=request_id,
+    )
+    try:
+        return work()
+    except Exception:
+        try:
+            db_compensate_api_units(
+                user_id=user_id,
+                units=units,
+                video_id=video_id,
+                request_id=request_id,
+                metadata={"event_type": f"{event_type}_failed"},
+            )
+        except Exception as compensation_exc:
+            logger.exception(
+                "Failed to compensate billed %s for video_id=%s: %s",
+                event_type,
+                video_id,
+                compensation_exc,
+            )
+        raise
 
 
 def _mcp_oauth_provider_or_raise():
@@ -1362,10 +1424,10 @@ def _try_cleanup_r2(store: R2Store, key: str, user_id: str) -> None:
 
 def _validate_and_upload_file(
     file: UploadFile, user_id: str, video_id: str,
-) -> tuple[R2Store, Any, str, bool]:
+) -> tuple[R2Store, Any, str, bool, float]:
     """Validate an uploaded file, store it in R2, and return context for billing.
 
-    Returns (store, upload_result, filename, requires_credit).
+    Returns (store, upload_result, filename, requires_credit, duration_s).
     """
     if not file.filename and not file.content_type:
         raise HTTPException(status_code=400, detail="No file uploaded")
@@ -1373,7 +1435,7 @@ def _validate_and_upload_file(
         raise HTTPException(status_code=400, detail="Only video uploads are supported")
     requires_credit = _precheck_video_processing_admission(user_id)
     try:
-        _validate_upload_file_duration_or_raise(file)
+        duration_s = _validate_upload_file_duration_or_raise(file)
     except UploadDurationLimitExceededError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except UploadDurationProbeUnavailableError as exc:
@@ -1397,7 +1459,7 @@ def _validate_and_upload_file(
         logger.exception("Failed to upload source video: %s", exc)
         raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
 
-    return store, upload_result, filename, requires_credit
+    return store, upload_result, filename, requires_credit, duration_s
 
 
 def upload_video(
@@ -1407,7 +1469,9 @@ def upload_video(
     """Upload a video file and enqueue durable processing job."""
     _enforce_user_write_rate_limit(user_id)
     video_id = str(uuid4())
-    store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
+    store, upload_result, filename, requires_credit, duration_s = _validate_and_upload_file(
+        file, user_id, video_id,
+    )
 
     try:
         if requires_credit:
@@ -1423,6 +1487,7 @@ def upload_video(
         source_filename=filename,
         user_id=user_id,
         status="queued",
+        duration_s=duration_s,
     )
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
@@ -1530,7 +1595,7 @@ def _complete_upload_core(
         ) from exc
 
     try:
-        _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
+        duration_s = _validate_uploaded_source_duration_with_cleanup(store, key, user_id)
     except UploadDurationLimitExceededError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except UploadDurationProbeUnavailableError as exc:
@@ -1538,7 +1603,7 @@ def _complete_upload_core(
 
     if retry_record is None:
         record, created = db_insert_uploaded_video_idempotent(
-            video_id, user_id, key, filename,
+            video_id, user_id, key, filename, duration_s=duration_s,
         )
         if not created:
             record = _require_matching_upload_record(
@@ -1950,7 +2015,7 @@ def v1_upload_video(
             if file.content_type and not file.content_type.startswith("video/"):
                 raise HTTPException(status_code=400, detail="Only video uploads are supported")
             try:
-                _validate_upload_file_duration_or_raise(file)
+                duration_s = _validate_upload_file_duration_or_raise(file)
             except UploadDurationLimitExceededError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             except UploadDurationProbeUnavailableError as exc:
@@ -1986,6 +2051,7 @@ def v1_upload_video(
             record = db_create_uploaded_video(
                 video_id=video_id, source_r2_key=upload_result.key,
                 source_filename=filename, user_id=user_id, status="queued",
+                duration_s=duration_s,
             )
             _enqueue_video_or_fail(record.id)
             track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
@@ -2022,7 +2088,7 @@ def v1_upload_video(
         if file.content_type and not file.content_type.startswith("video/"):
             raise HTTPException(status_code=400, detail="Only video uploads are supported")
         try:
-            _validate_upload_file_duration_or_raise(file)
+            duration_s = _validate_upload_file_duration_or_raise(file)
         except UploadDurationLimitExceededError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except UploadDurationProbeUnavailableError as exc:
@@ -2045,7 +2111,7 @@ def v1_upload_video(
             raise HTTPException(status_code=503, detail="Failed to store uploaded video") from exc
 
         record, created = db_insert_uploaded_video_idempotent(
-            video_id, user_id, upload_result.key, upload_filename,
+            video_id, user_id, upload_result.key, upload_filename, duration_s=duration_s,
         )
         if not created:
             record = _require_matching_upload_record(
@@ -2073,11 +2139,13 @@ def v1_upload_video(
         return _video_record_to_response(record)
 
     # JWT idempotent upload: uses web-credit admission via _validate_and_upload_file
-    store, upload_result, filename, requires_credit = _validate_and_upload_file(file, user_id, video_id)
+    store, upload_result, filename, requires_credit, duration_s = _validate_and_upload_file(
+        file, user_id, video_id,
+    )
 
     # Atomic insert: PK constraint serializes concurrent retries.
     record, created = db_insert_uploaded_video_idempotent(
-        video_id, user_id, upload_result.key, filename
+        video_id, user_id, upload_result.key, filename, duration_s=duration_s,
     )
     if not created:
         record = _require_matching_upload_record(
@@ -2257,6 +2325,31 @@ def _require_owned_video_or_404(video_id: str, user_id: str) -> VideoRecord:
     return record
 
 
+def _require_ready_owned_video_or_404(video_id: str, user_id: str) -> VideoRecord:
+    """Return a video record only when it exists, belongs to the user, and is ready.
+
+    Mirrors the ready-status gate ``_get_ready_video_for_search`` applies
+    before search (same 400 status code and error shape), so transcript and
+    frame retrieval on a queued/processing/failed video fail cleanly instead
+    of consuming API units for an empty or unusable result.
+    """
+    record = _require_owned_video_or_404(video_id, user_id)
+    if record.status != "ready":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Video not ready (status: {record.status})",
+        )
+    return record
+
+
+def _raise_transcript_fetch_unavailable(video_id: str, exc: Exception) -> None:
+    logger.exception("Transcript fetch failed for video_id=%s: %s", video_id, exc)
+    raise HTTPException(
+        status_code=503,
+        detail="Failed to fetch transcript. Please try again.",
+    ) from exc
+
+
 def v1_get_video_transcript(
     video_id: str,
     start_s: float | None = None,
@@ -2265,18 +2358,28 @@ def v1_get_video_transcript(
 ) -> VideoTranscriptResponse:
     """Return transcript segments for a video, optionally filtered to a time range."""
     user_id = identity.user_id
-    _require_owned_video_or_404(video_id, user_id)
+    _enforce_search_rate_limit(user_id)
+    _require_ready_owned_video_or_404(video_id, user_id)
+
+    def _fetch_segments() -> list[Any]:
+        try:
+            return db_get_video_transcript_segments(video_id, start_s=start_s, end_s=end_s)
+        except Exception as exc:
+            _raise_transcript_fetch_unavailable(video_id, exc)
+            raise  # pragma: no cover - _raise_transcript_fetch_unavailable always raises
 
     if _uses_api_unit_billing(identity):
-        _consume_api_units_or_raise(
+        segments = _bill_metered_call(
             user_id=user_id,
             api_key_id=_api_usage_key_id(identity),
             event_type="transcript_fetch",
             units=API_UNIT_COST_TRANSCRIPT_FETCH,
             video_id=video_id,
+            work=_fetch_segments,
         )
+    else:
+        segments = _fetch_segments()
 
-    segments = db_get_video_transcript_segments(video_id, start_s=start_s, end_s=end_s)
     language_code = segments[0].language_code if segments else None
 
     return VideoTranscriptResponse(
@@ -2296,8 +2399,10 @@ def v1_get_video_transcript(
     )
 
 
-def _thumb_frames_response(video_id: str, timestamps: list[float]) -> VideoFramesResponse:
-    plan = build_thumb_frame_plan(timestamps)
+def _thumb_frames_response(
+    video_id: str, timestamps: list[float], *, duration_s: float | None,
+) -> VideoFramesResponse:
+    plan = build_thumb_frame_plan(timestamps, duration_s=duration_s)
 
     try:
         r2_config = R2Config.from_env()
@@ -2412,29 +2517,41 @@ def v1_get_video_frames(
     except FrameRequestValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    record = _require_owned_video_or_404(video_id, user_id)
+    _enforce_search_rate_limit(user_id)
+    record = _require_ready_owned_video_or_404(video_id, user_id)
 
     if request.resolution == "high":
         source_url = _require_retained_source_url(video_id, record)
+
+        def _extract_high_res() -> VideoFramesResponse:
+            return _high_res_frames_response(source_url, request.timestamps)
+
         if _uses_api_unit_billing(identity):
-            _consume_api_units_or_raise(
+            return _bill_metered_call(
                 user_id=user_id,
                 api_key_id=_api_usage_key_id(identity),
                 event_type="frames_high",
                 units=API_UNIT_COST_FRAMES_HIGH,
                 video_id=video_id,
+                work=_extract_high_res,
             )
-        return _high_res_frames_response(source_url, request.timestamps)
+        return _extract_high_res()
+
+    def _resolve_thumbs() -> VideoFramesResponse:
+        return _thumb_frames_response(
+            video_id, request.timestamps, duration_s=record.duration_s,
+        )
 
     if _uses_api_unit_billing(identity):
-        _consume_api_units_or_raise(
+        return _bill_metered_call(
             user_id=user_id,
             api_key_id=_api_usage_key_id(identity),
             event_type="frames_thumb",
             units=API_UNIT_COST_FRAMES_THUMB,
             video_id=video_id,
+            work=_resolve_thumbs,
         )
-    return _thumb_frames_response(video_id, request.timestamps)
+    return _resolve_thumbs()
 
 
 def v1_billing_credits_summary(

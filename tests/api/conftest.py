@@ -46,7 +46,9 @@ from src.db.supabase import (
 UPLOAD_VIDEO_ID = "00000000-0000-4000-8000-000000000123"
 
 
-def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
+def _video_record(
+    video_id: str, *, status: str = "queued", duration_s: float | None = None,
+) -> VideoRecord:
     return VideoRecord(
         id=video_id,
         youtube_url="https://www.youtube.com/watch?v=abc123xyz45",
@@ -58,10 +60,13 @@ def _video_record(video_id: str, *, status: str = "queued") -> VideoRecord:
         source_filename=None,
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
+        duration_s=duration_s,
     )
 
 
-def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord:
+def _upload_video_record(
+    video_id: str, *, status: str = "ready", duration_s: float | None = None,
+) -> VideoRecord:
     return VideoRecord(
         id=video_id,
         youtube_url=None,
@@ -73,6 +78,7 @@ def _upload_video_record(video_id: str, *, status: str = "ready") -> VideoRecord
         source_filename="upload.mp4",
         created_at=datetime.now(timezone.utc).isoformat(),
         updated_at=datetime.now(timezone.utc).isoformat(),
+        duration_s=duration_s,
     )
 
 

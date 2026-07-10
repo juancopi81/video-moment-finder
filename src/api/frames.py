@@ -19,13 +19,16 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import base64
 import io
+import math
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 from typing import Literal
 
 from PIL import Image, UnidentifiedImageError
 
+from src.utils.env import get_env_int
 from src.utils.logging import Timer, get_logger
 from src.utils.subprocess import format_subprocess_error
 from src.video.metadata import max_video_duration_s
@@ -39,6 +42,26 @@ HIGH_RES_MAX_WIDTH = 1280
 HIGH_RES_JPEG_QUALITY = "3"
 HIGH_RES_MAX_WORKERS = 4
 HIGH_RES_FFMPEG_TIMEOUT_S = 60
+DEFAULT_FRAMES_FFMPEG_MAX_CONCURRENCY = 4
+
+
+def ffmpeg_max_concurrency() -> int:
+    """Return the process-wide cap on concurrent ffmpeg extractions.
+
+    A per-request ``ThreadPoolExecutor`` (see ``HIGH_RES_MAX_WORKERS``) only
+    bounds concurrency *within* one request; N concurrent requests would
+    otherwise spawn up to ``HIGH_RES_MAX_WORKERS * N`` ffmpeg processes. This
+    value additionally bounds total concurrent extractions across the whole
+    process via ``_FFMPEG_CONCURRENCY_SEMAPHORE``.
+    """
+    return get_env_int("FRAMES_FFMPEG_MAX_CONCURRENCY", DEFAULT_FRAMES_FFMPEG_MAX_CONCURRENCY)
+
+
+# Process-wide bound, constructed once at import time. Tests that need a
+# smaller bound monkeypatch this instance directly rather than relying on
+# env-var timing relative to module import.
+FRAMES_FFMPEG_MAX_CONCURRENCY = ffmpeg_max_concurrency()
+_FFMPEG_CONCURRENCY_SEMAPHORE = threading.BoundedSemaphore(FRAMES_FFMPEG_MAX_CONCURRENCY)
 
 Resolution = Literal["thumb", "high"]
 
@@ -77,6 +100,9 @@ def validate_frame_request(timestamps: list[float], resolution: Resolution) -> N
             f"At most {max_allowed} timestamps are allowed for resolution="
             f"{resolution!r} (got {len(timestamps)})"
         )
+
+    if any(not math.isfinite(t) for t in timestamps):
+        raise FrameRequestValidationError("timestamps must be finite numbers")
 
     if any(t < 0 for t in timestamps):
         raise FrameRequestValidationError("timestamps must be non-negative")
@@ -117,14 +143,25 @@ def build_frame_plan(
     return plan
 
 
-def build_thumb_frame_plan(timestamps: list[float]) -> list[FramePlanItem]:
+def build_thumb_frame_plan(
+    timestamps: list[float], *, duration_s: float | None = None,
+) -> list[FramePlanItem]:
     """Build a frame plan clamped to the known 1-fps thumbnail frame range.
 
-    The upper bound is derived from the configured max video duration so it
-    stays in lockstep with VIDEO_MAX_DURATION_S rather than duplicating a
-    frame-count literal.
+    When ``duration_s`` (the video's own probed duration) is available, the
+    clamp uses it directly — rounded down to the last full sampled frame —
+    so a timestamp past the true end of a shorter video doesn't silently
+    resolve to a frame near the global ceiling. Falls back to the configured
+    max video duration when ``duration_s`` is unknown (older videos indexed
+    before duration was persisted, or YouTube-sourced videos), keeping it in
+    lockstep with VIDEO_MAX_DURATION_S rather than duplicating a frame-count
+    literal.
     """
-    max_frame_index = int(max_video_duration_s() * FRAME_SAMPLE_FPS) - 1
+    if duration_s is not None and duration_s > 0:
+        max_frame_index = int(duration_s * FRAME_SAMPLE_FPS) - 1
+    else:
+        max_frame_index = int(max_video_duration_s() * FRAME_SAMPLE_FPS) - 1
+    max_frame_index = max(max_frame_index, 0)
     return build_frame_plan(timestamps, max_frame_index=max_frame_index)
 
 
@@ -152,74 +189,81 @@ def extract_high_res_frame(source_url: str, timestamp_s: float) -> ExtractedFram
     failures (including a timestamp past the end of the video) are returned
     as an ``ExtractedFrame`` with ``error`` set, so one bad timestamp doesn't
     fail the whole request.
+
+    The actual extraction (subprocess + decode) runs under a process-wide
+    ``BoundedSemaphore`` (see ``FRAMES_FFMPEG_MAX_CONCURRENCY``) so N
+    concurrent requests can't spawn unbounded ffmpeg processes; the semaphore
+    is acquired/released around each individual extraction, independent of
+    the per-request ``ThreadPoolExecutor`` in ``extract_high_res_frames``.
     """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        output_path = Path(temp_dir) / "frame.jpg"
-        cmd = [
-            "ffmpeg",
-            "-ss",
-            str(timestamp_s),
-            "-i",
-            source_url,
-            "-frames:v",
-            "1",
-            "-vf",
-            f"scale='min({HIGH_RES_MAX_WIDTH},iw)':-2",
-            "-q:v",
-            HIGH_RES_JPEG_QUALITY,
-            "-y",
-            str(output_path),
-        ]
-        try:
-            subprocess.run(
-                cmd,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=HIGH_RES_FFMPEG_TIMEOUT_S,
-            )
-        except FileNotFoundError as exc:
-            logger.error("ffmpeg binary not found for high-res frame extraction: %s", exc)
-            return ExtractedFrame(
-                image_base64=None, width=None, height=None,
-                error="ffmpeg is not available in the runtime environment",
-            )
-        except subprocess.TimeoutExpired:
-            logger.warning("ffmpeg timed out extracting frame at t=%.2fs", timestamp_s)
-            return ExtractedFrame(
-                image_base64=None, width=None, height=None,
-                error="Frame extraction timed out",
-            )
-        except subprocess.CalledProcessError as exc:
-            message = format_subprocess_error(exc, "ffmpeg failed with no output")
-            logger.warning(
-                "ffmpeg failed extracting frame at t=%.2fs: %s", timestamp_s, message,
-            )
-            return ExtractedFrame(image_base64=None, width=None, height=None, error=message)
+    with _FFMPEG_CONCURRENCY_SEMAPHORE:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "frame.jpg"
+            cmd = [
+                "ffmpeg",
+                "-ss",
+                str(timestamp_s),
+                "-i",
+                source_url,
+                "-frames:v",
+                "1",
+                "-vf",
+                f"scale='min({HIGH_RES_MAX_WIDTH},iw)':-2",
+                "-q:v",
+                HIGH_RES_JPEG_QUALITY,
+                "-y",
+                str(output_path),
+            ]
+            try:
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=HIGH_RES_FFMPEG_TIMEOUT_S,
+                )
+            except FileNotFoundError as exc:
+                logger.error("ffmpeg binary not found for high-res frame extraction: %s", exc)
+                return ExtractedFrame(
+                    image_base64=None, width=None, height=None,
+                    error="ffmpeg is not available in the runtime environment",
+                )
+            except subprocess.TimeoutExpired:
+                logger.warning("ffmpeg timed out extracting frame at t=%.2fs", timestamp_s)
+                return ExtractedFrame(
+                    image_base64=None, width=None, height=None,
+                    error="Frame extraction timed out",
+                )
+            except subprocess.CalledProcessError as exc:
+                message = format_subprocess_error(exc, "ffmpeg failed with no output")
+                logger.warning(
+                    "ffmpeg failed extracting frame at t=%.2fs: %s", timestamp_s, message,
+                )
+                return ExtractedFrame(image_base64=None, width=None, height=None, error=message)
 
-        if not output_path.exists():
-            return ExtractedFrame(
-                image_base64=None,
-                width=None,
-                height=None,
-                error="No frame was produced (timestamp may be past the end of the video)",
-            )
+            if not output_path.exists():
+                return ExtractedFrame(
+                    image_base64=None,
+                    width=None,
+                    height=None,
+                    error="No frame was produced (timestamp may be past the end of the video)",
+                )
 
-        image_bytes = output_path.read_bytes()
-        try:
-            with Image.open(io.BytesIO(image_bytes)) as image:
-                width, height = image.size
-        except (SyntaxError, UnidentifiedImageError, OSError) as exc:
-            return ExtractedFrame(
-                image_base64=None, width=None, height=None,
-                error=f"Invalid extracted frame: {exc}",
-            )
+            image_bytes = output_path.read_bytes()
+            try:
+                with Image.open(io.BytesIO(image_bytes)) as image:
+                    width, height = image.size
+            except (SyntaxError, UnidentifiedImageError, OSError) as exc:
+                return ExtractedFrame(
+                    image_base64=None, width=None, height=None,
+                    error=f"Invalid extracted frame: {exc}",
+                )
 
-        return ExtractedFrame(
-            image_base64=base64.b64encode(image_bytes).decode("ascii"),
-            width=width,
-            height=height,
-        )
+            return ExtractedFrame(
+                image_base64=base64.b64encode(image_bytes).decode("ascii"),
+                width=width,
+                height=height,
+            )
 
 
 def extract_high_res_frames(
