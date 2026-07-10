@@ -258,7 +258,19 @@ vmf_mcp = FastMCP(
         "OAuth-protected remote MCP server for Video Moment Finder. "
         "Supports presigned upload bootstrap, upload completion, video status, "
         "video listing, text search, full transcript retrieval, and frame "
-        "retrieval (returned as image content) for your connected account."
+        "retrieval (returned as image content) for your connected account. "
+        "Lecture-to-study-notes workflow (for clients without MCP prompt "
+        "support; also available as the lecture_notes prompt): 1) confirm the "
+        "video is ready via get_video_status; 2) fetch the full transcript "
+        "with get_transcript; 3) identify the lecture's sections and 'board "
+        "moments' where the speaker references visuals without describing "
+        "them; 4) call get_frames (high resolution) for the 5-15 most "
+        "important board moments, using timestamps near the END of each "
+        "explanation since board content accumulates while the speaker "
+        "writes; 5) transcribe the visuals into LaTeX/text and write one "
+        "structured Markdown document with a source-status disclosure and a "
+        "Main Takeaways list. Full recipe: "
+        "https://github.com/juancopi81/video-moment-finder/blob/main/docs/LECTURE_NOTES_RECIPE.md"
     ),
     website_url="https://www.videomomentfinder.com",
     host="0.0.0.0",

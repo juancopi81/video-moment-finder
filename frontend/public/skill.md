@@ -51,7 +51,7 @@ Remote MCP tools:
 - `get_transcript`
 - `get_frames` (returns frames as image content; defaults to high resolution with automatic thumbnail fallback)
 
-The server also ships the `lecture_notes` MCP prompt, a guided workflow that turns an indexed lecture video into Markdown study notes from its transcript and board-moment frames.
+The server also ships the `lecture_notes` MCP prompt, a guided workflow that turns an indexed lecture video into Markdown study notes from its transcript and board-moment frames. MCP prompts are user-invoked (not callable by agents as tools); clients without prompt support get the same workflow from the server's MCP instructions.
 
 How the Claude connect flow works:
 
@@ -67,6 +67,17 @@ Current MCP upload behavior:
 - `upload_video(action="start")` returns a presigned `upload_url`
 - write the file bytes to that URL with a plain `PUT`
 - `upload_video(action="complete")` finalizes the upload
+
+## Other MCP Clients
+
+The MCP endpoint is client-neutral: Streamable HTTP with OAuth authorization-code + PKCE and dynamic client registration. Any MCP client supporting remote OAuth servers can connect. For example, Codex:
+
+```bash
+codex mcp add vmf --url https://api.videomomentfinder.com/mcp
+codex mcp login vmf
+```
+
+Clients without MCP prompt support receive the lecture-notes workflow via the server's MCP instructions.
 
 ## REST Happy Path
 

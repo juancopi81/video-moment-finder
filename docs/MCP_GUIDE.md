@@ -26,6 +26,8 @@ This document covers the shipped Claude-compatible remote MCP server, its OAuth 
   - `get_frames`
 - MCP prompts:
   - `lecture_notes` — a guided workflow prompt that turns an indexed lecture video into polished Markdown study notes (transcript -> board moments -> high-res frames -> structured notes). See `docs/LECTURE_NOTES_RECIPE.md`.
+  - Prompts are user-invoked (claude.ai prompt menu; Claude Code slash command for directly-configured servers). Agents cannot call prompts as tools, and some clients (e.g. Codex) do not support prompts — the server's MCP `instructions` carry a compact version of the same workflow for those cases.
+- The endpoint is client-neutral (Streamable HTTP, OAuth + PKCE, dynamic client registration): non-Claude MCP clients such as Codex can connect, e.g. `codex mcp add vmf --url https://api.videomomentfinder.com/mcp` then `codex mcp login vmf`.
 
 Behavior notes:
 

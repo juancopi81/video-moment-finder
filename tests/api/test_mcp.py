@@ -233,7 +233,7 @@ def test_mcp_rejects_access_token_from_old_tools_version_grant(
     assert payload["error"] == "invalid_token"
     assert payload["error_description"] == (
         "This connection was approved for an older tool list. "
-        "Reconnect Video Moment Finder in Claude to approve the updated tools."
+        "Reconnect Video Moment Finder in your MCP client to approve the updated tool list."
     )
     www_authenticate = response.headers["WWW-Authenticate"]
     assert 'error="invalid_token"' in www_authenticate

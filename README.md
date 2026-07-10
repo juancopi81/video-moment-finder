@@ -36,14 +36,15 @@ Current transcript scope:
 - YouTube videos currently do not fall back to Whisper when no caption track is available.
 - Direct uploads extract speech with Whisper large-v3-turbo via `faster-whisper` and index those transcript segments for spoken-text queries.
 
-## Use with Claude (MCP)
+## Use with MCP clients (Claude, Codex, …)
 
-Video Moment Finder ships a Claude-compatible remote [Model Context Protocol](https://modelcontextprotocol.io) server that lets Claude list, upload, and search your videos directly from a conversation.
+Video Moment Finder ships a remote [Model Context Protocol](https://modelcontextprotocol.io) server (Streamable HTTP + OAuth with dynamic client registration and PKCE) that lets an AI agent list, upload, and search your videos directly from a conversation.
 
 | Surface | How to connect |
 |---------|---------------|
 | **Claude.ai / Claude Desktop** | Add a custom connector with server URL `https://api.videomomentfinder.com/mcp`. Claude handles OAuth and opens the approval flow automatically. |
 | **Claude Code (CLI)** | Add the MCP server in your project or global config. Claude Code runs locally and can drive the same upload, status, and search flow end to end. |
+| **Codex (CLI)** | `codex mcp add vmf --url https://api.videomomentfinder.com/mcp` then `codex mcp login vmf`. Codex reads the server instructions for the cross-tool workflow guidance. |
 
 ### Available tools
 
@@ -58,7 +59,9 @@ Video Moment Finder ships a Claude-compatible remote [Model Context Protocol](ht
 
 Video Moment Finder also ships a `lecture_notes` MCP prompt that chains
 `get_transcript` and `get_frames` into a guided workflow for turning an
-indexed lecture into Markdown study notes. See
+indexed lecture into Markdown study notes. MCP prompts are user-invoked
+(e.g. from the claude.ai prompt menu); agents and clients without prompt
+support get the same workflow from the server instructions. See
 [docs/LECTURE_NOTES_RECIPE.md](./docs/LECTURE_NOTES_RECIPE.md).
 
 ### Claude.ai

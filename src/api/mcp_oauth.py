@@ -63,7 +63,7 @@ DEFAULT_MCP_OAUTH_SCOPE = "vmf:mcp"
 MCP_APPROVED_TOOLS_VERSION = 2
 MCP_TOOLS_REAPPROVAL_DESCRIPTION = (
     "This connection was approved for an older tool list. "
-    "Reconnect Video Moment Finder in Claude to approve the updated tools."
+    "Reconnect Video Moment Finder in your MCP client to approve the updated tool list."
 )
 AUTHORIZATION_REQUEST_TTL_S = 3600
 AUTHORIZATION_CODE_TTL_S = 600
