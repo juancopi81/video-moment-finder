@@ -19,8 +19,19 @@ for the manual variant, anyone with a `vmf_` API key and REST access).
 
 ## One-Liner: The `lecture_notes` MCP Prompt
 
-With the connector configured, invoke the `lecture_notes` prompt with the
-video's UUID:
+MCP prompts are a **user-invoked** primitive: you select or type them
+yourself; an agent cannot call a named prompt as a tool. Where to find it:
+
+- **claude.ai / Claude Desktop**: the prompt appears in the connector's
+  prompt menu (type `/` in the composer).
+- **Claude Code**: prompts surface as slash commands for directly-configured
+  MCP servers (e.g. `/mcp__vmf__lecture_notes`); they may not appear for
+  claude.ai-managed connectors proxied into the CLI.
+- **Codex and other clients without prompt support**: the server's MCP
+  instructions carry a compact version of this workflow, and the manual
+  prompt below is the full equivalent.
+
+With the prompt available, invoke it with the video's UUID:
 
 ```text
 /lecture_notes video_id=<video_id>
