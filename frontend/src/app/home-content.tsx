@@ -11,7 +11,6 @@ import {
   useAuth,
 } from "@clerk/nextjs";
 import { usePostHog } from "posthog-js/react";
-import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { API_URL, parseApiError, parseApiErrorPayload } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics";
 
@@ -25,7 +24,7 @@ const MAX_UPLOAD_FILE_SIZE_LABEL = "8 GB";
 
 export default function HomeContent() {
   const router = useRouter();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
   const posthog = usePostHog();
   const trackCta = (cta: string) => () => posthog?.capture("cta_click", { cta });
   const [mode, setMode] = useState<SubmitMode>("upload");
@@ -218,10 +217,6 @@ export default function HomeContent() {
         setUploadProgress(null);
       }
     }
-  }
-
-  if (!isLoaded) {
-    return <AuthLoadingFallback />;
   }
 
   return (
