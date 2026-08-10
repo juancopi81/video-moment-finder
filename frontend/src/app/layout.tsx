@@ -73,12 +73,21 @@ export default function RootLayout({
         <body
           className={`${sourceSans.className} ${outfit.variable} ${sourceSans.variable} flex min-h-screen flex-col antialiased`}
         >
-          <script type="application/ld+json">
-            {JSON.stringify(organizationSchema)}
-          </script>
-          <script type="application/ld+json">
-            {JSON.stringify(softwareApplicationSchema)}
-          </script>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(organizationSchema).replace(/</g, "\\u003c"),
+            }}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(softwareApplicationSchema).replace(
+                /</g,
+                "\\u003c",
+              ),
+            }}
+          />
           <PHProvider>
             <Header />
             <main className="flex-1">{children}</main>
