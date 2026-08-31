@@ -224,13 +224,14 @@ export default function HomeContent() {
       {/* Hero */}
       <section className="flex flex-col items-center px-4 pt-20 pb-16 text-center animate-fade-in-up">
         <h1 className="font-heading text-5xl font-bold leading-tight sm:text-6xl">
-          Find the exact moment
+          Find the exact teaching moment
           <br />
-          in your video
+          in your video archive
         </h1>
         <p className="mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-          Upload a video file, then search by description or example image to
-          jump to the exact timestamp.
+          Upload one lesson, webinar, workshop, or demo you own. Search that
+          video by description or example image, then jump straight to the
+          timestamp.
         </p>
         <span className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
           1 free video &middot; up to 90 min &middot; direct upload
