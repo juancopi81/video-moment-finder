@@ -39,6 +39,17 @@ Use those files as the canonical variable list and defaults. This document expla
 - Vercel frontend: `NEXT_PUBLIC_*` variables only.
 - Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the service image must also include `ffmpeg` plus a JavaScript runtime for best-effort `yt-dlp` YouTube import. The Modal image installs the additional `modal` dependency group. After merging dependency-group changes or renaming Modal objects, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
 
+## Worker Database Recovery
+
+The continuous worker loop retries Supabase transport failures and PostgREST HTTP
+errors `429`, `500`, `502`, `503`, and `504`. It resets the database client and
+uses exponential backoff controlled by `VIDEO_JOB_DB_RETRY_BASE_DELAY_S` (default
+1 second) and `VIDEO_JOB_DB_RETRY_MAX_DELAY_S` (default 30 seconds). A successful
+queue iteration resets the retry delay. Other API errors still propagate so
+authentication, schema, and query failures remain visible. Restarting the worker
+does not resolve an upstream database outage; these retries keep it running until
+requests succeed again.
+
 ## Modal Deploy-Time Variables
 
 - `MODAL_QUERY_EMBED_MIN_CONTAINERS` and `MODAL_QUERY_EMBED_MAX_CONTAINERS` are optional deploy-time knobs for the Modal app.
