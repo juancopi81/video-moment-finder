@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from postgrest.exceptions import APIError
 
 from src.analytics.events import track
 from src.api.processing import (
@@ -39,6 +40,7 @@ DEFAULT_IDLE_BACKOFF_MAX_S = 15.0
 DEFAULT_DB_RETRY_BASE_DELAY_S = 1.0
 DEFAULT_DB_RETRY_MAX_DELAY_S = 30.0
 STALE_RECOVERY_BATCH_LIMIT = 25
+TRANSIENT_DB_HTTP_CODES = {"429", "500", "502", "503", "504"}
 
 
 def _default_worker_id() -> str:
@@ -390,10 +392,14 @@ def run_forever(
                 max_attempts=max_attempts,
                 stale_lock_timeout_s=stale_lock_timeout_s,
             )
-        except httpx.TransportError as exc:
+        except (httpx.TransportError, APIError) as exc:
+            # PostgREST wraps gateway responses as APIError, not TransportError.
+            # Codes may be integers for fallback responses or strings for JSON.
+            if isinstance(exc, APIError) and str(exc.code) not in TRANSIENT_DB_HTTP_CODES:
+                raise
             logger.warning(
                 (
-                    "Transient Supabase transport error worker_id=%s "
+                    "Transient Supabase request error worker_id=%s "
                     "error_type=%s retry_in_s=%.1f: %s"
                 ),
                 current_worker_id,

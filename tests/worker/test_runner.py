@@ -562,3 +562,58 @@ def test_run_forever_reraises_non_transient_exception(monkeypatch) -> None:
         run_forever(worker_id="worker:test", poll_interval_s=1.0)
 
     assert reset_calls == []
+
+
+@pytest.mark.parametrize("code", [429, 500, 502, 503, 504, "429", "500", "502", "503", "504"])
+@pytest.mark.parametrize("failure_site", ["list_stale_processing_video_jobs", "claim_next_video_job"])
+def test_run_forever_retries_gateway_errors_at_queue_boundaries(
+    monkeypatch, code, failure_site
+) -> None:
+    from postgrest.exceptions import APIError
+
+    error = APIError({
+        "message": "JSON could not be generated",
+        "code": code,
+        "hint": "Refer to full message for details",
+        "details": 'b\'{"message":"Gateway Timeout"}\'',
+    })
+    responses = [error, error, error, None, error, _StopLoop()]
+    sleeps = []
+    resets = []
+
+    def operation(*args, **kwargs):
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return [] if failure_site == "list_stale_processing_video_jobs" else None
+
+    monkeypatch.setattr("src.worker.runner.list_stale_processing_video_jobs", lambda *a, **kw: [])
+    monkeypatch.setattr("src.worker.runner.claim_next_video_job", lambda *a, **kw: None)
+    monkeypatch.setattr(f"src.worker.runner.{failure_site}", operation)
+    monkeypatch.setattr("src.worker.runner.reset_client", lambda: resets.append(True))
+    monkeypatch.setattr("src.worker.runner.time.sleep", sleeps.append)
+
+    with pytest.raises(_StopLoop):
+        run_forever(worker_id="worker:test", poll_interval_s=3,
+                    db_retry_base_delay_s=1, db_retry_max_delay_s=2)
+
+    assert sleeps == [1, 2, 2, 3, 1]
+    assert len(resets) == 4
+
+
+@pytest.mark.parametrize("code", [400, 401, 403, 404, "42501", "PGRST204", None])
+def test_run_forever_does_not_retry_permanent_api_errors(monkeypatch, code) -> None:
+    from postgrest.exceptions import APIError
+
+    error = APIError({"message": "permanent failure", "code": code})
+
+    def operation(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr("src.worker.runner.list_stale_processing_video_jobs", operation)
+    monkeypatch.setattr("src.worker.runner.time.sleep",
+                        lambda _: pytest.fail("Permanent errors must not retry"))
+
+    with pytest.raises(APIError) as raised:
+        run_forever(worker_id="worker:test")
+    assert raised.value is error
