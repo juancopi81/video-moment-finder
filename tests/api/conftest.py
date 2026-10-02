@@ -126,6 +126,9 @@ def _mock_free_video_count(monkeypatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _mock_api_billing(monkeypatch) -> None:
+    monkeypatch.setenv("API_TRIAL_ENABLED", "false")
+    monkeypatch.setattr("src.billing.trial.get_api_trial_grant", lambda _uid: None)
+    monkeypatch.setattr("src.api.app.db_has_video_processing_charge", lambda *_: False)
     monkeypatch.setattr("src.api.app.db_get_api_credits", lambda _uid: None)
     monkeypatch.setattr(
         "src.api.app.db_consume_api_units",

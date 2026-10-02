@@ -64,6 +64,7 @@ from src.billing.lemonsqueezy import (
     LemonSqueezyProviderError,
     create_checkout_session,
 )
+from src.billing.trial import ensure_trial_state, existing_trial_state
 from src.config.env import load_env
 from src.monitoring.sentry import capture_exception, init_sentry
 from src.db.supabase import (
@@ -73,6 +74,7 @@ from src.db.supabase import (
     compensate_api_units as db_compensate_api_units,
     consume_api_units as db_consume_api_units,
     consume_processing_credit as db_consume_processing_credit,
+    consume_trial_or_processing_credit as db_consume_trial_or_processing_credit,
     count_videos_for_user as db_count_videos_for_user,
     create_api_key as db_create_api_key,
     create_uploaded_video as db_create_uploaded_video,
@@ -85,6 +87,7 @@ from src.db.supabase import (
     insert_uploaded_video_idempotent as db_insert_uploaded_video_idempotent,
     insert_youtube_video_idempotent as db_insert_youtube_video_idempotent,
     has_unlimited_video_access as db_has_unlimited_video_access,
+    has_video_processing_charge as db_has_video_processing_charge,
     list_api_keys as db_list_api_keys,
     list_api_usage_events as db_list_api_usage_events,
     list_videos as db_list_videos,
@@ -116,7 +119,7 @@ DEFAULT_BILLING_GRANT_EVENTS = {
 INSUFFICIENT_CREDITS_DETAIL = "Insufficient credits. Buy credits to process another video."
 INSUFFICIENT_API_UNITS_DETAIL = {
     "code": "insufficient_api_units",
-    "message": "Insufficient API units. Purchase a Developer Pack to add units.",
+    "message": "Insufficient API units for this operation. Reuse retrieved evidence or choose an operation within the remaining allowance.",
 }
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
@@ -437,6 +440,8 @@ def _validate_uploaded_source_size_with_cleanup(
 def _is_video_processing_free_for_user(user_id: str) -> bool:
     if db_has_unlimited_video_access(user_id):
         return True
+    if existing_trial_state(user_id).enrolled:
+        return False
     max_videos = _max_free_videos()
     current_count = db_count_videos_for_user(user_id)
     return current_count < max_videos
@@ -444,8 +449,13 @@ def _is_video_processing_free_for_user(user_id: str) -> bool:
 
 def _precheck_video_processing_admission(user_id: str) -> bool:
     """Raise 402 when admission fails; return whether paid credit consume is needed."""
+    trial = ensure_trial_state(user_id)
     if _is_video_processing_free_for_user(user_id):
         return False
+    if trial.enrolled:
+        api_credits = db_get_api_credits(user_id)
+        if api_credits is not None and api_credits.balance >= API_UNIT_COST_INDEX_VIDEO:
+            return True
     credit_record = db_get_credits(user_id)
     if credit_record is not None and credit_record.balance > 0:
         return True
@@ -455,8 +465,15 @@ def _precheck_video_processing_admission(user_id: str) -> bool:
     )
 
 
-def _consume_processing_credit_or_raise(user_id: str) -> None:
-    credit_result = db_consume_processing_credit(user_id)
+def _consume_processing_credit_or_raise(user_id: str, video_id: str | None = None) -> None:
+    if existing_trial_state(user_id).enrolled:
+        if video_id is None:
+            raise RuntimeError("An owned video is required for a shared trial charge")
+        credit_result = db_consume_trial_or_processing_credit(
+            user_id=user_id, video_id=video_id, units=API_UNIT_COST_INDEX_VIDEO,
+        )
+    else:
+        credit_result = db_consume_processing_credit(user_id)
     if credit_result.allowed:
         return
 
@@ -466,10 +483,10 @@ def _consume_processing_credit_or_raise(user_id: str) -> None:
     )
 
 
-def _consume_and_admit_video_processing(user_id: str) -> None:
+def _consume_and_admit_video_processing(user_id: str, video_id: str | None = None) -> None:
     if _is_video_processing_free_for_user(user_id):
         return
-    _consume_processing_credit_or_raise(user_id)
+    _consume_processing_credit_or_raise(user_id, video_id)
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +526,10 @@ def _consume_api_units_or_raise(
     video_id: str | None = None,
     request_id: str | None = None,
 ) -> None:
+    # Index routes enroll before inserting their owned video; never reconcile
+    # that newly inserted row as historical free usage during its debit.
+    if event_type != "index_video":
+        ensure_trial_state(user_id)
     result = db_consume_api_units(
         user_id=user_id,
         api_key_id=api_key_id,
@@ -1023,15 +1044,25 @@ class AnalyticsEventRequest(BaseModel):
     metadata: dict | None = None
 
 
-class BillingSummaryResponse(BaseModel):
+class TrialSummaryResponse(BaseModel):
+    trial_enabled: bool = False
+    trial_status: Literal["disabled", "verification_required", "verification_unavailable", "granted", "exhausted"] = "disabled"
+    trial_allowance_units: int = 600
+    trial_units_granted: int = 0
+    trial_legacy_units_offset: int = 0
+
+
+class BillingSummaryResponse(TrialSummaryResponse):
     credits_balance: int
     free_videos_limit: int
     free_videos_used: int
     free_videos_remaining: int
     has_unlimited_access: bool
+    api_units_balance: int = 0
+    unit_cost_index_video: int = 500
 
 
-class ApiBillingSummaryResponse(BaseModel):
+class ApiBillingSummaryResponse(TrialSummaryResponse):
     api_units_balance: int
     unit_cost_index_video: int
     unit_cost_text_query: int
@@ -1186,7 +1217,7 @@ def _require_matching_upload_record(
     return record
 
 
-def _ensure_enqueued(record: VideoRecord) -> None:
+def _ensure_enqueued(record: VideoRecord, *, require_charge: bool = False) -> None:
     """Re-enqueue a stranded video that was billed but never got a job row.
 
     Called on the retry path when an existing dedupe record is found.
@@ -1200,6 +1231,10 @@ def _ensure_enqueued(record: VideoRecord) -> None:
         return
     if db_get_video_job(record.id) is not None:
         return
+    enrolled = record.user_id is not None and existing_trial_state(record.user_id).enrolled
+    if require_charge or (enrolled and not db_has_unlimited_video_access(record.user_id)):
+        if not db_has_video_processing_charge(record.user_id, record.id):
+            raise HTTPException(status_code=409, detail="Video admission is still pending. Retry shortly.")
     try:
         enqueue_video_job(record.id)
         logger.info("Re-enqueued stranded video_id=%s on retry", record.id)
@@ -1462,6 +1497,7 @@ def approve_mcp_connector_request(
     request_id: str,
     user_id: str = Depends(get_current_user_id),
 ) -> McpConnectorDecisionResponse:
+    ensure_trial_state(user_id)
     api_credits = db_get_api_credits(user_id)
     if api_credits is None or api_credits.balance <= 0:
         raise HTTPException(status_code=402, detail=INSUFFICIENT_API_UNITS_DETAIL)
@@ -1553,22 +1589,36 @@ def upload_video(
         file, user_id, video_id,
     )
 
+    # The shared debit requires an owned row and records a stable video charge.
+    # Keep the legacy admission ordering for accounts not enrolled in the trial.
+    record = None
+    if existing_trial_state(user_id).enrolled and not db_has_unlimited_video_access(user_id):
+        requires_credit = True
+        record = db_create_uploaded_video(
+            video_id=video_id, source_r2_key=upload_result.key,
+            source_filename=filename, user_id=user_id, status="queued",
+            duration_s=duration_s,
+        )
+
     try:
         if requires_credit:
-            _consume_processing_credit_or_raise(user_id)
+            _consume_processing_credit_or_raise(user_id, video_id)
     except HTTPException as exc:
         if exc.status_code == 402:
             _try_cleanup_r2(store, upload_result.key, user_id)
+            if record is not None:
+                update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
         raise
 
-    record = db_create_uploaded_video(
-        video_id=video_id,
-        source_r2_key=upload_result.key,
-        source_filename=filename,
-        user_id=user_id,
-        status="queued",
-        duration_s=duration_s,
-    )
+    if record is None:
+        record = db_create_uploaded_video(
+            video_id=video_id,
+            source_r2_key=upload_result.key,
+            source_filename=filename,
+            user_id=user_id,
+            status="queued",
+            duration_s=duration_s,
+        )
     _enqueue_video_or_fail(record.id)
     track("video_submitted", user_id=user_id, metadata={"source_type": "upload"})
     return _video_record_to_response(record)
@@ -1625,6 +1675,7 @@ def _complete_upload_core(
     user_id: str,
     bill: Callable[[VideoRecord], None],
     admit: Callable[[], None] | None = None,
+    require_charge: bool = False,
 ) -> VideoResponse:
     """Shared upload-complete flow for both JWT and API-key paths.
 
@@ -1645,10 +1696,11 @@ def _complete_upload_core(
         if _should_retry_failed_upload(existing):
             retry_record = existing
         else:
-            _ensure_enqueued(existing)
+            _ensure_enqueued(existing, require_charge=require_charge)
             return _video_record_to_response(existing)
 
-    if admit is not None:
+    charged_retry = retry_record is not None and db_has_video_processing_charge(user_id, video_id)
+    if admit is not None and not charged_retry:
         admit()
 
     try:
@@ -1702,12 +1754,15 @@ def _complete_upload_core(
             if _should_retry_failed_upload(record):
                 retry_record = record
             else:
-                _ensure_enqueued(record)
+                _ensure_enqueued(record, require_charge=require_charge)
                 return _video_record_to_response(record)
     else:
         record = retry_record
 
-    bill(record)
+    if retry_record is not None and not charged_retry:
+        charged_retry = db_has_video_processing_charge(user_id, video_id)
+    if not charged_retry:
+        bill(record)
 
     if retry_record is not None:
         record = _reset_upload_retry_record(record)
@@ -1730,10 +1785,12 @@ def complete_upload(
         requires_credit = _precheck_video_processing_admission(user_id)
 
     def _bill_web_credits(record: VideoRecord) -> None:
-        if not requires_credit:
+        if not requires_credit and (
+            not existing_trial_state(user_id).enrolled or db_has_unlimited_video_access(user_id)
+        ):
             return
         try:
-            _consume_processing_credit_or_raise(user_id)
+            _consume_processing_credit_or_raise(user_id, record.id)
         except HTTPException as exc:
             if exc.status_code == 402:
                 update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
@@ -1768,13 +1825,16 @@ def get_billing_summary(
     user_id: str = Depends(get_current_user_id),
 ) -> BillingSummaryResponse:
     """Return billing-relevant usage and credit balance for the authenticated user."""
-    max_free_videos = _max_free_videos()
+    trial = ensure_trial_state(user_id)
+    max_free_videos = 0 if trial.enrolled else _max_free_videos()
     used_videos = db_count_videos_for_user(user_id)
     credit_record = db_get_credits(user_id)
     has_unlimited_access = db_has_unlimited_video_access(user_id)
     free_videos_remaining = max(max_free_videos - used_videos, 0)
     raw_credits_balance = credit_record.balance if credit_record else 0
     credits_balance = max(raw_credits_balance, 0)
+    api_record = db_get_api_credits(user_id)
+    api_balance = max(api_record.balance, 0) if api_record else 0
 
     return BillingSummaryResponse(
         credits_balance=credits_balance,
@@ -1782,6 +1842,9 @@ def get_billing_summary(
         free_videos_used=used_videos,
         free_videos_remaining=free_videos_remaining,
         has_unlimited_access=has_unlimited_access,
+        api_units_balance=api_balance,
+        unit_cost_index_video=API_UNIT_COST_INDEX_VIDEO,
+        **trial.summary(api_balance),
     )
 
 
@@ -2066,6 +2129,7 @@ def v1_create_video(
     user_id: str = Depends(get_current_user_id),
 ) -> VideoResponse:
     _enforce_user_write_rate_limit(user_id)
+    ensure_trial_state(user_id)
     _validate_video_duration(request.youtube_url)
 
     # Atomic insert: the unique partial index on (user_id, youtube_url) serializes
@@ -2079,7 +2143,7 @@ def v1_create_video(
         return _video_record_to_response(record)
 
     try:
-        _consume_and_admit_video_processing(user_id)
+        _consume_and_admit_video_processing(user_id, record.id)
     except HTTPException:
         update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
         raise
@@ -2094,6 +2158,7 @@ def v1_upload_video(
     identity: AuthIdentity = Depends(get_current_user),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ) -> VideoResponse:
+    ensure_trial_state(identity.user_id)
     if idempotency_key is None:
         if _uses_api_unit_billing(identity):
             # API-key upload: same flow as upload_video but with API unit billing
@@ -2134,6 +2199,7 @@ def v1_upload_video(
                 _consume_api_units_or_raise(
                     user_id=user_id, api_key_id=_api_usage_key_id(identity),
                     event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
+                    video_id=video_id, request_id=f"index_video:{video_id}",
                 )
             except HTTPException as exc:
                 if exc.status_code == 402:
@@ -2167,7 +2233,7 @@ def v1_upload_video(
             source_r2_key=expected_key,
             source_filename=filename,
         )
-        _ensure_enqueued(existing)
+        _ensure_enqueued(existing, require_charge=_uses_api_unit_billing(identity))
         return _video_record_to_response(existing)
 
     _enforce_user_write_rate_limit(user_id)
@@ -2213,7 +2279,7 @@ def v1_upload_video(
             )
             if upload_result.key != record.source_r2_key:
                 _try_cleanup_r2(store, upload_result.key, user_id)
-            _ensure_enqueued(record)
+            _ensure_enqueued(record, require_charge=True)
             return _video_record_to_response(record)
 
         try:
@@ -2221,6 +2287,7 @@ def v1_upload_video(
                 user_id=user_id, api_key_id=_api_usage_key_id(identity),
                 event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
                 video_id=video_id,
+                request_id=f"index_video:{video_id}",
             )
         except HTTPException as exc:
             if exc.status_code == 402:
@@ -2254,9 +2321,11 @@ def v1_upload_video(
         _ensure_enqueued(record)
         return _video_record_to_response(record)
 
-    if requires_credit:
+    if requires_credit or (
+        existing_trial_state(user_id).enrolled and not db_has_unlimited_video_access(user_id)
+    ):
         try:
-            _consume_processing_credit_or_raise(user_id)
+            _consume_processing_credit_or_raise(user_id, record.id)
         except HTTPException as exc:
             if exc.status_code == 402:
                 _try_cleanup_r2(store, upload_result.key, user_id)
@@ -2272,6 +2341,7 @@ def v1_init_upload(
     request: UploadInitRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> UploadInitResponse:
+    ensure_trial_state(identity.user_id)
     if not _uses_api_unit_billing(identity):
         return init_upload(request, user_id=identity.user_id)
 
@@ -2311,6 +2381,7 @@ def v1_complete_upload(
     request: UploadCompleteRequest,
     identity: AuthIdentity = Depends(get_current_user),
 ) -> VideoResponse:
+    ensure_trial_state(identity.user_id)
     if not _uses_api_unit_billing(identity):
         return complete_upload(request, user_id=identity.user_id)
 
@@ -2324,13 +2395,14 @@ def v1_complete_upload(
                 user_id=user_id, api_key_id=_api_usage_key_id(identity),
                 event_type="index_video", units=API_UNIT_COST_INDEX_VIDEO,
                 video_id=request.video_id,
+                request_id=f"index_video:{request.video_id}",
             )
         except HTTPException as exc:
             if exc.status_code == 402:
                 update_video_status(record.id, "failed", error_message=FAILED_ERROR_INSUFFICIENT_CREDITS)
             raise
 
-    return _complete_upload_core(request.video_id, filename, user_id, _bill_api_units)
+    return _complete_upload_core(request.video_id, filename, user_id, _bill_api_units, require_charge=True)
 
 
 def v1_get_video(
@@ -2711,6 +2783,7 @@ def v1_api_billing_summary(
     identity: AuthIdentity = Depends(get_current_user),
 ) -> ApiBillingSummaryResponse:
     """Return API unit balance and approximate equivalents."""
+    trial = ensure_trial_state(identity.user_id)
     record = db_get_api_credits(identity.user_id)
     balance = record.balance if record else 0
     cost_video = API_UNIT_COST_INDEX_VIDEO
@@ -2721,6 +2794,7 @@ def v1_api_billing_summary(
         unit_cost_text_query=cost_query,
         approx_videos=balance // cost_video if cost_video > 0 else 0,
         approx_queries=balance // cost_query if cost_query > 0 else 0,
+        **trial.summary(balance),
     )
 
 

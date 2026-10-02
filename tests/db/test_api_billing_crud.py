@@ -149,14 +149,14 @@ class TestCompensateApiUnits:
         client.rpc.return_value.execute.return_value = rpc_result
         monkeypatch.setattr("src.db.supabase.get_client", lambda: client)
 
-        compensate_api_units(user_id="user_123", units=100)
+        compensate_api_units(user_id="user_123", units=100, request_id="charge_1")
         client.rpc.assert_called_once_with(
             "compensate_api_units",
             {
                 "p_user_id": "user_123",
                 "p_units": 100,
                 "p_video_id": None,
-                "p_request_id": None,
+                "p_request_id": "charge_1",
                 "p_metadata": {},
             },
         )
@@ -166,6 +166,8 @@ class TestCompensateApiUnits:
             compensate_api_units(user_id="  ", units=50)
         with pytest.raises(ValueError, match="units"):
             compensate_api_units(user_id="u", units=-1)
+        with pytest.raises(ValueError, match="request_id"):
+            compensate_api_units(user_id="u", units=1)
 
 
 class TestListApiUsageEvents:

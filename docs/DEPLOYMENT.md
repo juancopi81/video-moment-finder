@@ -19,6 +19,7 @@ Use those files as the canonical variable list and defaults. This document expla
 | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Required | Required | - | Required for Modal calls from both services. |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Optional | Optional | - | Runtime monitoring for API and worker. |
 | `CLERK_ISSUER`, `CLERK_AUDIENCE`, `CLERK_JWKS_URL` | Required | - | - | API JWT verification only. |
+| `CLERK_SECRET_KEY`, `API_TRIAL_ENABLED`, `API_TRIAL_UNITS` | Optional | - | - | Server-verified, once-per-account trial. Grants default OFF; secret required only to enroll new eligible accounts. |
 | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEX` | Required | - | - | API CORS policy only. Include Claude web origins and localhost callback origins for MCP browser auth. |
 | `FRONTEND_BASE_URL`, `MCP_OAUTH_ISSUER_URL`, `MCP_OAUTH_RESOURCE_URL`, `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Required | - | - | Claude connector OAuth issuer, protected resource metadata, DCR support, optional static reviewer client validation, and approval-page redirects. |
 | `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, `LEMON_SQUEEZY_VARIANT_ID_STARTER`, `LEMON_SQUEEZY_VARIANT_ID_PRO`, `LEMON_SQUEEZY_VARIANT_ID_DEVELOPER`, `LEMON_SQUEEZY_CHECKOUT_REDIRECT_URL`, `LEMON_SQUEEZY_CHECKOUT_TEST_MODE`, `LEMON_SQUEEZY_WEBHOOK_SECRET`, `BILLING_GRANT_EVENT_NAMES`, `API_UNIT_COST_INDEX_VIDEO`, `API_UNIT_COST_TEXT_QUERY` | Required | - | - | API billing checkout, webhook handling, and API unit pricing. |
@@ -112,7 +113,7 @@ Notes:
 - Missing R2 configuration or failed storage verification returns `503`.
 - Missing uploaded object on complete returns `400`.
 
-## Claude Connector OAuth Contract
+## VMF Connector OAuth Contract
 
 - Protected resource endpoint: `https://api.videomomentfinder.com/mcp`
 - OAuth discovery endpoints:
@@ -134,9 +135,89 @@ Notes:
 Behavior notes:
 
 - `/mcp` only accepts OAuth bearer tokens. Legacy `vmf_` API keys remain valid for REST and CLI, not for MCP.
-- Connector usage bills against Developer Pack API units and records `api_usage_events.api_key_id = null`.
-- The connect page blocks approval when `api_units_balance <= 0` and sends users through Developer Pack checkout with a preserved `return_path`.
+- Connector usage bills against the shared API unit balance (existing paid units plus any trial grant) and records `api_usage_events.api_key_id = null`.
+- The connect page blocks approval when `api_units_balance <= 0`, explains the unavailable operation neutrally, and offers denial. It does not advertise or link to digital-credit purchases. Ordinary website checkout remains independent.
 - `HEAD /mcp` must stay tokenless for Claude client compatibility checks.
+
+## Verified-account trial (inactive proposal)
+
+Apply `20261002120000_api_billing_retry_safety.sql` and
+`20261002121000_verified_account_trial.sql` before deploying the updated API.
+These migrations create schema/functions only and grant no trial units. Keep
+`API_TRIAL_ENABLED=false` until activation is separately approved. No production
+migration, activation, or live grant is part of the implementation validation.
+
+With grants enabled, an authenticated account is enrolled on a billing summary,
+connector approval, indexing admission, or metered API operation. The backend
+fetches that same immutable Clerk user ID from `https://api.clerk.com/v1/users/`
+using the server-only `CLERK_SECRET_KEY`. Only a verified **primary** email on an
+unlocked, unbanned account qualifies. Client booleans, editable metadata, and an
+unverified primary email with a verified secondary email do not qualify. Clerk
+unavailability grants nothing; paid access and the existing unverified-account
+website allowance remain usable. Only the opaque email ID is recorded, not its
+address. This is once per Clerk account, not a claim of one trial per human.
+
+`API_TRIAL_UNITS` starts at **600**. A permanent `api_trial_grants.user_id` primary
+key and one database transaction serialize competing requests, add the grant to
+`api_credits`, and record the grant event. Reconnects, repeated requests, changed
+configuration, and a spent balance cannot grant again. `API_TRIAL_ENABLED` controls
+**new** grants only: disabling it preserves existing enrollment and balances,
+and cannot revive a second legacy free-video allowance. Deleting grant records
+would break this protection and is not a rollback strategy.
+
+The website's old free indexing allowance and the new trial do not stack. Prior
+nonfailed videos without an API indexing debit are conservatively treated as
+legacy free usage, up to `VIDEO_MAX_FREE_VIDEOS`. Their offset uses the configured
+`API_UNIT_COST_INDEX_VIDEO`, capped at the grant: with default pricing, one prior
+free video reduces a 600-unit grant to **100**. Failed videos, explicitly
+API-funded videos, and unlimited-access accounts are excluded from this inference.
+Historical API indexing also sometimes omitted its video ID. Those unattributed
+debits conservatively exclude the same number of otherwise unmatched uploads from
+the free-usage inference. Historical website debits were not recorded, so
+imported/manual videos and past changes to the free quota cannot be distinguished
+perfectly. Review those cohorts
+before activation; this migration does not rewrite their balances or assume all
+existing videos were free. Grant reconciliation runs before a new video insert.
+
+For enrolled accounts, website indexing atomically uses enough shared API units
+first, otherwise one existing paid website processing credit. Concurrent retries
+for the same video charge once. A queued row alone is not proof of a charge:
+trial/API retries with no committed debit return a neutral `409` while admission
+is pending, instead of starting unbilled work. An upload with a proven debit whose
+enqueue failed can retry without another balance precheck or charge. New API
+indexing debits retain the video ID and a stable request ID. Paid API balances, paid website balances and
+checkout, and unlimited-access overrides are preserved. Existing website search
+remains free; the trial does not silently change that entitlement. API/MCP search,
+transcript, and frame calls keep the configured unit costs. Listing and status
+remain free. At default costs, 600 units cover one 500-unit index and **up to 100
+units of retrieval**; this is tariff arithmetic, not a measured infrastructure
+cost or a promise of 100 complete learning outputs.
+
+Both billing summaries add `trial_enabled`, `trial_status`,
+`trial_allowance_units`, `trial_units_granted`, and `trial_legacy_units_offset`.
+Statuses are `disabled`, `verification_required`, `verification_unavailable`,
+`granted`, and `exhausted`. The latter two describe an existing grant and whether
+the **combined** API balance is positive/zero; historical granted units are not a
+separate remaining-trial balance. The web summary also exposes `api_units_balance`
+and `unit_cost_index_video`; enrolled accounts report zero legacy free quota.
+
+The billing reliability migration additionally fixes failed-call compensation:
+refunds now reference a matching original debit, use a distinct refund key, and
+cannot exceed or duplicate that debit or cross account boundaries. Compensated
+requests need a new request ID when retried. No existing ledger rows are changed
+or retroactively refunded.
+
+Isolated validation (never uses `SUPABASE_DB_URL`):
+
+```bash
+docker pull postgres:16-alpine
+VMF_RUN_POSTGRES_TESTS=1 uv run pytest -q tests/db/test_trial_postgres.py
+uv run pytest -q tests/billing/test_trial.py tests/api/test_api_trial.py
+```
+
+The PostgreSQL tests create a disposable container with no network and no exposed
+ports, apply every repository migration, exercise real concurrent transactions,
+and remove the container. Ordinary tests skip this opt-in integration suite.
 
 ## Quick Troubleshooting
 
