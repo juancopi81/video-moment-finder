@@ -1,21 +1,27 @@
-# Turn a Lecture Video into Study Notes with Claude
+# Turn a Lecture Video into Study Notes with VMF
 
 This is the canonical recipe for turning an indexed lecture video into
-structured Markdown study notes using Video Moment Finder plus Claude (or any
-MCP-compatible client). It's built on the `lecture_notes` MCP prompt and the
+structured Markdown study notes using Video Moment Finder and an MCP-compatible
+client. It's built on the `lecture_notes` MCP prompt and the
 `get_transcript` / `get_frames` tools described in `docs/MCP_GUIDE.md`.
 
-Audience: a Video Moment Finder user with the Claude connector configured (or,
+Audience: a Video Moment Finder user with the VMF connection configured (or,
 for the manual variant, anyone with a `vmf_` API key and REST access).
+
+For HTML study guides, flashcards, tutoring, and what-if comparisons, use the
+[portable learning plugin](../plugins/video-moment-finder/README.md). Its shared
+evidence workflow generalizes this recipe, reuses retrieved material, and states
+whether it covers the full lecture or a bounded excerpt. This document retains
+the supported Markdown prompt/manual workflow.
 
 ## Prerequisites
 
 - The lecture video is already indexed and `ready` (see `docs/CLI_API_GUIDE.md`
   or `docs/MCP_GUIDE.md` for upload and status polling).
-- The Claude connector is added and authorized (server URL
+- The VMF connection is added and authorized (server URL
   `https://api.videomomentfinder.com/mcp`), **or** you have a `vmf_` API key
   for the REST/manual variant below.
-- A positive Developer Pack API-unit balance (see the cost estimate below).
+- Sufficient API units for the planned calls (see the configurable cost defaults below).
 
 ## One-Liner: The `lecture_notes` MCP Prompt
 
@@ -41,18 +47,18 @@ Optional arguments:
 
 - `course_context` — course name, lecture number, and/or related links to
   include at the top of the notes.
-- `own_notes` — text of your own handwritten notes. When provided, Claude
+- `own_notes` — text of your own handwritten notes. When provided, the client
   treats your notes as the primary skeleton and uses the video to verify,
   correct, complete, and enrich them, flagging any conflicts explicitly. If
   you'd rather share photos of your notes, paste them directly into the chat
   instead of using this argument.
 
-Claude runs the workflow described below and returns one Markdown document.
+The client runs the workflow described below and returns one Markdown document.
 
 ## Manual Equivalent (REST / CLI Users)
 
 If you're driving the REST API directly instead of through the MCP prompt,
-give Claude (or any agent) this equivalent instruction:
+give the agent this equivalent instruction:
 
 ```text
 Turn the indexed lecture video <video_id> into polished Markdown study notes.
@@ -126,9 +132,11 @@ of footage. The video only needs to be indexed once; you can re-run the notes
 workflow as many times as you like afterward for the same typical ~6-16 units
 per run.
 
+These are configurable tariff defaults, not measured charges for a connected
+account. Confirm effective costs and available units before metered calls.
 None of the above includes the LLM tokens spent reading the transcript,
 reasoning about board moments, and writing the notes — those are spent by
-your own Claude session (or API key) outside of Video Moment Finder's
+your own model session (or API key) outside of Video Moment Finder's
 billing.
 
 ## Limitations

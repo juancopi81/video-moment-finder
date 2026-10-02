@@ -1,6 +1,6 @@
 # Remote MCP Guide
 
-This document covers the shipped Claude-compatible remote MCP server, its OAuth flow, reviewer setup, and the validation gates required before submission.
+This document covers the client-neutral remote MCP server, its OAuth flow, compatibility setup, and validation. The portable learning plugin's current package and public-review status are owned by [docs/plugin/SUBMISSION.md](plugin/SUBMISSION.md).
 
 ## What Ships
 
@@ -33,7 +33,7 @@ Behavior notes:
 
 - `/mcp` is OAuth-only.
 - REST API and CLI keep their existing JWT + `vmf_` API-key behavior.
-- Connector usage bills against Developer Pack API units.
+- Connector usage bills against the account's API units, including an eligible trial grant when enrollment is enabled. Trial rollout and legacy-credit reconciliation are documented in [deployment guidance](DEPLOYMENT.md#verified-account-trial-inactive-proposal).
 - MCP tool execution records `api_usage_events.api_key_id = null` for OAuth calls.
 - `upload_video` is annotated as a write tool; the other five tools are read-only.
 
@@ -63,16 +63,16 @@ Operational impact of deploying a version bump:
 
 Bump `MCP_APPROVED_TOOLS_VERSION` whenever the approval screen's tool surface changes in a way that requires fresh consent.
 
-## Claude Connect Flow
+## VMF Connect Flow
 
-1. Add the custom connector in Claude with server URL `https://api.videomomentfinder.com/mcp`.
-2. Use guided OAuth. Claude web/Desktop can self-register through DCR, and internal review flows may still use the static client credentials from the secure review/test configuration.
+1. Add the VMF connection in an MCP-compatible client with server URL `https://api.videomomentfinder.com/mcp`.
+2. Use guided OAuth. DCR-capable clients self-register, and existing client-specific review flows may still use the static client credentials from the secure review/test configuration.
 3. Click `Connect`.
 4. The user lands on `https://www.videomomentfinder.com/connectors/claude?request_id=...`.
 5. If signed out, they sign in or create an account.
-6. If `api_units_balance <= 0`, they buy a Developer Pack and return to the same connector page.
+6. The page shows the connected account and its current units. When trial enrollment is enabled, verified eligible accounts receive a single reconciled grant. If units remain unavailable, approval stays disabled with a neutral explanation; the user can deny the request. The connection flow does not advertise digital-credit purchases or upgrades.
 7. They review the six MCP tools and explicitly approve access.
-8. Claude receives the authorization code callback, exchanges it for tokens, and begins using the connector.
+8. The client receives the authorization code callback, exchanges it for tokens, and begins using VMF. Reconnecting does not renew an enrolled trial.
 
 Supported redirect URIs:
 
@@ -85,13 +85,13 @@ Supported redirect URIs:
 
 Do not publish the confidential client secret in public docs or UI copy.
 
-For Anthropic review and internal testing:
+For existing client-specific review and internal testing (see the separate plugin submission checklist for OpenAI):
 
 - Claude web/Desktop and other DCR-capable surfaces can self-register a public client through `POST /register`.
 - Keep the static reviewer client (`MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET`) available for review flows that still expect explicit credentials.
 - Prepare a live review account before submission:
   - valid login
-  - positive Developer Pack API-unit balance
+  - sufficient existing API units for the planned review calls
   - at least one ready video
   - at least three documented example prompts
 

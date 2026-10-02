@@ -1,0 +1,73 @@
+# VMF review walkthrough script
+
+This is a recording plan, not a recording. There is no verified demo URL yet.
+Use the final private development installation in the intended host; do not
+upload a submission draft merely to start recording. The development recording
+and the portal's saved-release connection are distinct checks.
+
+Preparation status: the private version 0.1.0 package has been saved and its
+stored files inspected. Host installation and authenticated OAuth are still
+unverified. Use that existing private package for the walkthrough; do not create
+another one. Local browser checks passed for all three HTML artifacts and the
+developers page, but the consent shell's authentication remained loading. Those
+checks are not a recorded demonstration of a connected plugin.
+
+## Prepare the actual recording
+
+1. Open the intended host, select the final VMF plugin version, and confirm its
+   archive hash against the package report. Use a dedicated test account with
+   sufficient units and an original or redistributable lecture. Keep its sign-in
+   secrets and unrelated library entries off screen.
+2. Complete OAuth using the supported host flow. Show the neutral consent page
+   with the connected account label, allowed operations and unit costs, without
+   exposing the account's email or a token. A reconnect demonstration must show
+   actual behavior; source tests alone do not prove an end-user reconnect.
+3. Rehearse all prompts below. Fix errors before recording, preserving an honest
+   boundary example. Do not replace tool results with a mockup or synthetic claim
+   of a successful live run. Reuse the same evidence across outputs.
+4. Check whether the environment has a real video recorder. Computer control or
+   screenshots alone are not video capture. If a supported Computer integration
+   with recording is available, it can perform the visible walkthrough within
+   the user's authorization. Otherwise start your own screen recorder and follow
+   this script. The current cloud environment has no exposed Computer/recording
+   capability; its screenshots are not a finished demo.
+
+## A concise 4–6 minute sequence
+
+| Segment | Prompt / action | Show and verify |
+| --- | --- | --- |
+| 0:00–0:25: identity and purpose | Show Video Moment Finder's installed version and the ready original sample | Real plugin name/version; explain “index once, reuse evidence”; hide account secrets |
+| 0:25–1:40: study guide | “Make a clear HTML study guide from my sample lecture, with useful visuals and source timestamps. Tell me what it covers.” | Actual list/status/transcript/search/frame calls; inspected image; readable HTML, coverage disclosure and working timestamp references |
+| 1:40–2:30: flashcards | “Use the same evidence to make six useful flashcards, with a review page and CSV.” | Avoid repeated VMF retrieval; reveal an answer; show one timestamp; open the real UTF-8 CSV with Front, Back and Tags columns |
+| 2:30–3:25: tutoring | “Tutor me on one important idea, one question at a time.” Then give one incorrect and one corrected answer | Tutor waits, offers a useful hint, grounds the correction and adapts; do not compress several learner turns into a fictional summary |
+| 3:25–4:30: Assumption Lab | “Show where one rule from this lecture stops working. Let me change assumptions and pin two cases to compare.” | Change a discrete choice; pin a reviewed case; compare another; show applicability warnings, unknowns and citations; reset and download a comparison note. Explain that this is a finite teaching table, not a continuous simulation |
+| 4:30–5:00: boundary | “Use my saved card to buy more VMF units and refill them automatically.” | Clear unsupported-action explanation; no VMF commerce tool, checkout or fabricated balance update |
+| Optional ingestion | Record the one original sample upload separately if not already indexed | Start → PUT without Authorization → complete → real status; accelerate idle waiting only with a visible edit disclosure |
+
+The prompts mirror the manifest cases. Update this script when the fourth skill
+selection or core behavior changes. Do not show unauthorized third-party lecture
+material publicly. If an output reveals a private source URL, keep it off screen
+or use the original sample instead. Do not start another indexing job merely
+to get a cleaner take.
+
+## Review the result before hosting
+
+- Play the saved video from beginning to end. Confirm the text and images are
+  readable, interactions actually change the artifact, audio is understandable
+  if used, and no password, token, email, signed URL or private lecture appears.
+- Show the real fallback when a high-resolution request returns thumbnails.
+  Do not claim visual text is readable when it is not.
+- Record the tested plugin version and hash, case outcomes, any edits/time cuts,
+  and which steps were blocked. Keep account access information separate.
+- Host the actual recording at the publisher's chosen reviewer-accessible
+  destination, within authorized scope. Open the resulting URL without the
+  publisher's private session and verify playback and permissions.
+- Add only that verified URL as
+  `extensions.com.openai.review.demo_recording_url`, then rebuild and validate
+  the exact ZIP for submission. A script, screenshot collection, placeholder
+  URL or local-only video does not complete this field.
+
+Provide reviewer credentials and sign-in instructions only through secure portal
+fields. If a recording needs a working account or a host that is unavailable,
+keep it blocked and finish independent source/package work; do not claim it was
+recorded or tested.

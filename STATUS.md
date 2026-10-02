@@ -68,11 +68,17 @@ Authoring rules:
 | 2026-07-09 | Phase 7 | MCP connector one-time re-consent                      | Done        | Versioned the approved tool list on OAuth grants, rejected pre-expansion tokens and refreshes so existing connections reconnect once, and disclosed exact per-tool unit costs on the approval screen. |
 | 2026-07-09 | Phase 7 | Upload size limit                                      | Done        | Added an 8 GiB upload cap enforced mid-stream on the multipart path and via HEAD check at presigned complete, with frontend pre-check and bounded temp-disk usage. |
 | 2026-07-10 | Phase 7 | Client-neutral MCP guidance                            | Done        | First real lecture-notes dogfood run passed end to end; embedded the workflow in MCP server instructions for clients without prompt support, neutralized Claude-only copy, documented prompt-invocation reality and Codex setup. |
+| 2026-10-02 | Phase 7 | Portable lecture-learning plugin                      | Implemented | Added four skills, offline HTML/CSV renderers, original examples, reproducible archive, and a saved private release; real-lecture excerpt artifacts and claim audits remain private. |
+| 2026-10-02 | Phase 7 | Neutral onboarding and verified-account trial          | Implemented, inactive | Prepared default-off 600-unit trial with trusted Clerk verification, one-time enrollment, shared website/API accounting, historical reconciliation and retry/refund fixes; no production migration or grant. |
+| 2026-10-02 | Phase 7 | Learning release validation and independent review     | Passed locally | Full check passed: 672 Python tests including 17 isolated PostgreSQL cases, 13 archive tests, seven frontend tests, lint and normal 18-page build; accounting review findings resolved. |
+| 2026-10-02 | Phase 7 | Learning experience checks                             | Partial live coverage | Audited one real lecture excerpt across all four skills; three HTML outputs passed desktop/mobile browser checks and tutoring passed a seven-turn agent harness; ingestion, second lecture and installed-host OAuth remain pending. |
+| 2026-10-02 | Phase 7 | Public review preparation                              | Blocked externally | Listing, five positive/three negative cases and recording script prepared; current official policies and live listing URLs blocked by destination policy, while reviewer/publisher/recording facts remain outstanding in docs/plugin/SUBMISSION.md. |
 
 ## Blockers
 
 - Best-effort YouTube URL import can be blocked from cloud IP ranges; direct upload is the supported reliable path.
 - Current traffic volume is too low to validate retention or pricing confidently.
+- Learning plugin release gates and exact remaining checks are tracked in `docs/plugin/SUBMISSION.md`; private creation does not establish installation, submission or publication.
 - ~~Funnel instrumentation is incomplete on the signed-out and pre-auth path, so top-of-funnel conclusions are still weak.~~ Resolved 2026-03-25 (PostHog covers signed-out pageviews, CTAs, and full acquisition funnel).
 - ~~Final launch hardening depends on clearing remaining Supabase Security Advisor findings in every deployed environment.~~ Resolved 2026-03-06.
 - ~~Ops readiness checklist (backup verification and monitoring alert routing) remains open for launch gate completion.~~ Resolved 2026-03-06 (manual backup path verified; Sentry active for monitoring).
@@ -87,6 +93,8 @@ Authoring rules:
 - **Direct upload is the primary ingest path**; YouTube URL import remains best effort.
 - **Phase 7 prioritizes acquisition, activation, and monetization learning** before broader platform expansion.
 - **Study-notes generation stays agent-side first**: transcript/frames primitives and the lecture_notes MCP prompt ship with flat per-call unit pricing; a web-UI notes feature waits for dogfooding evidence.
+- **Assumption Lab is included experimentally** after comparing three prototypes; it supports finite case comparisons, with no measured demand claim. See `docs/plugin/fourth-skill-evaluation.md`.
+- **Trial enrollment is permanent per verified account** and replaces the remaining legacy free indexing entitlement; new grants remain disabled until separately approved. Deployment and historical-account caveats live in `docs/DEPLOYMENT.md`.
 
 ## Metrics / Measurements
 
@@ -98,3 +106,5 @@ Authoring rules:
 | Single embed latency      | -       | 0.1317s     | Batch=8 benchmark sample. |
 | Model load time           | -       | ~25.7s      | Cold container start baseline. |
 | Embedding dimension       | -       | 2048        | Qwen3-VL-Embedding-2B output vector size. |
+| Learning development API use (2026-10-02) | ≤700 units, ≤1 new index | Conservative 8 units, 0 new indexes | Readiness retrieval reused across four artifacts; actual receipts unavailable. Further metered work paused pending effective tariff/balance confirmation. |
+| Portable package reproducibility (0.1.0) | Identical bytes | 28 files, 444700 bytes | SHA256 `150b90b819464de0d56eb6c520406a77a2144a3c118b85b1c941783d8e97c1aa`; final archive matches the saved private release. |
