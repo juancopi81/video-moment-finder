@@ -1,0 +1,23 @@
+{
+  "format_version":1,
+  "title":"Read a dot product in two ways",
+  "subtitle":"Connect a coordinate calculation to alignment, orthogonality, and a useful boundary case.",
+  "lecture":{"title":"VMF original vector lab · redistribution-safe demonstration","video_id":null},
+  "coverage":{"kind":"synthetic","start_s":0,"end_s":45,"gaps":["Original teaching fixture, not a transcript or a live VMF retrieval. Times identify planned scenes in the accompanying reproducible fixture; generated audio timing is recorded separately by make_fixture_video.py.","No claim is made that this example has been indexed in any connected account."]},
+  "sources":[
+    {"id":"s-coordinate","kind":"synthetic","start_s":0,"end_s":15,"summary":"Original example: a=(3,4), b=(2,0). The dot product is 3×2 + 4×0 = 6."},
+    {"id":"s-perpendicular","kind":"synthetic","start_s":15,"end_s":30,"summary":"Original example: (1,0) and (0,1) are nonzero perpendicular vectors, and their dot product is zero."},
+    {"id":"s-boundary","kind":"synthetic","start_s":30,"end_s":45,"summary":"Original example: replacing (2,0) with (−2,0) flips the dot product with (3,4) from 6 to −6. A zero vector has zero dot product with every vector, but no defined angle."}
+  ],
+  "sections":[
+    {"id":"calculate","title":"Multiply matching coordinates, then add","origin":"generated","paragraphs":["For two real two-dimensional vectors a=(a₁,a₂) and b=(b₁,b₂), the dot product is a₁b₁+a₂b₂.","With a=(3,4) and b=(2,0), only the horizontal contribution remains: 3×2+4×0=6. The result is a scalar, not a new vector."],"citations":["s-coordinate"]},
+    {"id":"geometry","title":"Read the sign as alignment","origin":"generated","paragraphs":["For nonzero vectors, a·b=|a||b|cos(θ). A positive dot product means an acute angle; zero means a right angle; a negative result means an obtuse angle.","The unit coordinate vectors (1,0) and (0,1) make a right angle, and 1×0+0×1=0. The coordinate rule and geometric interpretation agree."],"citations":["s-perpendicular"]},
+    {"id":"boundary","title":"Check the assumption before using the rule","origin":"generated","paragraphs":["Reversing b from (2,0) to (−2,0) changes the example's dot product from 6 to −6. It points in the opposite direction.","A zero dot product alone does not establish a defined 90-degree angle: if either vector is zero, the dot product is zero but its direction and angle are undefined. The nonzero assumption matters."],"citations":["s-boundary"]}
+  ],
+  "questions":[
+    {"prompt":"What is (2,3)·(4,−1)?","hint":"Compute the horizontal and vertical contributions separately.","answer":"2×4+3×(−1)=8−3=5. This is a generated practice example.","citations":["s-coordinate"]},
+    {"prompt":"Does a zero dot product always define a right angle?","hint":"Try a=(0,0).","answer":"No. For nonzero vectors, zero dot product means perpendicular. If a vector is zero, the angle is undefined.","citations":["s-boundary"]}
+  ],
+  "takeaways":["A dot product is a scalar obtained by multiplying matching coordinates and adding.","For nonzero vectors, the sign describes whether their angle is acute, right, or obtuse.","Check the nonzero assumption before turning zero dot product into an angle claim."],
+  "interaction":null
+}
