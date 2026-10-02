@@ -27,8 +27,18 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --frozen --group dev
 
-      - name: Run backend tests
-        run: uv run pytest -q
+      - name: Prepare isolated migration test image
+        run: docker pull postgres:16-alpine
+
+      - name: Run backend and isolated migration tests
+        env:
+          VMF_RUN_POSTGRES_TESTS: "1"
+        run: uv run --frozen --no-sync pytest -q
+
+      - name: Validate portable plugin archive
+        run: |
+          uv run --frozen --no-sync python -m unittest discover -s scripts/plugin -p 'test_*.py'
+          uv run --frozen --no-sync python scripts/plugin/build_package.py
 
   frontend:
     runs-on: ubuntu-latest
@@ -51,6 +61,9 @@ jobs:
 
       - name: Run frontend lint
         run: npm run lint
+
+      - name: Test account messages and source timestamps
+        run: node tests/account-and-source-links.test.mjs
 
       - name: Run frontend build
         env:

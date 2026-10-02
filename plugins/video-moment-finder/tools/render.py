@@ -39,7 +39,7 @@ def identifier(value: object) -> str:
 
 
 def validate(data: dict) -> None:
-    if data.get("format_version") != 1:
+    if type(data.get("format_version")) is not int or data["format_version"] != 1:
         raise ValueError("Unsupported format_version")
     if not isinstance(data.get("title"), str) or not data["title"].strip():
         raise ValueError("A title is required")
@@ -64,7 +64,7 @@ def validate(data: dict) -> None:
     section_ids = set()
     for section in data["sections"]:
         sid = identifier(section["id"])
-        if sid in section_ids or sid in {"source-notes", "practice", "takeaways", "experiment", "main"}:
+        if sid in section_ids or sid.startswith("source-") or sid in {"practice", "takeaways", "experiment", "main"}:
             raise ValueError("Duplicate or reserved section ID")
         section_ids.add(sid)
         if section["origin"] not in ("lecture", "generated"):
@@ -163,6 +163,8 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--template", type=Path)
     args = parser.parse_args()
+    if args.output.resolve() == args.input.resolve() or (args.template and args.output.resolve() == args.template.resolve()):
+        parser.error("Input, template, and output paths must be distinct")
     data = json.loads(args.input.read_text(encoding="utf-8"))
     output = render(data, args.input.parent, args.template)
     args.output.parent.mkdir(parents=True, exist_ok=True)

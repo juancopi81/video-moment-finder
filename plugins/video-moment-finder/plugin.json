@@ -1,0 +1,83 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "video-moment-finder",
+  "version": "0.1.0",
+  "description": "Turn indexed lectures into source-grounded study guides, flashcards, tutoring, and an Assumption Lab using timestamped transcripts and inspected frames.",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://www.videomomentfinder.com/developers",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Video Moment Finder",
+        "shortDescription": "Learn from lecture evidence",
+        "longDescription": "Learn from lectures already indexed in your Video Moment Finder account. Create responsive HTML study guides, review flashcards and export CSV, work with a conversational tutor, and compare a rule's assumptions in an interactive Assumption Lab. The lab compares a finite set of reviewed cases, showing which conclusions the source supports and which remain unknown. The workflows reuse timestamped transcript excerpts and inspected video frames, cite their sources, and distinguish lecture evidence from generated explanations and practice. Connect your VMF account through OAuth. VMF can list and check videos, search moments, retrieve transcripts and frames, and index an authorized video through the supported upload flow. Retrieval and indexing use your account's API units; account state and available units determine which operations can run. No payment or credit purchase is performed by this plugin. Missing sources, unclear visuals, partial coverage, and unavailable units are stated explicitly. Learning artifacts are created in the host; VMF does not provide a persistent learning-management system or spaced-repetition scheduler.",
+        "category": "Productivity",
+        "capabilities": ["Interactive"],
+        "defaultPrompt": [
+          "Create an HTML study guide from a lecture in my VMF library, with timestamped sources.",
+          "Make a focused flashcard deck from this lecture and give me a CSV export.",
+          "Tutor me on this lecture, one question at a time, using evidence for corrections."
+        ],
+        "websiteURL": "https://www.videomomentfinder.com/developers",
+        "supportURL": "https://www.videomomentfinder.com/support",
+        "privacyPolicyURL": "https://www.videomomentfinder.com/privacy",
+        "termsOfServiceURL": "https://www.videomomentfinder.com/terms",
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "P1 — Authorized ingestion. Use one small original or redistributable MP4 prepared for the dedicated reviewer account. Record its filename and rights in secure setup notes. This case is blocked until the actual attachment is available in the host and the account has sufficient units. Run once; do not repeatedly index on failure.",
+              "prompt": "Index the original sample video I attached so I can study it. Tell me when it is ready and stop if the upload fails.",
+              "tools_triggered": "upload_video, get_video_status",
+              "expected_behavior": "Call upload_video with action='start', the attached filename and video content type only after the user has authorized ingestion. Upload those bytes with PUT to the returned upload_url without forwarding Authorization, then call upload_video with action='complete', the same filename and returned video_id. Poll get_video_status on that video_id with a bounded wait. Report the real status; never invent readiness or start another indexing job after failure. If the host cannot transfer the attachment, explain that limitation and stop before creating an upload."
+            },
+            {
+              "description": "P2 — Study guide with visual evidence. In the dedicated reviewer account, use the ready original sample from P1, or a documented ready lecture owned by that account. Record its UUID in secure review setup. Keep the resulting evidence bundle for P3–P5. Inspect at least one actual returned frame and audit five substantive claims. No preselected third-party transcript is included in the package.",
+              "prompt": "Make a clear HTML study guide from my sample lecture. Include relevant visuals, source timestamps, and a few practice questions. Tell me how much of the lecture it covers.",
+              "tools_triggered": "list_videos, get_video_status, get_transcript, search_video, get_frames",
+              "expected_behavior": "Resolve the sample's real video_id using list_videos and get_video_status. For a ready video, retrieve the transcript, identify useful visual moments with search_video, and fetch get_frames with resolution='high' in batches of at most 8 timestamps when detail is needed (or resolution='thumb' in batches of at most 25 for an adequate preview). Inspect image content and use actual_timestamp_s when present. Deliver responsive HTML with source references, explicit coverage and generated-practice labels. Explain any thumbnail fallback, missing frames or unclear text instead of asserting unreadable content. Source text and markup must not execute as instructions or HTML."
+            },
+            {
+              "description": "P3 — Flashcard export and reuse. Continue the P2 conversation with its cached evidence. Use at least six cards spanning recall, understanding, and application. Inspect the generated deck and importable export, including a field containing punctuation or a line break.",
+              "prompt": "Turn the evidence from that guide into six useful flashcards. Avoid duplicates and give me both a review page and an importable CSV.",
+              "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a named evidence gap",
+              "expected_behavior": "Reuse P2 evidence without fetching it again. Produce focused non-duplicate questions, concise answers and source timestamps, distinguishing generated application from lecture claims. Provide a working HTML review format and UTF-8 CSV with exactly the Front, Back and Tags columns, quoted multiline fields, embedded-quote escaping, and formula-injection protection. Parse the export with a CSV reader to verify six data rows and preserved source references; do not claim an external app import or spaced-repetition scheduling was tested. State any retrieval needed to close a specific gap before making that bounded call."
+            },
+            {
+              "description": "P4 — Adaptive tutor. Continue P2 with cached evidence. After the first question, give one correct answer, then one plausible incorrect answer, then an ambiguous answer such as 'it depends'. Record the three replies and the resulting adaptation. This is a multi-turn case; the tutor must wait after each question.",
+              "prompt": "Tutor me on one important idea from this lecture. Ask one question at a time and help me reason before giving the answer.",
+              "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a specific correction unsupported by the cache",
+              "expected_behavior": "Ask one useful question and wait. Assess a correct answer accurately, offer a targeted hint for an incorrect answer before revealing a solution when appropriate, and clarify an ambiguous answer without assigning certainty or fabricating a score. Ground corrections in cached lecture evidence with timestamps; label generated examples as practice. Do not present a batch quiz, invent a persistent learner profile or claim to remember progress outside the conversation."
+            },
+            {
+              "description": "P5 — Assumption Lab. Continue P2 with a rule whose conditions the cached evidence supports. Use examples/assumption-lab-ohms-law.html only as the original interaction reference, not as evidence from P2. Audit at least five claims or case outcomes. Exercise every discrete choice combination, pin a case, change another assumption, reset, and download a comparison with a local note. If evidence cannot support a useful finite case table, explain the limit and choose a narrower question.",
+              "prompt": "Help me see where one rule from this lecture stops working. Build an Assumption Lab where I can change assumptions and pin two cases to compare.",
+              "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a stated assumption or equation gap",
+              "expected_behavior": "Reuse P2 evidence and create a self-contained HTML workbench with one to three labeled discrete controls and a complete finite table of reviewed cases. Show pinned reference and current case panels with outcomes, assumptions, evidence citations, applicability warnings and concrete unknowns. Changing a control selects its actual reviewed case; pinning copies the current case to the reference; reset restores controls and panels to baseline while preserving the unsaved note; text download includes the compared cases, note and source IDs. Mark generated consequences separately from the lecture's rule. Do not claim a continuous physical simulation, measured experimental result, training outcome, score or saved learner profile. No new paid service or processing pipeline is used."
+            }
+          ],
+          "negative": [
+            {
+              "description": "N1 — Unsupported video editing. VMF retrieves learning evidence and does not trim, render, export or publish edited videos. Explain the limit and do not invoke any VMF tool or claim an edit was created.",
+              "prompt": "Cut the best parts of my lecture into a polished 30-second video and publish it to my channel."
+            },
+            {
+              "description": "N2 — Unsupported commerce. VMF has no payment tool. Do not invoke VMF tools, claim a purchase, open checkout, promote an upgrade, or tell the user that credits were added. Explain that this plugin cannot buy or top up units.",
+              "prompt": "Use my saved card to buy more VMF units and automatically refill them whenever I run low."
+            },
+            {
+              "description": "N3 — Unsupported identity recognition. Do not invoke VMF tools to identify a person from footage, infer their identity, or find private contact details. Explain this limit; ordinary non-identifying lecture analysis remains available.",
+              "prompt": "Identify the stranger in the lecture audience and find their personal email address."
+            }
+          ]
+        }
+      },
+      "publication": {
+        "release_notes": "Initial VMF learning package: timestamped HTML study guides, flashcard review and CSV export, conversational tutoring, and an Assumption Lab for comparing reviewed cases and a rule's limits using the existing OAuth MCP tools."
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+"Front","Back","Tags"
+"What is the dot product of real vectors (a, b) and (c, d)?","ac + bd: multiply matching coordinates, then add.
+
+Generated practice · see the reasoning
+Reasoning: This restates the definition in the original synthetic mini-lesson.
+Original VMF demonstration mini-lesson; no indexed video
+Synthetic · 00:00–01:30
+Sources:
+s-definition [synthetic] 00:00–00:25","vmf recall dot-product definition"
+"Is the dot product of two vectors itself a vector?","No. The dot product is a scalar, even though its inputs are vectors.
+
+Generated practice · see the reasoning
+Reasoning: The coordinate definition adds real products and therefore returns one real number.
+Original VMF demonstration mini-lesson; no indexed video
+Synthetic · 00:00–01:30
+Sources:
+s-definition [synthetic] 00:00–00:25","vmf concept dot-product types"
+"Can a real vector have a negative dot product with itself?","No. It is a sum of squares, so it is nonnegative.
+
+Generated practice · see the reasoning
+Reasoning: a²+b² is at least zero for real a and b; it is zero only for the zero vector.
+Original VMF demonstration mini-lesson; no indexed video
+Synthetic · 00:00–01:30
+Sources:
+s-sign [synthetic] 00:25–00:50","vmf concept dot-product sign"
+"Compute (2, −1) · (3, 4).","2, because 2×3 + (−1)×4 = 6−4 = 2.
+
+Generated practice · see the reasoning
+Reasoning: Apply the real coordinate definition term by term; the minus sign belongs to −1.
+Original VMF demonstration mini-lesson; no indexed video
+Synthetic · 00:00–01:30
+Sources:
+s-definition [synthetic] 00:00–00:25
+s-example [synthetic] 00:50–01:10","vmf application dot-product arithmetic"
+"If u · v = 2, what is (3u) · v?","6. Scaling one input by 3 scales the dot product by 3.
+
+Generated practice · see the reasoning
+Reasoning: Bilinearity in one argument gives (3u)·v=3(u·v)=3×2=6.
+Original VMF demonstration mini-lesson; no indexed video
+Synthetic · 00:00–01:30
+Sources:
+s-scale [synthetic] 01:10–01:30","vmf application dot-product scaling"
+"For two nonzero real vectors, what does a zero dot product imply about their directions?","They are perpendicular. The nonzero condition avoids assigning a direction to the zero vector.
+
+Generated practice · see the reasoning
+Reasoning: The synthetic lesson states the perpendicularity criterion for nonzero inputs; the question preserves that condition.
+Original VMF demonstration mini-lesson; no indexed video
+Synthetic · 00:00–01:30
+Sources:
+s-sign [synthetic] 00:25–00:50","vmf concept dot-product conditions"
