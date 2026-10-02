@@ -9,7 +9,7 @@ const CHECKOUT_POLL_ATTEMPTS = 4;
 const CHECKOUT_POLL_INTERVAL_MS = 2500;
 
 type UseApiBillingSummaryOptions = {
-  checkoutStatus: string | null;
+  checkoutStatus?: string | null;
   enableCheckoutPolling?: boolean;
 };
 
@@ -17,10 +17,12 @@ type UseApiBillingSummaryResult = {
   apiBillingSummary: ApiBillingSummary | null;
   apiBillingSummaryError: string | null;
   isRefreshingBalance: boolean;
+  isLoadingBalance: boolean;
+  refreshBalance: () => void;
 };
 
 export function useApiBillingSummary({
-  checkoutStatus,
+  checkoutStatus = null,
   enableCheckoutPolling = false,
 }: UseApiBillingSummaryOptions): UseApiBillingSummaryResult {
   const { getToken, isLoaded, userId } = useAuth();
@@ -30,6 +32,7 @@ export function useApiBillingSummary({
     string | null
   >(null);
   const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -41,6 +44,8 @@ export function useApiBillingSummary({
     }
 
     let cancelled = false;
+    setApiBillingSummary(null);
+    setApiBillingSummaryError(null);
     const shouldPoll =
       enableCheckoutPolling && checkoutStatus === "success";
     const pollAttempts = shouldPoll ? CHECKOUT_POLL_ATTEMPTS : 1;
@@ -93,7 +98,13 @@ export function useApiBillingSummary({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [checkoutStatus, enableCheckoutPolling, getToken, isLoaded, userId]);
+  }, [checkoutStatus, enableCheckoutPolling, getToken, isLoaded, userId, refreshVersion]);
 
-  return { apiBillingSummary, apiBillingSummaryError, isRefreshingBalance };
+  return {
+    apiBillingSummary,
+    apiBillingSummaryError,
+    isRefreshingBalance,
+    isLoadingBalance: !!userId && apiBillingSummary === null && apiBillingSummaryError === null,
+    refreshBalance: () => setRefreshVersion((version) => version + 1),
+  };
 }

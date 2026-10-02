@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: March 24, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: October 2, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -29,7 +29,14 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Usage data:</strong> Search queries, optional example images submitted for
-              search, processing history, and credit usage.
+              search, processing history, website credit and API-unit usage, and
+              one-time trial grant records.
+            </li>
+            <li>
+              <strong>Connected app authorization:</strong> OAuth client and
+              connection records, approved permissions, authorization requests,
+              token hashes, and expiration or revocation state used to authenticate
+              connected apps.
             </li>
             <li>
               <strong>Traffic analytics:</strong> We use Vercel Web Analytics to measure page
@@ -51,7 +58,7 @@ export default function PrivacyPage() {
           <p className="mt-2">We use your information to:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Process videos and enable semantic search functionality</li>
-            <li>Manage your account and credit balance</li>
+            <li>Manage your account, connected app permissions, credit and API-unit balances, and trial eligibility</li>
             <li>Improve the Service and develop new features</li>
             <li>Communicate with you about your account and the Service</li>
           </ul>
@@ -66,6 +73,7 @@ export default function PrivacyPage() {
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Thumbnail images of extracted frames</li>
             <li>Embedding vectors for search indexing</li>
+            <li>Transcripts with segment timestamps, when available</li>
             <li>Metadata (timestamps, video ID, processing status)</li>
           </ul>
           <p className="mt-2">
@@ -118,12 +126,18 @@ export default function PrivacyPage() {
           <p className="mt-2">
             Each provider processes data in accordance with their own privacy policies.
           </p>
+          <p className="mt-2">
+            When you authorize a connected app, requested video information,
+            transcripts, search results, and frames can be returned to that app
+            through the approved tools. The receiving app processes that content
+            under its own terms and privacy policy.
+          </p>
         </section>
 
         <section>
           <h2 className="text-lg font-semibold text-foreground">5. Data Retention</h2>
           <p className="mt-2">
-            Processed video data (embeddings and thumbnails) is retained as long as your account
+            Processed video data (embeddings, thumbnails, and transcripts) is retained as long as your account
             is active. Uploaded source video files are automatically deleted after a short
             retention period. You can request deletion of all your data by contacting us.
           </p>

@@ -1,6 +1,7 @@
 import { API_URL, parseApiError } from "@/lib/api";
+import type { ApiUnitTrialSummary } from "@/lib/api-unit-trial";
 
-export type ApiBillingSummary = {
+export type ApiBillingSummary = ApiUnitTrialSummary & {
   api_units_balance: number;
   unit_cost_index_video: number;
   unit_cost_text_query: number;

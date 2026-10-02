@@ -38,14 +38,27 @@ const faqs = [
   {
     question: "What happens to my video data?",
     answer:
-      "We extract frames and generate AI embeddings for search. Thumbnail images and search vectors are stored to enable search. Uploaded source files are automatically cleaned up after processing, and submitted YouTube URLs are only used to attempt import and processing. We do not share your video data with third parties.",
-    dateModified: FAQ_BASELINE_REVIEWED,
+      "We store thumbnail images, search vectors, and available transcripts with timestamps. Uploaded source files are temporary and subject to automatic cleanup. Hosting and processing providers help operate the service, as described in the privacy policy. If you authorize a connected app, the requested video evidence is returned to that app through its approved tools.",
+    dateModified: "2026-10-02",
   },
   {
-    question: "How do credits work?",
+    question: "How do website credits and API units differ?",
     answer:
-      "Each credit allows you to process one video (up to 90 minutes). Free accounts include 1 credit to try the service. Paid credit packs are available on the pricing page for signed-in users. Credits do not expire.",
-    dateModified: FAQ_BASELINE_REVIEWED,
+      "A website video credit processes one video up to 90 minutes. Connected apps and the API instead use API units for indexing, searches, transcripts, and frames. If an eligible account is enrolled in a one-time API-unit trial, that allowance also covers its free website processing; prior free website processing counts toward the grant. Where that trial is not enabled, the existing free website video allowance applies. Your signed-in account summary shows the allowance actually available to you. Reconnecting does not reset it.",
+    dateModified: "2026-10-02",
+  },
+  {
+    id: "mcp-connection",
+    question: "How do I start learning with a connected app?",
+    answer:
+      "Connect Video Moment Finder from a supported app, sign in to the account holding your videos, and review the tools and operation costs before approving. Then ask the app to list your ready videos and explain one key idea with a timestamp and frame where available. OAuth handles the connection; do not paste an API key into chat. Only videos accessible to your connected account can be used.",
+    dateModified: "2026-10-02",
+  },
+  {
+    question: "What if my video or API allowance is unavailable?",
+    answer:
+      "Wait for a processing video to become ready, or choose another if it failed or is inaccessible. A public URL alone does not make a video available in a connected app. Source cleanup can remove playback and high-resolution frames while thumbnails and transcripts remain. When API units are insufficient, metered operations stop; you can continue studying evidence already retrieved. Video listing and status checks use no units on an active connection. A new connection approval requires a positive API-unit balance.",
+    dateModified: "2026-10-02",
   },
   {
     question: "How accurate are the search results?",

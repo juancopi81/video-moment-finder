@@ -1,324 +1,159 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
-const connectorSteps = [
-  "Add a custom connector in Claude with server URL https://api.videomomentfinder.com/mcp.",
-  "Use guided OAuth. Claude surfaces that support dynamic client registration can self-register, and internal review flows may still use provided static credentials.",
-  "Click Connect, then sign in to Video Moment Finder if needed.",
-  "Buy a Developer Pack if your API-unit balance is zero.",
-  "Review the six MCP tools and approve access.",
-];
+export const metadata: Metadata = {
+  title: "Connect Video Moment Finder",
+  description: "Connect your video library with MCP, understand API units, and get your first learning result.",
+  alternates: { canonical: "/developers" },
+};
 
-const promptExamples = [
-  {
-    prompt: "List my recent videos in Video Moment Finder.",
-    expectation:
-      "Claude uses list_videos and returns recent IDs, status, and source details.",
-  },
-  {
-    prompt: "Check whether video <video_id> is ready and tell me if it failed.",
-    expectation:
-      "Claude uses get_video_status and reports the current processing state or failure reason.",
-  },
-  {
-    prompt:
-      "Search video <video_id> for the moment they explain the model and give me timestamps.",
-    expectation:
-      "Claude uses search_video and returns timestamped text-search matches.",
-  },
-  {
-    prompt: "Turn this lecture video into study notes.",
-    expectation:
-      "Claude runs the lecture_notes prompt: get_transcript for the full transcript, then get_frames for the key board moments, and returns Markdown notes with LaTeX math and a Main Takeaways section.",
-  },
+const connectorSteps = [
+  "Add Video Moment Finder in your app, or add a remote MCP server with URL https://api.videomomentfinder.com/mcp.",
+  "Start Connect and sign in to the Video Moment Finder account that holds your videos. Remote MCP uses OAuth; you do not need to paste an API key into chat.",
+  "Review the requesting app, available tools, operation costs, and your account allowance on the approval screen. Any available one-time trial is reported there after account verification; reconnecting does not grant another trial.",
+  "Approve access, then return to your app. If your account has no API units, the approval screen explains the limit without starting any video operation.",
 ];
 
 const tools = [
-  {
-    name: "upload_video",
-    title: "Upload Video",
-    summary:
-      "Starts a presigned upload or completes it after the bytes are written.",
-    tone: "Write",
-  },
-  {
-    name: "get_video_status",
-    title: "Get Video Status",
-    summary: "Checks the current indexing state for one video.",
-    tone: "Read",
-  },
-  {
-    name: "list_videos",
-    title: "List Videos",
-    summary: "Lists recent videos for the connected account.",
-    tone: "Read",
-  },
-  {
-    name: "search_video",
-    title: "Search Video",
-    summary: "Runs text search against a ready video and returns timestamps.",
-    tone: "Read",
-  },
-  {
-    name: "get_transcript",
-    title: "Get Transcript",
-    summary:
-      "Fetches the full spoken transcript with per-segment timestamps.",
-    tone: "Read",
-  },
-  {
-    name: "get_frames",
-    title: "Get Frames",
-    summary:
-      "Fetches frame images at given timestamps as image content, defaulting to high resolution.",
-    tone: "Read",
-  },
+  { name: "upload_video", title: "Upload video", summary: "Starts or completes a file upload for indexing. Use only a file you own or are authorized to use.", cost: "500 units per indexed video", access: "Write" },
+  { name: "get_video_status", title: "Check video status", summary: "Reports whether a video is queued, processing, ready, or failed.", cost: "No units", access: "Read" },
+  { name: "list_videos", title: "List your videos", summary: "Lists videos available to the connected account.", cost: "No units", access: "Read" },
+  { name: "search_video", title: "Find a moment", summary: "Finds timestamped matches in a ready video using a text query.", cost: "1 unit per query", access: "Read" },
+  { name: "get_transcript", title: "Read a transcript", summary: "Retrieves spoken content with timestamps, optionally for a selected time range.", cost: "1 unit per call", access: "Read" },
+  { name: "get_frames", title: "Inspect frames", summary: "Retrieves images at selected timestamps. High-resolution retrieval may fall back to stored thumbnails when the source is no longer retained.", cost: "1 unit per thumbnail call (up to 25 timestamps); 5 per high-resolution call (up to 8)", access: "Read" },
 ];
 
-const prompts = [
-  {
-    name: "lecture_notes",
-    title: "Lecture Notes",
-    summary:
-      "Guided workflow that turns an indexed lecture video into polished Markdown study notes: transcript, then board-moment frames, then structured LaTeX notes.",
-  },
+const promptExamples = [
+  { prompt: "List my ready videos, then help me understand one key idea from a lecture, with a timestamp and a frame where available.", expectation: "Choose an available video, retrieve a small amount of evidence, and explain the idea with its source timestamp." },
+  { prompt: "Explain this diagram at 03:43 in video <video_id>. What does each part mean?", expectation: "Inspect the actual frame and nearby transcript, distinguish visible labels from interpretation, and identify anything unreadable." },
+  { prompt: "Turn this indexed lecture into study notes with the main takeaways and source timestamps.", expectation: "Use transcript evidence and selected frames. In clients that support MCP prompts, the user can also invoke lecture_notes." },
+  { prompt: "Help me study this idea using the evidence we already retrieved.", expectation: "Continue the explanation or a practice question using existing evidence when more video retrieval is unavailable." },
 ];
 
 export default function DevelopersPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-16">
       <div className="rounded-3xl border border-zinc-200 bg-surface-card p-8 shadow-sm dark:border-zinc-800">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-accent">
-          Developers
-        </p>
-        <h1 className="mt-3 font-heading text-4xl font-bold">
-          Build with Video Moment Finder
-        </h1>
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-accent">Video learning and developer access</p>
+        <h1 className="mt-3 font-heading text-4xl font-bold">Connect Video Moment Finder</h1>
         <p className="mt-4 max-w-3xl text-lg text-zinc-600 dark:text-zinc-400">
-          OAuth-protected Claude connector plus a public REST API and CLI for
-          upload, indexing, and text search.
+          Bring your indexed videos into a supported app to understand a lecture,
+          inspect a diagram, or find a specific explanation. The connection uses
+          your Video Moment Finder account and its available API units.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3 text-sm">
-          <Link
-            href="/skill.md"
-            className="rounded-lg bg-accent px-4 py-2 font-medium text-white"
-          >
-            Read /skill.md
-          </Link>
-          <a
-            href="https://api.videomomentfinder.com/openapi.json"
-            className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900"
-          >
-            OpenAPI schema
-          </a>
-          <Link
-            href="/dashboard/api"
-            className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900"
-          >
-            API dashboard
-          </Link>
+        <div className="mt-6 flex flex-wrap gap-4 text-sm">
+          <a href="#connect" className="rounded-lg bg-accent px-4 py-2 font-medium text-white">Connection steps</a>
+          <Link href="/skill.md" className="rounded-lg border border-zinc-300 px-4 py-2 dark:border-zinc-700">Public integration reference</Link>
         </div>
       </div>
 
+      <section id="connect" className="mt-12 rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+        <h2 className="font-heading text-2xl font-bold">Connect your account</h2>
+        <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
+          {connectorSteps.map((step) => <li key={step}>{step}</li>)}
+        </ol>
+        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+          This is a client-neutral remote MCP server with OAuth authorization-code
+          and PKCE. Apps that support dynamic client registration can register
+          automatically. Keep tokens and client secrets out of chat and public documents.
+        </p>
+      </section>
+
       <section className="mt-12 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
-          <h2 className="font-heading text-2xl font-bold">Claude Connector</h2>
+        <div>
+          <h2 className="font-heading text-2xl font-bold">Tools and operation costs</h2>
           <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-            The remote MCP server is available at{" "}
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-              https://api.videomomentfinder.com/mcp
-            </code>
-            . It uses OAuth 2.0 authorization-code + PKCE and bills against
-            Developer Pack API units.
+            Default rates are shown below. The approval screen reports the configured
+            rates for your connection. Frame retrieval is charged per call, not per frame.
           </p>
           <div className="mt-5 space-y-3">
             {tools.map((tool) => (
-              <div
-                key={tool.name}
-                className="rounded-2xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/40"
-              >
+              <div key={tool.name} className="rounded-2xl border border-zinc-200 bg-surface-card p-4 dark:border-zinc-800">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                      {tool.title}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      <code>{tool.name}</code>
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                    {tool.tone}
-                  </span>
+                  <h3 className="font-medium">{tool.title}</h3>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs dark:bg-zinc-800">{tool.access}</span>
                 </div>
-                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-                  {tool.summary}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <h3 className="mt-6 font-heading text-lg font-bold">MCP Prompts</h3>
-          <div className="mt-3 space-y-3">
-            {prompts.map((prompt) => (
-              <div
-                key={prompt.name}
-                className="rounded-2xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/40"
-              >
-                <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                  {prompt.title}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  <code>{prompt.name}</code>
-                </p>
-                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-                  {prompt.summary}
-                </p>
+                <p className="mt-1 text-xs text-zinc-500"><code>{tool.name}</code></p>
+                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{tool.summary}</p>
+                <p className="mt-2 text-sm font-medium">{tool.cost}</p>
               </div>
             ))}
           </div>
         </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
-          <h2 className="font-heading text-2xl font-bold">Developer Pack</h2>
-          <p className="mt-3 text-3xl font-bold">$20</p>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            10,000 API units
-          </p>
-          <ul className="mt-4 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <li>500 units per indexed video</li>
-            <li>1 unit per text query</li>
-            <li>1 unit per transcript fetch</li>
-            <li>1 unit per thumbnail frame call (up to 25 timestamps)</li>
-            <li>5 units per high-res frame call (up to 8 timestamps)</li>
-            <li>Required for Claude connector usage</li>
-            <li>Also powers REST API and CLI indexing/search calls</li>
-          </ul>
-
-          <div className="mt-5 rounded-xl border border-zinc-200 bg-white/80 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950/40">
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">
-              What a workflow costs
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+            <h2 className="font-heading text-xl font-bold">Start with one useful result</h2>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              List your ready videos first, then choose one idea to explain. At the
+              default rates, one transcript retrieval plus one thumbnail call uses
+              2 API units; one transcript plus one high-resolution frame call uses
+              6. Additional searches or frame calls add to the total.
             </p>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              Index a video once for ~500 units. After that, each search or
-              transcript fetch is 1 unit, and each frame call is 1 unit
-              (thumbnail) or 5 units (high-res) &mdash; billed per call, not
-              per frame.
-            </p>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              Example &mdash; turning a lecture into study notes: ~500 units
-              the first time you index it, then typically ~6-16 units per
-              notes session (one transcript fetch plus one to three high-res
-              frame calls; minimum ~2, maximum ~21), regardless of video
-              length.
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              Indexing a new video costs 500 API units at the default rate and is
+              separate from learning with an already indexed video. Review the
+              expected cost before an upload begins.
             </p>
           </div>
-
-          <Link
-            href="/dashboard/api"
-            className="mt-5 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
-          >
-            Open API dashboard
-          </Link>
+          <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+            <h2 className="font-heading text-xl font-bold">Account allowance</h2>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              Website video credits and API units are separate balances. Connected
+              apps use API units. If your account receives a one-time verified-account
+              trial, its actual grant and shared unit balance are shown after sign-in.
+              Prior free website processing can count toward that allowance.
+            </p>
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              A trial is not available on every deployment. Signing out, reconnecting,
+              or creating a new API key does not reset an account allowance. When no
+              units remain, metered operations stop; you can keep studying evidence
+              already retrieved in your chat.
+            </p>
+          </div>
         </div>
       </section>
 
-      <section className="mt-12 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
-          <h2 className="font-heading text-2xl font-bold">Connect Flow</h2>
-          <ol className="mt-4 list-inside list-decimal space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
-            {connectorSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-            Reviewer note: keep the confidential client secret out of public
-            docs. Share review credentials only through the secure review packet
-            or environment configuration.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
-          <h2 className="font-heading text-2xl font-bold">REST API And CLI</h2>
-          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-            REST and CLI remain the canonical public contract for direct
-            programmatic use. They still authenticate with{" "}
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-              vmf_
-            </code>{" "}
-            API keys.
-          </p>
-          <ul className="mt-4 space-y-1 text-xs text-zinc-500">
-            <li>
-              <code>POST /api/v1/videos/upload</code>
-            </li>
-            <li>
-              <code>POST /api/v1/videos/{"{"}id{"}"}/search</code>
-            </li>
-            <li>
-              <code>GET /api/v1/videos/{"{"}id{"}"}/transcript</code>
-            </li>
-            <li>
-              <code>POST /api/v1/videos/{"{"}id{"}"}/frames</code>
-            </li>
-          </ul>
-          <div className="mt-5 space-y-3 text-sm">
-            <a
-              href="https://api.videomomentfinder.com/docs"
-              className="block rounded-xl border border-zinc-200 px-4 py-3 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-            >
-              Swagger UI
-            </a>
-            <a
-              href="https://api.videomomentfinder.com/openapi.json"
-              className="block rounded-xl border border-zinc-200 px-4 py-3 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-            >
-              OpenAPI schema
-            </a>
-            <Link
-              href="/skill.md"
-              className="block rounded-xl border border-zinc-200 px-4 py-3 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-            >
-              Public skill file
-            </Link>
-          </div>
-        </div>
+      <section className="mt-12 rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
+        <h2 className="font-heading text-2xl font-bold">If a video or frame is unavailable</h2>
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+          Only videos accessible to the connected account can be used. Wait for a
+          queued or processing video to become ready, or choose another video if
+          processing failed. A public link does not by itself make a video available
+          through MCP. File upload requires an app that can transfer the bytes to a
+          temporary upload URL; never send your account token to that URL.
+        </p>
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+          Original video files are temporary, so playback and high-resolution frames
+          can become unavailable while transcripts and thumbnails remain. A learning
+          answer should name evidence gaps, keep source timestamps, and avoid guessing
+          details from an unreadable frame.
+        </p>
       </section>
 
       <section className="mt-12">
-        <h2 className="font-heading text-2xl font-bold">Example Prompts</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <h2 className="font-heading text-2xl font-bold">Try a learning prompt</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {promptExamples.map((example) => (
-            <div
-              key={example.prompt}
-              className="rounded-2xl border border-zinc-200 bg-surface-card p-5 dark:border-zinc-800"
-            >
-              <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                {example.prompt}
-              </p>
-              <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-                {example.expectation}
-              </p>
+            <div key={example.prompt} className="rounded-2xl border border-zinc-200 bg-surface-card p-5 dark:border-zinc-800">
+              <p className="font-medium">{example.prompt}</p>
+              <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{example.expectation}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section className="mt-12 rounded-2xl border border-zinc-200 bg-surface-card p-6 dark:border-zinc-800">
-        <h2 className="font-heading text-2xl font-bold">Privacy And Support</h2>
+        <h2 className="font-heading text-2xl font-bold">REST API and CLI</h2>
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Source uploads are temporary and may be deleted after processing.
-          Indexed search data, transcript embeddings, and thumbnails remain
-          available while the account is active.
+          Direct programmatic requests use <code>vmf_</code> API keys instead of
+          MCP OAuth tokens. The public REST API supports upload, status, listing,
+          search, transcripts, and frames. The CLI wraps upload, status, and search.
         </p>
         <div className="mt-5 flex flex-wrap gap-4 text-sm">
-          <Link href="/privacy" className="text-accent hover:underline">
-            Privacy policy
-          </Link>
-          <Link href="/support" className="text-accent hover:underline">
-            Support
-          </Link>
-          <Link href="/dashboard/api" className="text-accent hover:underline">
-            API dashboard
-          </Link>
+          <a href="https://api.videomomentfinder.com/docs" className="text-accent hover:underline">REST API reference</a>
+          <a href="https://api.videomomentfinder.com/openapi.json" className="text-accent hover:underline">OpenAPI schema</a>
+          <Link href="/privacy" className="text-accent hover:underline">Privacy policy</Link>
+          <Link href="/support" className="text-accent hover:underline">Support</Link>
         </div>
       </section>
     </div>

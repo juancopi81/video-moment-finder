@@ -174,7 +174,7 @@ function ApiDashboardContent() {
         )}
 
         {/* State 1: No balance — get started */}
-        {!hasBalance && !keysLoading && (
+        {apiBillingSummary && !hasBalance && !keysLoading && (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-surface-card p-8 text-center dark:border-zinc-700">
             <h2 className="font-heading text-xl font-semibold">
               Get started with the API
@@ -205,7 +205,7 @@ function ApiDashboardContent() {
         )}
 
         {/* Balance card */}
-        {apiBillingSummary && hasBalance && (
+        {apiBillingSummary && (
           <ApiBalanceCard summary={apiBillingSummary} />
         )}
 
