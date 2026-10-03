@@ -1,233 +1,153 @@
 # VMF plugin release preparation
 
-The portable source lives in `plugins/video-moment-finder/`. Its manifest is the
-source of truth for listing text, prompts and review cases. This document records
-release gates that cannot be asserted by a source archive. Private creation,
-account connection, public draft upload, submission for review and publication
-are separate actions.
+The portable source in `plugins/video-moment-finder/` owns listing text, prompts
+and review cases. This record separates a private working package from a public
+release. Last checked: 2026-10-02 (America/Bogota).
 
-## Build and inspect the distributable
+## Current release
 
-From the repository root, with the existing development environment installed:
+Version **0.1.1** has 28 portable files and four skills. It was saved over the
+existing USER-scoped PRIVATE plugin, preserving its identity and audience.
+Read-back confirmed both manifests at 0.1.1, all four skills, the unchanged
+starter prompts, icons, and the same OAuth MCP endpoint. The installed-plugin
+page displays the selected publisher name and version.
 
 ```sh
 uv run python -m unittest discover -s scripts/plugin -p 'test_*.py'
 uv run python scripts/plugin/build_package.py
-uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.1.0.zip
+uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.1.1.zip
 ```
 
-The builder writes a ZIP and an inventory/validation report in `dist/`. Archive
-members are sorted, timestamps and file modes are normalized, and the final ZIP
-is inspected without extraction. Repeating the build with the same content
-produces identical bytes. The report checks portable manifest fields, the exact
-MCP endpoint, discoverable skills, case counts and types, PNG dimensions, local
-Markdown references, private bindings, dangerous paths, symlinks and recognizable
-credentials/signed URLs. It rejects unsupported top-level content. It cannot
-prove every source is licensed, detect every possible secret, validate a live
-server, or replace the target portal's validator. Review the final inventory too.
+ZIP SHA-256:
+`ddca03a0939c310a98b738323baaa67f164455d8a062a7a06c156c9af7f004a5`.
 
-`--submission` deliberately fails while external review facts remain unverified.
-Do not remove required fields or invent values to make that command pass. The
-portable manifest uses the Agent Plugins 1.0 schema URLs, but fetching those
-schemas and the current official policy pages is presently blocked by the
-environment's destination policy. The checked-in validator implements the
-available plugin-creator package guidance; it is not advertised as an official
-JSON Schema or portal validation result.
+The builder normalizes ordering, timestamps and modes and inspects the finished
+archive for paths, supported fields, icons, references, private bindings and
+recognizable credentials. It cannot prove all rights or live service behavior.
+The archive service adds compatibility manifests; keep those generated files
+and private identifiers out of the portable public upload.
 
-## Evidence and status, checked 2026-10-02
+Both root JSON files also passed validation against schemas downloaded directly
+from the declared Agent Plugins 1.0.0 URLs on this date. This is portable JSON
+Schema validation, not OpenAI's submission validator. `--submission` continues
+to fail on external gates; do not fabricate facts to clear it.
 
-| Stage | State | Evidence or next action |
+## Evidence and remaining gates
+
+| Area | Verified result | Remaining boundary |
 | --- | --- | --- |
-| Source and archive contract | Passed for frozen version 0.1.0, 28 files and four skills | Final archive inventory and validation report are alongside the ZIP; frozen hash below |
-| Current official requirements | Blocked | All three requested developer-document URLs returned proxy CONNECT 403; details below |
-| Package metadata | Drafted with factual gaps omitted | No invented publisher, country targeting, commerce declaration or demo URL |
-| Review cases | Drafted, not run as a saved release | Exactly five positive and three negative cases in `plugin.json` |
-| Live tool observations | Separate development evidence | Existing connection proves neither this package installation nor saved-release review cases |
-| Private package creation | Saved successfully and inspected | Stored version 0.1.0 is USER-scoped and PRIVATE; all four skills and the exact MCP endpoint were read back; private identifiers remain outside public docs |
-| End-user installation / OAuth | Unverified | No supported direct installer was exposed; package discovery did not surface the new private package. Saving it does not prove host installation or an authenticated connection |
-| Local HTML / intended-host UI / reconnect | All three HTML workflows passed local desktop/mobile browser checks; package host connection and reconnect pending | Development results/screenshots are in ignored `docs/private/vmf-learning/{render-checks,flashcard-render-checks,fourth-render-checks}/`; installing the final version remains a separate gate |
-| Local frontend smoke | Developers page passed desktop/mobile layout and menu checks; consent shell only | `docs/private/vmf-learning/frontend-checks/smoke.json`; no pricing/checkout links in the consent shell, but authentication remained loading and was not verified |
-| Tutor agent harness | Seven tutor turns with six scripted learner follow-ups | A fresh agent handled ambiguous, correct and incorrect answers, hints, generated practice, an unsupported claim and learner stop against cached evidence; this was not a real learner or installed-host test |
-| Dedicated reviewer access | Not supplied | Human supplies a suitable test account through secure dashboard fields |
-| Walkthrough recording | Script prepared; no recording or hosted URL | Follow `docs/plugin/WALKTHROUGH.md` |
-| Public draft / review / publication | Not performed | None is implied by archive creation or private installation |
-| Production trial rollout | Not performed | Trial code and migrations require a separately authorized deployment |
+| Package installation | Four skills appear in the installed sidebar; 0.1.1 metadata was read back | A clean-account installation must prove the packaged MCP connection independently of the existing custom connector |
+| Live VMF tools | Listing, status, search, transcripts, frames and one upload worked | Existing publisher account, not a dedicated reviewer account |
+| Original ingestion | One original 42-second narrated MP4: start → PUT HTTP 200 without Authorization → complete → queued → processing → ready | No second upload was attempted; this is not a long-video load test |
+| Source retrieval | Complete original transcript and three inspected 1280×720 high-resolution frames matched the lesson | Original source retention is temporary |
+| Authenticated playback | Original sample loaded and playback time advanced with no media error | Deployed `?t=27` link started at zero; the seeking implementation in this PR needs post-deployment verification |
+| Second lecture | Dot-product excerpt transferred to a guide, eight-card HTML/CSV deck and four-case Assumption Lab | Explicit 20.62–134.75-second excerpt; not full-lecture or duality coverage |
+| Visual evidence | Four actual 320×180 thumbnails inspected; ASR omissions disclosed | No inferred unreadable numbers; generated exercises stay labeled |
+| Browser checks | Guide answers and embedded images; deck navigation/answers/show-all; all four lab cases, pin and reset preserving a note; no lab console errors | Guide narrow view checked; original cloud run checked all three templates on desktop/mobile. This follow-up did not independently complete every mobile/download case |
+| CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
+| OAuth reconnect | Existing ChatGPT custom connector returned to connected state; subsequent free list succeeded | Current consent still has Claude branding; new package's independent OAuth path and fresh-account onboarding remain to verify |
+| Trial | Default-off code, unit tests and isolated migration CI prepared | No production migrations, trial grants or activation performed |
+| Reviewer cases | Exactly five positive and three negative cases packaged | Full eight-case run against a saved portal release and dedicated account remains pending |
+| Review recording | Original sample and a concrete walkthrough script are ready | No screen recording or reviewer-accessible recording URL exists |
+| Submission/publication | None performed | Developer/domain verification, account access, scans, legal attestations and release authorization remain |
 
-Frozen portable ZIP SHA-256:
-`150b90b819464de0d56eb6c520406a77a2144a3c118b85b1c941783d8e97c1aa`.
-The private package service added `.codex-plugin/plugin.json` and `.mcp.json`
-compatibility files to its stored release. The original 28 portable files were
-verified unchanged. Those service-generated files and private identifiers do
-not need to be copied into the public source archive. Private backend acceptance
-is separate from public submission validation and end-user connection testing.
+Private evidence lives under ignored `docs/private/vmf-learning/`:
+`second-lecture/` contains the real excerpt, outputs and claim audit;
+`original-fixture/` contains the original MP4, narration timing, actual live
+retrievals, guide and audit. Earlier cloud artifacts remain in their cloud
+workspace. Do not add third-party transcripts, frames, signed URLs, credentials,
+or private account identifiers to Git or the distribution ZIP.
 
-The available plugin-creator guidance requires five positive and three negative
-cases for an MCP app entering initial review, a verified recording, all four
-listing URLs, suitable reviewer access, release metadata and correct tool
-annotations. The repository's six MCP tools have explicit boolean
-`readOnlyHint`, `openWorldHint` and `destructiveHint` annotations. Upload is a
-write action that consumes units and can replace an incomplete upload record;
-the other five tools retrieve existing account data. Review these annotations
-again if the service behavior changes.
+The original fixture generator now supports Linux ffmpeg/libflite or an
+installed macOS speech voice, with an explicit font override and fail-fast checks
+for empty audio. It only creates local media; it never uploads. Generate it with:
 
-## Current requirements and monetization check
+```sh
+uv run python scripts/learning/make_fixture_video.py docs/private/vmf-learning/original-fixture
+```
 
-The user requested a fresh check of:
+On macOS, speech services may require the execution environment's supported
+permission flow. Do not weaken machine security or index repeatedly to diagnose
+local media generation. Check the final MP4 duration with ffprobe; scene timing
+can differ slightly after audio/video encoding.
 
-- <https://developers.openai.com/plugins/build/plugins>
-- <https://developers.openai.com/plugins/deploy/submission>
-- <https://developers.openai.com/plugins/plugin-guidelines>
+## Metered validation
 
-On 2026-10-02, the initial shell request could not reach the network proxy from
-the execution sandbox. A retry using the supported network-only permission
-reached the inherited proxy, which returned CONNECT 403 for each destination.
-The managed environment reports an enforced restricted policy that omits
-`developers.openai.com`. No proxy, TLS or route change was made. The Agent
-Plugins schema host was also blocked. These results establish a network-policy
-gap, not that the public URLs are broken.
+The publisher authorized at most 700 existing units and one new indexing job.
+The live account dashboard reconciled the readiness calls to **4 actual units**,
+rather than the conservative 8-unit estimate (high-resolution fallback billed as
+a thumbnail call). This follow-up used 3 units on the second lecture and 506 on
+the original ingestion/transcript/high-frame batch: **513 actual units total**.
+The account balance moved from 5,946 before this follow-up to 5,437 afterward.
+The reconnect consent confirmed deployed tariffs: indexing 500, search 1,
+transcript 1, thumbnail call 1, high-resolution call 5; list/status free.
+No credit purchase or trial grant occurred. Recheck tariffs and allowance before
+new metered work; these observations are not a permanent price guarantee.
 
-Consequently this record contains **no verified current monetization quote**.
-Do not infer approval from the lack of a citation. Reopen the exact official
-guidelines when permitted and record their date, relevant text and the resulting
-decision before public submission. The implementation keeps normal website
-checkout separate and keeps plugin-facing consent, errors, tool responses and
-onboarding free of digital-credit purchase or upgrade promotion. The plugin
-does not purchase, top up or automatically refill units. Its informational
-unit accounting and prepared trial do not constitute an approval under a policy
-we could not read live.
+## Publisher and current policy
 
-The publisher must confirm the truthful commerce declaration required by the
-current portal, including the relationship between free trial usage, existing
-unit balances and any independent website purchases. `review.commerce` and
-`review.commerce_description` are intentionally absent until the correct portal
-type and declaration are known. Omission is a review gap, not a declaration that
-the business has no paid service.
+The publisher selected **Juan Carlos Pineros** and **all platform-supported
+countries**. The manifest now has that author/developerName and explicitly sets
+`publication.countries: []`. The selected name is not proof of identity
+verification: the directory ultimately uses the verified identity chosen in the
+portal.
 
-## Listing and policy references
+Official guidance was accessible in the follow-up environment and was checked:
+[submission requirements](https://developers.openai.com/plugins/deploy/submission)
+and [commerce guidance](https://developers.openai.com/plugins/plugin-guidelines#commerce-and-monetization).
+The earlier cloud destination-policy failure is resolved as an evidence gap.
 
-These exact URLs are backed by existing route source and are stored in
-`extensions.com.openai.interface`. Their live contents and anonymous access
-could not be verified because the VMF destination was also blocked by CONNECT
-403. An HTTP status alone would not suffice; inspect the actual content after
-access is available.
+Current guidance allows access through an existing paid account, while prohibiting
+digital-credit sales, upgrade promotion and checkout initiation through a plugin.
+An informational entitlement explanation can be appropriate. Accordingly,
+`review.commerce` is false **for this plugin's actions**, with an explicit
+description of the separate website's paid credit/unit service and the inactive
+trial. This is a factual draft declaration, not a legal attestation or review
+approval. Check the complete deployed flow before submission.
 
-| Field | URL | Local source / live status |
+## Anonymous listing URLs
+
+All four exact URLs were accessible, and their returned content was inspected.
+They are still the older production pages, not the updated source in this PR.
+
+| URL | Current evidence | Release action |
 | --- | --- | --- |
-| `websiteURL` | <https://www.videomomentfinder.com/developers> | `frontend/src/app/developers/page.tsx`; live verification pending |
-| `supportURL` | <https://www.videomomentfinder.com/support> | `frontend/src/app/support/page.tsx`; contains support contact; live verification pending |
-| `privacyPolicyURL` | <https://www.videomomentfinder.com/privacy> | `frontend/src/app/privacy/page.tsx`; live coverage verification pending |
-| `termsOfServiceURL` | <https://www.videomomentfinder.com/terms> | `frontend/src/app/terms/page.tsx`; live coverage verification pending |
+| [Website](https://www.videomomentfinder.com/developers) | Old Claude-specific connection steps and paid Developer Pack promotion | Deploy neutral informational source and inspect it again |
+| [Support](https://www.videomomentfinder.com/support) | Public support contact and FAQs | Verify updated unit/source-retention wording after deployment |
+| [Privacy](https://www.videomomentfinder.com/privacy) | Public policy; old production wording lacks the explicit transcript/connected-app disclosure added here | Authorized publisher reviews the policy changes before deployment |
+| [Terms](https://www.videomomentfinder.com/terms) | Public terms; old credit terminology | Verify API-unit and connected-app terms added here after deployment |
 
-Before release, ensure the published policy covers account authentication,
-OAuth grants, video transcripts/frames, processors, retention, deletion, and
-usage accounting truthfully. The accompanying source changes now disclose
-transcripts, OAuth connection/token-hash records, trial/usage accounting, and
-data returned to authorized apps. They distinguish website credits from API
-units and remove the inaccurate blanket claim of no third-party sharing.
-Source changes do not publish those policy updates. Have the publisher review
-the final policy commitments.
-The support page must offer an actual functioning contact path; no test support
-message has been sent during this work.
+The website's independent purchase flow is separate from plugin-facing
+consent/errors/outputs. Public accessibility alone does not clear policy review.
+Tool annotations and the consent surface must describe actual deployed behavior.
 
-The 512×512 listing PNG and 192×192 composer PNG are copied from existing VMF
-branding. They are below 5 MiB, have a legible play/time silhouette, and do not
-need a new publisher identity. Optional dark-mode assets and brand colors are
-omitted; their omission is not a release blocker. No author/developer name is
-inferred from the repository maintainer or website footer. Confirm the intended
-verified individual or business and use the matching portal identity.
+## Finish release in this order
 
-## Review fixtures and case execution
+1. Review PR #91 and the default-off rollout in `docs/DEPLOYMENT.md`. Production
+   database migrations, backend/frontend deployment and trial activation remain
+   separate authorized actions. Apply schema before the dependent backend.
+   Validate in staging or an equivalent isolated deployment first; local
+   migration tests are not a staging OAuth test.
+2. Verify deployed neutral consent, informational listing pages and timestamp
+   playback. Test the packaged server in a clean intended-host account rather
+   than relying on the publisher's existing custom connector.
+3. Provide a dedicated reviewer account with authorized sample material and
+   enough units. It must work without the publisher's personal Google login,
+   phone, mailbox or private network. Store access details only in the secure
+   portal fields. The original sample can be reused with authorized provisioning;
+   do not silently consume another indexing job from the exhausted one-job test
+   allowance.
+4. Record the real walkthrough in `docs/plugin/WALKTHROUGH.md`, verify the
+   finished video and reviewer-accessible hosting, then add the actual
+   `review.demo_recording_url`. No recording API is exposed in this local
+   browser-control session; screenshots and a script do not substitute for it.
+5. Build and inspect the exact final ZIP, then perform the separately authorized
+   public-draft upload. Check imported fields, category, connection, five positive
+   and three negative cases, required scans, domain and developer verification.
+6. The authorized developer completes legal/policy attestations. Submit for
+   review only after authorization; publication after approval is another action.
 
-The five positive cases cover one authorized ingestion, an HTML study guide,
-flashcards/CSV export, multi-turn tutoring and an Assumption Lab. The three
-negative cases cover video editing/publishing, purchasing units and identifying
-an unknown person. They use natural prompts, explicit tool expectations and
-observable pass conditions. See the exact draft in `plugin.json`.
-
-| Case | Initial status | Required evidence to change the status |
-| --- | --- | --- |
-| P1 ingestion | Not run as a release review case | Actual attachment → start/PUT/complete/status, account units, resulting ID and status; no secret upload URL in notes |
-| P2 study guide | Not run as a release review case | Actual tools/arguments, inspected frame, rendered artifact, explicit coverage and five-claim audit |
-| P3 flashcards | Not run as a release review case | Reused evidence, focused deck, working review format and round-trip export validation |
-| P4 tutor | Not run as a release review case | Correct, incorrect and ambiguous response transcripts with grounded adaptation |
-| P5 Assumption Lab | Not run as a release review case | All discrete combinations; reference pinning, baseline reset and comparison-note export; audit of outcomes/assumptions/evidence |
-| N1 video editing | Not run as a release review case | Clear limit, no VMF calls and no fabricated edit/publication |
-| N2 commerce | Not run as a release review case | Clear limit, no tool/checkout/top-up/upgrade action |
-| N3 identification | Not run as a release review case | Clear limit, no identification lookup or VMF tool call |
-
-Use original, redistribution-safe sample data. The portable vector fixture is a
-local explanatory example; it is not already indexed in every review account.
-The reviewer account needs its own ready sample and known UUID. An original
-41.37-second narrated vector fixture (440,919 bytes) has been prepared locally
-with `scripts/learning/make_fixture_video.py`; it has not been uploaded while
-the effective tariff is awaiting confirmation. Its current local development
-copy is in ignored `docs/private/vmf-learning/ingestion-fixture/`. It is original
-material, but no public attachment URL or successful ingestion is claimed.
-P1 may provide that sample once; do not fabricate an attachment URL or reuse the owner's
-private lecture library as reviewer access. Keep real third-party lecture
-evaluation artifacts only in ignored `docs/private/vmf-learning/`, never in the
-package or Git. Never include full third-party transcripts, signed source URLs,
-access tokens, passwords or reviewer-account details in this document.
-
-Development tests may substantiate a workflow without counting as a saved-release
-portal case. When a case is actually run, record Passed, Failed, Blocked or Not
-run with concrete observations and the package version/hash. Do not add arbitrary
-test-status fields to the manifest. A supported workflow that fails due to
-authentication or units needs an honest recovery check; it is not one of the
-three out-of-scope negative cases.
-
-Development browser checks passed at desktop width 1440 and mobile width 390 for
-the private real-lecture study guide, an eight-card flashcard deck, and a four-case
-Assumption Lab. Screenshots were visually inspected. Checks covered embedded
-frames, keyboard/hint interactions and the guide's teaching slider; deck
-navigation and a downloaded CSV parsed as nine rows including its header; and
-lab case selection, pinning, reset and a downloaded comparison note. There were
-no JavaScript page errors. These observations do not establish an external
-flashcard import, private-plugin installation, host connection/reconnect or a
-real learner tutoring session. The bundled tutor response scenarios are authored
-simulations and are labeled accordingly. Separately, a fresh tutor agent was
-exercised through seven tutor turns with six scripted learner follow-ups covering ambiguous, correct and incorrect
-answers, hint requests, a generated 64-cell calculation, an unsupported
-temperature claim and a learner stop. The actual transcript is preserved in
-ignored `docs/private/vmf-learning/simclr-tutor-agent-harness.md`. This checks
-model behavior in that harness; it does not establish real-learner outcomes or
-an authenticated installed-host experience. Final repository checks and the
-resolved independent review are recorded in `STATUS.md`.
-
-The local frontend smoke also passed `/developers` at desktop and 390px mobile
-width, with no horizontal overflow and a working mobile menu. The consent route
-served its shell with HTTP 200 and no pricing or checkout links. Its authentication
-state remained loading, so this was not an authenticated consent, account-label,
-trial-eligibility or OAuth round-trip check. Local rendering does not verify the
-currently published listing pages.
-
-## Remaining preparation in order
-
-1. Confirm the intended verified publisher, supported countries (or explicitly
-   all available countries), and commerce facts. Preserve unknown fields as
-   absent; do not use empty country or translation collections accidentally.
-2. Verify the published listing URLs, policy coverage and current official
-   guidelines. Reconcile any policy rule with the final deployed service and
-   package. Check category availability in the actual portal.
-3. Open the already-created private package and install/connect it through the
-   intended host's supported flow; reuse this identity rather than creating a
-   duplicate. Complete OAuth and run the host
-   workflows, including reconnect and missing-unit handling. No credentials may
-   be extracted or stored in source.
-4. Prepare a dedicated reviewer account with sufficient test units and authorized
-   sample data, then verify reviewers can sign in without the publisher's phone,
-   mailbox or private network. Put its login URL, tenant and exact instructions
-   only in secure portal fields. Do not invent or publicly distribute them.
-5. Rehearse, record and verify the real walkthrough described in
-   `docs/plugin/WALKTHROUGH.md`. Host it with reviewer access, verify playback
-   without private login, write the actual `review.demo_recording_url`, and
-   rebuild and inspect the final ZIP.
-6. When separately authorized, upload a public draft through the intended
-   organization. Connect the actual MCP server through the portal OAuth flow,
-   inspect imported metadata and target country settings, and run all eight
-   cases against the saved version. Check required scans and domain/developer
-   verification in the current portal. Preserve portal-generated app bindings
-   in the saved release, while keeping them out of author-supplied public ZIPs.
-7. The authorized publisher completes legal/policy attestations. Submission for
-   review and publication of an approved release each require their own
-   authorization. Neither action is part of this implementation handoff.
+To retrieve the earlier cloud examples, ask that agent to attach its final
+real-lecture HTML files, CSV, tutor transcript and ZIP as downloadable chat files,
+excluding credentials and signed URLs. The cloud's workspace paths alone are
+not local downloads.

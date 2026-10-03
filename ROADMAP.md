@@ -51,9 +51,9 @@
 ### 7.6 Agent Productization on Evidence
 
 - Improve the current API, CLI, and OAuth MCP onboarding without adding broad new agent surface area.
-- Validate private installation and reviewer onboarding for the portable learning plugin and existing six-tool MCP flow.
-- Complete the original-video ingestion and second-lecture transfer checks once current account tariffs/allowance are confirmed.
-- Recheck current public-directory policies, finish reviewer access and the actual walkthrough recording, and complete publisher/domain verification before submission.
+- Validate the portable package's independent MCP connection in a clean host account and complete dedicated reviewer onboarding.
+- Verify deployed neutral consent, updated listing/policy pages and timestamp playback after an authorized rollout.
+- Finish reviewer access and the actual walkthrough recording, then complete saved-release cases and publisher/domain verification before submission.
 - Review trial migrations and legacy allowance reconciliation before a separately authorized production rollout; reconnect must not grant another allowance.
 - Validate repeated successful Claude connector sessions before broader promotion or MCP expansion.
 

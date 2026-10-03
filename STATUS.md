@@ -73,6 +73,8 @@ Authoring rules:
 | 2026-10-02 | Phase 7 | Learning release validation and independent review     | Passed locally | Full check passed: 672 Python tests including 17 isolated PostgreSQL cases, 13 archive tests, seven frontend tests, lint and normal 18-page build; accounting review findings resolved. |
 | 2026-10-02 | Phase 7 | Learning experience checks                             | Partial live coverage | Audited one real lecture excerpt across all four skills; three HTML outputs passed desktop/mobile browser checks and tutoring passed a seven-turn agent harness; ingestion, second lecture and installed-host OAuth remain pending. |
 | 2026-10-02 | Phase 7 | Public review preparation                              | Blocked externally | Listing, five positive/three negative cases and recording script prepared; current official policies and live listing URLs blocked by destination policy, while reviewer/publisher/recording facts remain outstanding in docs/plugin/SUBMISSION.md. |
+| 2026-10-02 | Phase 7 | Private release follow-up                             | Validated with release gates | Saved 0.1.1 under the same private identity with publisher/country metadata; official portable schemas passed. Indexed one original narrated lesson, verified full transcript/high-resolution frames/playback, tested a second lecture and reconnected the existing ChatGPT connector. Live policy/page access is restored; production pages still need the prepared updates. Exact remaining gates are in docs/plugin/SUBMISSION.md. |
+| 2026-10-02 | Phase 7 | Local follow-up validation                            | Passed; isolated DB run in CI | 669 Python tests passed and 17 opt-in PostgreSQL tests skipped locally because Docker was unavailable; 13 archive tests, seven frontend checks and lint passed. Normal frontend build passed after the supported network permission allowed its existing Google Fonts requests. Added nine fixture portability/empty-audio tests; no production dependency added. |
 
 ## Blockers
 
@@ -106,5 +108,5 @@ Authoring rules:
 | Single embed latency      | -       | 0.1317s     | Batch=8 benchmark sample. |
 | Model load time           | -       | ~25.7s      | Cold container start baseline. |
 | Embedding dimension       | -       | 2048        | Qwen3-VL-Embedding-2B output vector size. |
-| Learning development API use (2026-10-02) | ≤700 units, ≤1 new index | Conservative 8 units, 0 new indexes | Readiness retrieval reused across four artifacts; actual receipts unavailable. Further metered work paused pending effective tariff/balance confirmation. |
-| Portable package reproducibility (0.1.0) | Identical bytes | 28 files, 444700 bytes | SHA256 `150b90b819464de0d56eb6c520406a77a2144a3c118b85b1c941783d8e97c1aa`; final archive matches the saved private release. |
+| Learning development API use (2026-10-02) | ≤700 units, ≤1 new index | 513 actual units, 1 new index | Live ledger reconciled readiness 4 + second lecture 3 + original lesson 506. Reconnect added no grant; available balance 5,437. |
+| Portable package reproducibility (0.1.1) | Identical bytes | 28 files | SHA256 `ddca03a0939c310a98b738323baaa67f164455d8a062a7a06c156c9af7f004a5`; stored portable and generated compatibility manifests verified at 0.1.1. |

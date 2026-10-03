@@ -1,14 +1,21 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "video-moment-finder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Turn indexed lectures into source-grounded study guides, flashcards, tutoring, and an Assumption Lab using timestamped transcripts and inspected frames.",
   "license": "AGPL-3.0-only",
   "homepage": "https://www.videomomentfinder.com/developers",
+  "author": {
+    "name": "Juan Carlos Pineros",
+    "email": "support@videomomentfinder.com",
+    "url": "https://www.videomomentfinder.com"
+  },
+  "repository": "https://github.com/juancopi81/video-moment-finder",
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Video Moment Finder",
+        "developerName": "Juan Carlos Pineros",
         "shortDescription": "Learn from lecture evidence",
         "longDescription": "Learn from lectures already indexed in your Video Moment Finder account. Create responsive HTML study guides, review flashcards and export CSV, work with a conversational tutor, and compare a rule's assumptions in an interactive Assumption Lab. The lab compares a finite set of reviewed cases, showing which conclusions the source supports and which remain unknown. The workflows reuse timestamped transcript excerpts and inspected video frames, cite their sources, and distinguish lecture evidence from generated explanations and practice. Connect your VMF account through OAuth. VMF can list and check videos, search moments, retrieve transcripts and frames, and index an authorized video through the supported upload flow. Retrieval and indexing use your account's API units; account state and available units determine which operations can run. No payment or credit purchase is performed by this plugin. Missing sources, unclear visuals, partial coverage, and unavailable units are stated explicitly. Learning artifacts are created in the host; VMF does not provide a persistent learning-management system or spaced-repetition scheduler.",
         "category": "Productivity",
@@ -26,6 +33,8 @@
         "composerIcon": "./assets/composer-icon.png"
       },
       "review": {
+        "commerce": false,
+        "commerce_description": "The plugin does not sell products, purchase or refill units, initiate checkout, or promote paid upgrades. VMF metered operations use the connected account's existing API-unit balance. The separately operated VMF website sells processing credits and API units independently. A configurable once-only verified-account allowance is implemented but disabled by default; installing or reconnecting the plugin does not activate it. Exhausted-unit responses explain the entitlement limit without a purchase link.",
         "test_cases": {
           "positive": [
             {
@@ -76,7 +85,8 @@
         }
       },
       "publication": {
-        "release_notes": "Initial VMF learning package: timestamped HTML study guides, flashcard review and CSV export, conversational tutoring, and an Assumption Lab for comparing reviewed cases and a rule's limits using the existing OAuth MCP tools."
+        "countries": [],
+        "release_notes": "Four learning workflows using the existing OAuth MCP tools: timestamped HTML study guides, flashcard review and CSV export, conversational tutoring, and an Assumption Lab. This private revision adds publisher and worldwide-availability metadata and documents the external paid-account relationship. Public release and the trial remain inactive pending review."
       }
     }
   }

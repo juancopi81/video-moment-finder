@@ -5,12 +5,14 @@ Use the final private development installation in the intended host; do not
 upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
-Preparation status: the private version 0.1.0 package has been saved and its
-stored files inspected. Host installation and authenticated OAuth are still
-unverified. Use that existing private package for the walkthrough; do not create
-another one. Local browser checks passed for all three HTML artifacts and the
-developers page, but the consent shell's authentication remained loading. Those
-checks are not a recorded demonstration of a connected plugin.
+Preparation status: private version 0.1.1 is saved and appears installed with four
+skills. The existing custom connector passed OAuth reconnect and authenticated
+calls; a clean-account connection using the packaged MCP server remains a
+separate check. One original 42-second lesson was indexed, its full transcript
+and three high-resolution frames inspected, and authenticated playback tested.
+Reuse that sample for rehearsal. Do not create a duplicate package or index
+again just for a cleaner take. Current production consent still has Claude
+wording, so record the neutral flow after the authorized deployment.
 
 ## Prepare the actual recording
 
@@ -30,7 +32,8 @@ checks are not a recorded demonstration of a connected plugin.
    with recording is available, it can perform the visible walkthrough within
    the user's authorization. Otherwise start your own screen recorder and follow
    this script. The current cloud environment has no exposed Computer/recording
-   capability; its screenshots are not a finished demo.
+   capability; the local follow-up browser controller also exposes no recording
+   API. Neither environment's screenshots are a finished demo.
 
 ## A concise 4–6 minute sequence
 

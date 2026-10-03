@@ -147,7 +147,7 @@ def validate_archive(archive: Path, *, submission: bool = False) -> dict:
         require(len({" ".join(str(p).split()) for p in prompts}) == len(prompts), "Default prompts must be unique")
     for field in ("websiteURL", "supportURL", "privacyPolicyURL", "termsOfServiceURL"):
         require(_https(interface.get(field)), f"{field} needs an absolute HTTPS URL without credentials")
-    gaps.append("Live listing URL accessibility/content and current official policy requirements require external verification")
+    gaps.append("Deployed-service compliance and release evidence require checks outside this archive; see docs/plugin/SUBMISSION.md")
 
     for field, minimum in (("logo", 256), ("composerIcon", 48), ("logoDark", 256), ("composerIconDark", 48)):
         if field.endswith("Dark") and field not in interface:
