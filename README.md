@@ -39,12 +39,14 @@ Current transcript scope:
 ## Learn from an indexed lecture
 
 The [portable VMF plugin](plugins/video-moment-finder/README.md) reuses the same
-transcript, search, and frame tools across four experiences:
+transcript, search, and frame tools across five experiences:
 
 - Responsive HTML study guides with source timestamps and inspected visuals.
 - Flashcard review and an importable CSV with cited answers.
 - A conversational tutor that asks one question at a time.
-- An Assumption Lab for comparing what-if cases and finding a rule's limits.
+- Interactive Playgrounds with computed models or reviewed assumption cases.
+- Presentations for learning, teaching or work, with source notes, HTML previews
+  and editable PowerPoint export when the host supports it.
 
 Start with “Make a study guide from this lecture,” then reuse its evidence for
 cards or tutoring. Whole-lecture and excerpt coverage are stated explicitly.

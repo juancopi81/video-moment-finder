@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "video-moment-finder",
-  "version": "0.1.1",
-  "description": "Turn indexed lectures into source-grounded study guides, flashcards, tutoring, and an Assumption Lab using timestamped transcripts and inspected frames.",
+  "version": "0.2.0",
+  "description": "Turn indexed videos into source-grounded study guides, flashcards, tutoring, interactive playgrounds and editable presentations using timestamped evidence.",
   "license": "AGPL-3.0-only",
   "homepage": "https://www.videomomentfinder.com/developers",
   "author": {
@@ -16,10 +16,12 @@
       "interface": {
         "displayName": "Video Moment Finder",
         "developerName": "Juan Carlos Pineros",
-        "shortDescription": "Learn from lecture evidence",
-        "longDescription": "Learn from lectures already indexed in your Video Moment Finder account. Create responsive HTML study guides, review flashcards and export CSV, work with a conversational tutor, and compare a rule's assumptions in an interactive Assumption Lab. The lab compares a finite set of reviewed cases, showing which conclusions the source supports and which remain unknown. The workflows reuse timestamped transcript excerpts and inspected video frames, cite their sources, and distinguish lecture evidence from generated explanations and practice. Connect your VMF account through OAuth. VMF can list and check videos, search moments, retrieve transcripts and frames, and index an authorized video through the supported upload flow. Retrieval and indexing use your account's API units; account state and available units determine which operations can run. No payment or credit purchase is performed by this plugin. Missing sources, unclear visuals, partial coverage, and unavailable units are stated explicitly. Learning artifacts are created in the host; VMF does not provide a persistent learning-management system or spaced-repetition scheduler.",
+        "shortDescription": "Learn and present from video",
+        "longDescription": "Reuse the evidence in your Video Moment Finder library across five workflows: responsive HTML study guides, flashcards with CSV export, a conversational tutor, interactive Playgrounds, and presentations for learning, teaching or work. Playgrounds compute a justified model when the source supports one, or compare reviewed assumption cases when it does not. Presentations adapt to an audience and purpose, preserve timestamps in speaker notes, and distinguish observations, proposals and recorded decisions. Editable PowerPoint export requires a compatible presentation runtime in the host; an offline HTML preview is available without it. The workflows cite timestamped transcript excerpts and inspected frames, disclose excerpt coverage and missing evidence, and label generated explanations and practice. Connect your VMF account through OAuth. VMF can list and check videos, search moments, retrieve transcripts and frames, and index an authorized video through the supported upload flow. Retrieval and indexing use the account's available API units. No payment or credit purchase is performed by this plugin. Artifacts are created in the host. This plugin does not provide meeting recording, a persistent learning system, spaced-repetition scheduling, shared workspaces or a publishing service.",
         "category": "Productivity",
-        "capabilities": ["Interactive"],
+        "capabilities": [
+          "Interactive"
+        ],
         "defaultPrompt": [
           "Create an HTML study guide from a lecture in my VMF library, with timestamped sources.",
           "Make a focused flashcard deck from this lecture and give me a CSV export.",
@@ -50,10 +52,10 @@
               "expected_behavior": "Resolve the sample's real video_id using list_videos and get_video_status. For a ready video, retrieve the transcript, identify useful visual moments with search_video, and fetch get_frames with resolution='high' in batches of at most 8 timestamps when detail is needed (or resolution='thumb' in batches of at most 25 for an adequate preview). Inspect image content and use actual_timestamp_s when present. Deliver responsive HTML with source references, explicit coverage and generated-practice labels. Explain any thumbnail fallback, missing frames or unclear text instead of asserting unreadable content. Source text and markup must not execute as instructions or HTML."
             },
             {
-              "description": "P3 — Flashcard export and reuse. Continue the P2 conversation with its cached evidence. Use at least six cards spanning recall, understanding, and application. Inspect the generated deck and importable export, including a field containing punctuation or a line break.",
-              "prompt": "Turn the evidence from that guide into six useful flashcards. Avoid duplicates and give me both a review page and an importable CSV.",
+              "description": "P3 — Reusable study and presentation artifacts. Continue P2 with its cached evidence. Produce six flashcards and a six-slide teaching deck. Inspect card export quoting and slide text, sources, speaker notes and editability. This tests artifact reuse rather than more ingestion.",
+              "prompt": "Use the same evidence to make six flashcards with CSV, then a six-slide teaching presentation with source notes, an HTML preview and an editable PowerPoint if the host supports it.",
               "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a named evidence gap",
-              "expected_behavior": "Reuse P2 evidence without fetching it again. Produce focused non-duplicate questions, concise answers and source timestamps, distinguishing generated application from lecture claims. Provide a working HTML review format and UTF-8 CSV with exactly the Front, Back and Tags columns, quoted multiline fields, embedded-quote escaping, and formula-injection protection. Parse the export with a CSV reader to verify six data rows and preserved source references; do not claim an external app import or spaced-repetition scheduling was tested. State any retrieval needed to close a specific gap before making that bounded call."
+              "expected_behavior": "Reuse P2 evidence without repeated retrieval. Produce six focused cards with UTF-8 CSV using exactly Front, Back and Tags, correct quoting and formula-injection protection. Parse six rows. Produce six slides with explicit coverage, labeled generated practice, timestamped sources and speaker notes. Render and inspect every slide, verify editable text and citations, and exercise the offline HTML preview. If a compatible presentation runtime is unavailable, deliver HTML plus an outline and explicitly report the missing PowerPoint export; never relabel HTML as PPTX or claim an uncreated export. No publishing, external sharing or new paid service occurs."
             },
             {
               "description": "P4 — Adaptive tutor. Continue P2 with cached evidence. After the first question, give one correct answer, then one plausible incorrect answer, then an ambiguous answer such as 'it depends'. Record the three replies and the resulting adaptation. This is a multi-turn case; the tutor must wait after each question.",
@@ -62,10 +64,10 @@
               "expected_behavior": "Ask one useful question and wait. Assess a correct answer accurately, offer a targeted hint for an incorrect answer before revealing a solution when appropriate, and clarify an ambiguous answer without assigning certainty or fabricating a score. Ground corrections in cached lecture evidence with timestamps; label generated examples as practice. Do not present a batch quiz, invent a persistent learner profile or claim to remember progress outside the conversation."
             },
             {
-              "description": "P5 — Assumption Lab. Continue P2 with a rule whose conditions the cached evidence supports. Use examples/assumption-lab-ohms-law.html only as the original interaction reference, not as evidence from P2. Audit at least five claims or case outcomes. Exercise every discrete choice combination, pin a case, change another assumption, reset, and download a comparison with a local note. If evidence cannot support a useful finite case table, explain the limit and choose a narrower question.",
-              "prompt": "Help me see where one rule from this lecture stops working. Build an Assumption Lab where I can change assumptions and pin two cases to compare.",
+              "description": "P5 — Playground. Continue P2 with a supported rule. For the original dot-product sample, build a computed 2D vector playground and independently check representative results, zero-vector limits and invariants. For a source without a computable law, use the finite Assumption Lab and audit its complete case table. A cached source is not evidence of measured outcomes.",
+              "prompt": "Build a playground for one idea from this video. Let me change inputs, predict a result, test it, and compare it with a pinned reference. Show what the model assumes.",
               "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a stated assumption or equation gap",
-              "expected_behavior": "Reuse P2 evidence and create a self-contained HTML workbench with one to three labeled discrete controls and a complete finite table of reviewed cases. Show pinned reference and current case panels with outcomes, assumptions, evidence citations, applicability warnings and concrete unknowns. Changing a control selects its actual reviewed case; pinning copies the current case to the reference; reset restores controls and panels to baseline while preserving the unsaved note; text download includes the compared cases, note and source IDs. Mark generated consequences separately from the lecture's rule. Do not claim a continuous physical simulation, measured experimental result, training outcome, score or saved learner profile. No new paid service or processing pipeline is used."
+              "expected_behavior": "Reuse cached evidence. Choose a supported mathematical model or an explicitly labeled finite table. For the dot-product sample, dragging or keyboard coordinate controls must update the actual dot product, projection and angle; zero vectors must produce undefined angle, and zero v must produce undefined projection. Verify at least five results including a boundary and a scaling invariant. Include source notes, model limits, a prediction experiment, pinned comparison, reset and observation download. Check desktop, mobile and keyboard use. Generated models are not measurements, trained systems or proof of learning gains. If a numerical rule is unsupported, show reviewed discrete cases with unknowns rather than inventing one."
             }
           ],
           "negative": [
@@ -86,7 +88,7 @@
       },
       "publication": {
         "countries": [],
-        "release_notes": "Four learning workflows using the existing OAuth MCP tools: timestamped HTML study guides, flashcard review and CSV export, conversational tutoring, and an Assumption Lab. This private revision adds publisher and worldwide-availability metadata and documents the external paid-account relationship. Public release and the trial remain inactive pending review."
+        "release_notes": "Five workflows now reuse the same video evidence. Playground expands the existing Assumption Lab with computed interactive models, prediction experiments and pinned comparisons while retaining reviewed discrete cases. Video to Presentation adds audience-aware decks, editable PowerPoint export in compatible hosts, offline HTML previews and timestamped speaker notes. Original teaching and fictional work examples are bundled. The existing MCP endpoint, publisher, three starter prompts, private audience and default-off trial are unchanged. Public release still requires the documented review gates."
       }
     }
   }

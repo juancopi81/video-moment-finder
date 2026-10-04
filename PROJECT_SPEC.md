@@ -39,7 +39,7 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 - Top timestamped matches for a query.
 - Relevance scores.
 - Jump-to-moment playback links.
-- Portable learning artifacts: source-grounded HTML guides, flashcards, conversational tutoring, and bounded assumption experiments.
+- Portable learning artifacts: source-grounded HTML guides, flashcards, conversational tutoring, interactive playgrounds with explicit model limits, and presentations for learning, teaching or work. Editable presentation export uses the host runtime; these workflows reuse the existing video evidence service.
 
 ## MVP Scope
 

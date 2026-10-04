@@ -28,7 +28,7 @@ class PackageTests(unittest.TestCase):
         shutil.copytree(original / "assets", self.source / "assets")
         (self.source / "README.md").write_text("# Fixture package\n", encoding="utf-8")
         (self.source / "LICENSE").write_text("Fixture only\n", encoding="utf-8")
-        for skill in ("study-guide", "flashcards", "tutor"):
+        for skill in ("study-guide", "flashcards", "tutor", "assumption-lab", "presentation"):
             target = self.source / "skills" / skill / "SKILL.md"
             target.parent.mkdir(parents=True)
             target.write_text(f"---\nname: {skill}\ndescription: Use for the fixture workflow.\n---\nFixture.\n", encoding="utf-8")

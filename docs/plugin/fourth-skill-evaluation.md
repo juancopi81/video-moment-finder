@@ -1,5 +1,12 @@
 # Fourth skill experiment: Assumption Lab
 
+Update (2026-10-03): version 0.2.0 expands this skill into **Playground**. It
+adds computed models when evidence supports an equation and preserves the
+finite Assumption Lab for qualitative cases. A separate Presentation workflow
+brings the total to five. The experiment below records the original selection,
+not a limit on the current skill. No measured demand or learning-gain claim has
+been established.
+
 Decision: include **Assumption Lab** in the private package as an experimental
 workflow. It demonstrated a useful interaction that the existing study-guide
 slider does not provide: change an assumption, hold a comparison case fixed,

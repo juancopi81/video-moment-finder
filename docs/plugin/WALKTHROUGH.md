@@ -5,8 +5,8 @@ Use the final private development installation in the intended host; do not
 upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
-Preparation status: private version 0.1.1 is saved and appears installed with four
-skills. The existing custom connector passed OAuth reconnect and authenticated
+Preparation status: private version 0.2.0 contains five workflows. Playground keeps the
+existing assumption-lab skill identity, and Presentation is the fifth skill. The existing custom connector passed OAuth reconnect and authenticated
 calls; a clean-account connection using the packaged MCP server remains a
 separate check. One original 42-second lesson was indexed, its full transcript
 and three high-resolution frames inspected, and authenticated playback tested.
@@ -35,7 +35,7 @@ wording, so record the neutral flow after the authorized deployment.
    capability; the local follow-up browser controller also exposes no recording
    API. Neither environment's screenshots are a finished demo.
 
-## A concise 4–6 minute sequence
+## A concise 6–7 minute sequence
 
 | Segment | Prompt / action | Show and verify |
 | --- | --- | --- |
@@ -43,12 +43,13 @@ wording, so record the neutral flow after the authorized deployment.
 | 0:25–1:40: study guide | “Make a clear HTML study guide from my sample lecture, with useful visuals and source timestamps. Tell me what it covers.” | Actual list/status/transcript/search/frame calls; inspected image; readable HTML, coverage disclosure and working timestamp references |
 | 1:40–2:30: flashcards | “Use the same evidence to make six useful flashcards, with a review page and CSV.” | Avoid repeated VMF retrieval; reveal an answer; show one timestamp; open the real UTF-8 CSV with Front, Back and Tags columns |
 | 2:30–3:25: tutoring | “Tutor me on one important idea, one question at a time.” Then give one incorrect and one corrected answer | Tutor waits, offers a useful hint, grounds the correction and adapts; do not compress several learner turns into a fictional summary |
-| 3:25–4:30: Assumption Lab | “Show where one rule from this lecture stops working. Let me change assumptions and pin two cases to compare.” | Change a discrete choice; pin a reviewed case; compare another; show applicability warnings, unknowns and citations; reset and download a comparison note. Explain that this is a finite teaching table, not a continuous simulation |
-| 4:30–5:00: boundary | “Use my saved card to buy more VMF units and refill them automatically.” | Clear unsupported-action explanation; no VMF commerce tool, checkout or fabricated balance update |
+| 3:25–4:40: Playground | “Build a playground for one idea. Let me change inputs, predict a result and compare a pinned reference.” | Drag a vector and use keyboard controls; compare a perpendicular and zero-vector case; test doubling, pin/reset and save an observation. Show real calculations and generated-model limits. Use the discrete Assumption Lab only when the source lacks a computable rule |
+| 4:40–6:00: Presentation | “Make a six-slide teaching presentation from the same evidence, with editable PowerPoint, an HTML preview and source notes.” | Open the actual deck, show editable text and timestamped speaker notes, then navigate the HTML preview. Disclose host export limits if present. Distinguish generated practice from lecture claims |
+| 6:00–6:25: boundary | “Use my saved card to buy more VMF units and refill them automatically.” | Clear unsupported-action explanation; no VMF commerce tool, checkout or fabricated balance update |
 | Optional ingestion | Record the one original sample upload separately if not already indexed | Start → PUT without Authorization → complete → real status; accelerate idle waiting only with a visible edit disclosure |
 
-The prompts mirror the manifest cases. Update this script when the fourth skill
-selection or core behavior changes. Do not show unauthorized third-party lecture
+The prompts mirror the manifest cases. Update this script when the workflow
+behavior changes. Do not show unauthorized third-party lecture
 material publicly. If an output reveals a private source URL, keep it off screen
 or use the original sample instead. Do not start another indexing job merely
 to get a cleaner take.

@@ -1,0 +1,61 @@
+{
+  "format_version": 1,
+  "lecture": {
+    "title": "VMF original vector lab · redistribution-safe demonstration",
+    "video_id": null
+  },
+  "coverage": {
+    "kind": "synthetic",
+    "start_s": 0,
+    "end_s": 45,
+    "gaps": [
+      "Original teaching fixture, not a transcript or a live VMF retrieval. Times identify planned scenes in the accompanying reproducible fixture; generated audio timing is recorded separately by make_fixture_video.py.",
+      "No claim is made that this example has been indexed in any connected account."
+    ]
+  },
+  "sources": [
+    {
+      "id": "s-coordinate",
+      "kind": "synthetic",
+      "start_s": 0,
+      "end_s": 15,
+      "summary": "Original example: a=(3,4), b=(2,0). The dot product is 3×2 + 4×0 = 6."
+    },
+    {
+      "id": "s-perpendicular",
+      "kind": "synthetic",
+      "start_s": 15,
+      "end_s": 30,
+      "summary": "Original example: (1,0) and (0,1) are nonzero perpendicular vectors, and their dot product is zero."
+    },
+    {
+      "id": "s-boundary",
+      "kind": "synthetic",
+      "start_s": 30,
+      "end_s": 45,
+      "summary": "Original example: replacing (2,0) with (−2,0) flips the dot product with (3,4) from 6 to −6. A zero vector has zero dot product with every vector, but no defined angle."
+    }
+  ],
+  "title": "The geometry of a dot product",
+  "playground": {
+    "model": "dot-product-2d",
+    "question": "How can one number describe the relationship between two arrows?",
+    "initial": {
+      "v": [
+        3,
+        4
+      ],
+      "w": [
+        2,
+        0
+      ]
+    },
+    "citations": [
+      "s-coordinate",
+      "s-perpendicular",
+      "s-boundary"
+    ],
+    "model_limit": "A deterministic model of real two-dimensional Euclidean vectors. It computes coordinate products, signed projection and the angle directly. Coordinate controls are limited to −5 through 5; displayed values round to two decimals. This is a generated teaching model, not a measured experiment or a reconstruction of the lecturer’s exact vectors.",
+    "extension_note": "The zero-vector case and doubling experiment are generated extensions. Angle is undefined when either vector is zero. Projection onto v is undefined when v is zero. For nonzero v and w, positive scaling preserves the angle."
+  }
+}

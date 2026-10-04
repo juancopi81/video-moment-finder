@@ -2,24 +2,39 @@
 
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
-release. Last checked: 2026-10-02 (America/Bogota).
+release. Package and guidance checked: 2026-10-03 (America/Bogota). Deployed-service
+observations below are dated 2026-10-02 and have not been rerun for this artifact-only update.
 
 ## Current release
 
-Version **0.1.1** has 28 portable files and four skills. It was saved over the
-existing USER-scoped PRIVATE plugin, preserving its identity and audience.
-Read-back confirmed both manifests at 0.1.1, all four skills, the unchanged
-starter prompts, icons, and the same OAuth MCP endpoint. The installed-plugin
-page displays the selected publisher name and version.
+Version **0.2.0** has **44 portable files and five workflows**. It was saved
+over the same USER-scoped PRIVATE plugin. Read-back confirmed both root and
+compatibility manifests at 0.2.0, all five skill files, unchanged starter prompts,
+icons, publisher, worldwide targeting and OAuth MCP endpoint. The service stores
+46 files because it retains its two compatibility files. This read-back does not
+establish a new clean-account installation or live OAuth test.
+
+Playground expands the existing `assumption-lab` skill in place so installations
+do not accumulate duplicate skills. It supports computed models where justified
+and retains the finite case-table mode. Presentation is the new fifth skill.
+Editable PPTX export requires the host's presentation runtime; HTML generation
+uses Python's standard library. No production dependencies were added.
 
 ```sh
 uv run python -m unittest discover -s scripts/plugin -p 'test_*.py'
 uv run python scripts/plugin/build_package.py
-uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.1.1.zip
+uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.2.0.zip
 ```
 
 ZIP SHA-256:
-`ddca03a0939c310a98b738323baaa67f164455d8a062a7a06c156c9af7f004a5`.
+`4e05430e8b8a626b53d87dc4fd650d822e63960c8858b6255143ee5c16ece3a4`.
+
+The private review collection is `docs/private/vmf-learning/review-0.2.0/index.html`.
+Its companion ZIP is `dist/vmf-private-review-0.2.0.zip`. They include the real
+lecture guide, cards/CSV, computed playground, teaching presentation/PowerPoint,
+original work briefing/PowerPoint, finite lab and a tutor prompt/rubric. The tutor
+page is not a newly recorded conversation. Keep this third-party lecture
+collection private; the distributable package includes only original examples.
 
 The builder normalizes ordering, timestamps and modes and inspects the finished
 archive for paths, supported fields, icons, references, private bindings and
@@ -27,8 +42,9 @@ recognizable credentials. It cannot prove all rights or live service behavior.
 The archive service adds compatibility manifests; keep those generated files
 and private identifiers out of the portable public upload.
 
-Both root JSON files also passed validation against schemas downloaded directly
-from the declared Agent Plugins 1.0.0 URLs on this date. This is portable JSON
+The 0.1.1 root JSON files passed validation against schemas downloaded directly
+from the declared Agent Plugins 1.0.0 URLs on 2026-10-02. Version 0.2.0 preserves
+that structure and passes the portable archive contract. This is portable JSON
 Schema validation, not OpenAI's submission validator. `--submission` continues
 to fail on external gates; do not fabricate facts to clear it.
 
@@ -36,18 +52,20 @@ to fail on external gates; do not fabricate facts to clear it.
 
 | Area | Verified result | Remaining boundary |
 | --- | --- | --- |
-| Package installation | Four skills appear in the installed sidebar; 0.1.1 metadata was read back | A clean-account installation must prove the packaged MCP connection independently of the existing custom connector |
+| Package installation | The prior version appeared installed; 0.2.0 source and five skills were read back from the saved private release | A clean-account installation must prove the packaged MCP connection independently of the existing custom connector |
 | Live VMF tools | Listing, status, search, transcripts, frames and one upload worked | Existing publisher account, not a dedicated reviewer account |
 | Original ingestion | One original 42-second narrated MP4: start → PUT HTTP 200 without Authorization → complete → queued → processing → ready | No second upload was attempted; this is not a long-video load test |
 | Source retrieval | Complete original transcript and three inspected 1280×720 high-resolution frames matched the lesson | Original source retention is temporary |
 | Authenticated playback | Original sample loaded and playback time advanced with no media error | Deployed `?t=27` link started at zero; the seeking implementation in this PR needs post-deployment verification |
-| Second lecture | Dot-product excerpt transferred to a guide, eight-card HTML/CSV deck and four-case Assumption Lab | Explicit 20.62–134.75-second excerpt; not full-lecture or duality coverage |
+| Second lecture | Cached dot-product evidence now also drives a computed Playground and an eight-slide editable teaching presentation, alongside the existing guide, cards and finite lab | Explicit 20.62–134.75-second excerpt; not full-lecture or duality coverage |
 | Visual evidence | Four actual 320×180 thumbnails inspected; ASR omissions disclosed | No inferred unreadable numbers; generated exercises stay labeled |
 | Browser checks | Guide answers and embedded images; deck navigation/answers/show-all; all four lab cases, pin and reset preserving a note; no lab console errors | Guide narrow view checked; original cloud run checked all three templates on desktop/mobile. This follow-up did not independently complete every mobile/download case |
+| Playground 0.2.0 | Real dragging and keyboard coordinates updated calculations; presets, zero-vector limits, prediction, pin/reset and note preservation passed. Tested narrow/desktop rendering without horizontal overflow or console errors. Model invariants checked across 1,600 vector pairs | Download click produced the correct comparison text; the browser tool could not capture a download receipt, so a visible copyable text fallback is included |
+| Presentation 0.2.0 | Eight-slide lecture deck and six-slide fictional work deck exported with editable text and source notes. All 14 slides inspected. Package/geometry/font/import checks passed; reopened final-file renders were pixel-identical. HTML navigation, source-note disclosure, images and narrow layout checked | No native Microsoft PowerPoint or Google Slides execution claimed; work fixture is original fiction, not a retrieved meeting. Low-resolution lecture frames remain disclosed |
 | CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
 | OAuth reconnect | Existing ChatGPT custom connector returned to connected state; subsequent free list succeeded | Current consent still has Claude branding; new package's independent OAuth path and fresh-account onboarding remain to verify |
 | Trial | Default-off code, unit tests and isolated migration CI prepared | No production migrations, trial grants or activation performed |
-| Reviewer cases | Exactly five positive and three negative cases packaged | Full eight-case run against a saved portal release and dedicated account remains pending |
+| Reviewer cases | Exactly five positive and three negative cases packaged | P3 now covers flashcards plus a teaching deck; P5 covers Playground. A full eight-case run against a saved portal release and dedicated account remains pending |
 | Review recording | Original sample and a concrete walkthrough script are ready | No screen recording or reviewer-accessible recording URL exists |
 | Submission/publication | None performed | Developer/domain verification, account access, scans, legal attestations and release authorization remain |
 
@@ -71,7 +89,30 @@ permission flow. Do not weaken machine security or index repeatedly to diagnose
 local media generation. Check the final MP4 duration with ffprobe; scene timing
 can differ slightly after audio/video encoding.
 
+## Artifact-update verification (2026-10-03)
+
+The full local repository workflow passed: backend tests, archive tests, seven
+frontend tests, lint and the 18-page production build. After final artifact
+changes, the complete backend suite passed **686 tests**, with **17 isolated
+PostgreSQL tests skipped** because Docker was unavailable locally; the 77 plugin
+tests and 13 archive tests also passed. GitHub CI runs the PostgreSQL checks.
+See PR #91 for the exact commit and CI result.
+
+All 14 final PowerPoint slides were reimported and rendered. Their pixels matched
+the individually inspected authoring renders. Every slide retains native editable
+text and a speaker-notes part; the lecture deck contains three actual source
+frames. The public work example has no third-party assets, private identity or
+measured customer claims. This does not claim native PowerPoint execution.
+
+The portable archive was rebuilt byte-for-byte. Public examples and skill links
+resolve. The private review ZIP has 12 files and validated local links. There
+were no new production dependencies, permissions, API endpoints or data stores.
+
 ## Metered validation
+
+This 0.2.0 update made **zero VMF calls and used zero additional units or indexing
+jobs**. It reused the previously retrieved evidence. The prior cumulative usage
+below remains unchanged.
 
 The publisher authorized at most 700 existing units and one new indexing job.
 The live account dashboard reconciled the readiness calls to **4 actual units**,
@@ -92,7 +133,7 @@ countries**. The manifest now has that author/developerName and explicitly sets
 verification: the directory ultimately uses the verified identity chosen in the
 portal.
 
-Official guidance was accessible in the follow-up environment and was checked:
+Official guidance was rechecked on 2026-10-03:
 [submission requirements](https://developers.openai.com/plugins/deploy/submission)
 and [commerce guidance](https://developers.openai.com/plugins/plugin-guidelines#commerce-and-monetization).
 The earlier cloud destination-policy failure is resolved as an evidence gap.
@@ -107,7 +148,7 @@ approval. Check the complete deployed flow before submission.
 
 ## Anonymous listing URLs
 
-All four exact URLs were accessible, and their returned content was inspected.
+On 2026-10-02 all four exact URLs were accessible, and their returned content was inspected.
 They are still the older production pages, not the updated source in this PR.
 
 | URL | Current evidence | Release action |

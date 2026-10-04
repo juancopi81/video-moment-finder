@@ -1,0 +1,147 @@
+{
+  "format_version": 1,
+  "lecture": {
+    "title": "VMF original vector lab · redistribution-safe demonstration",
+    "video_id": null
+  },
+  "coverage": {
+    "kind": "synthetic",
+    "start_s": 0,
+    "end_s": 45,
+    "gaps": [
+      "Original teaching fixture, not a transcript or a live VMF retrieval. Times identify planned scenes in the accompanying reproducible fixture; generated audio timing is recorded separately by make_fixture_video.py.",
+      "No claim is made that this example has been indexed in any connected account."
+    ]
+  },
+  "sources": [
+    {
+      "id": "s-coordinate",
+      "kind": "synthetic",
+      "start_s": 0,
+      "end_s": 15,
+      "summary": "Original example: a=(3,4), b=(2,0). The dot product is 3×2 + 4×0 = 6."
+    },
+    {
+      "id": "s-perpendicular",
+      "kind": "synthetic",
+      "start_s": 15,
+      "end_s": 30,
+      "summary": "Original example: (1,0) and (0,1) are nonzero perpendicular vectors, and their dot product is zero."
+    },
+    {
+      "id": "s-boundary",
+      "kind": "synthetic",
+      "start_s": 30,
+      "end_s": 45,
+      "summary": "Original example: replacing (2,0) with (−2,0) flips the dot product with (3,4) from 6 to −6. A zero vector has zero dot product with every vector, but no defined angle."
+    }
+  ],
+  "title": "Dot products: an original teaching example",
+  "audience": "Learners of linear algebra",
+  "purpose": "Explain coordinates, sign and a boundary with original examples",
+  "slides": [
+    {
+      "title": "The geometry of a dot product",
+      "layout": "cover",
+      "body": [
+        "An original teaching example about coordinates, alignment and a boundary.",
+        "Synthetic sample, not a retrieved lecture."
+      ],
+      "citations": [
+        "s-coordinate"
+      ],
+      "origin": "generated",
+      "notes": "All examples are original fixture content. Scene times are planned teaching segments, not a live retrieval."
+    },
+    {
+      "title": "The coordinate calculation",
+      "layout": "statement",
+      "body": [
+        "Multiply matching coordinates and add.",
+        "The result is a scalar."
+      ],
+      "citations": [
+        "s-coordinate"
+      ],
+      "origin": "generated",
+      "notes": "Walk through the two products: 3×2 and 4×0.",
+      "headline": "(3, 4) · (2, 0) = 6"
+    },
+    {
+      "title": "Direction changes the sign",
+      "layout": "comparison",
+      "body": [
+        "Hold v = (3, 4) fixed. Reverse the second vector."
+      ],
+      "citations": [
+        "s-coordinate",
+        "s-boundary"
+      ],
+      "origin": "generated",
+      "notes": "Only w changes sign, so both coordinate contributions change sign.",
+      "columns": [
+        {
+          "title": "w = (2, 0)",
+          "body": "The dot product is +6. The angle is acute."
+        },
+        {
+          "title": "w = (−2, 0)",
+          "body": "The dot product is −6. The angle is obtuse."
+        }
+      ]
+    },
+    {
+      "title": "Zero can mean different things",
+      "layout": "comparison",
+      "body": [
+        "The angle interpretation requires two nonzero vectors."
+      ],
+      "citations": [
+        "s-perpendicular",
+        "s-boundary"
+      ],
+      "origin": "generated",
+      "notes": "Zero is algebraically orthogonal to every vector, while its geometric angle is undefined.",
+      "columns": [
+        {
+          "title": "(1, 0) and (0, 1)",
+          "body": "Dot product 0. Defined angle 90°."
+        },
+        {
+          "title": "(0, 0) and (2, 0)",
+          "body": "Dot product 0. Undefined angle."
+        }
+      ]
+    },
+    {
+      "title": "A prediction to test",
+      "layout": "exercise",
+      "body": [
+        "Keep v = (3, 4). Double w from (1, 0) to (2, 0).",
+        "What happens to the dot product and the angle?"
+      ],
+      "citations": [
+        "s-coordinate"
+      ],
+      "origin": "generated",
+      "notes": "Generated extension: the dot product doubles from 3 to 6, while the angle stays approximately 53.13 degrees. Use the companion playground to verify.",
+      "headline": "Same direction. Twice the length."
+    },
+    {
+      "title": "Coordinates and geometry agree",
+      "layout": "statement",
+      "body": [
+        "A dot product combines coordinate contributions into one number.",
+        "Its sign describes alignment when both vectors are nonzero."
+      ],
+      "citations": [
+        "s-coordinate",
+        "s-perpendicular",
+        "s-boundary"
+      ],
+      "origin": "generated",
+      "notes": "The generated playground computes these exact relationships. It is not a measurement of learning outcomes.",
+      "headline": "Calculate, then interpret"
+    }
+  ]
+}

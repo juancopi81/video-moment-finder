@@ -23,11 +23,11 @@ from PIL import Image
 
 PLUGIN_NAME = "video-moment-finder"
 SEMVER = r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
-CORE_SKILLS = {"study-guide", "flashcards", "tutor"}
+CORE_SKILLS = {"study-guide", "flashcards", "tutor", "assumption-lab", "presentation"}
 MAX_UNCOMPRESSED = 30 * 1024 * 1024
 TOP_LEVEL = {"plugin.json", "mcp.json", "README.md", "LICENSE", "assets", "skills", "templates", "references", "tools", "examples", ".codex-plugin"}
 FORBIDDEN_PARTS = {".git", ".env", ".app.json", "node_modules", ".venv", "__pycache__", "private", ".DS_Store"}
-TEXT_SUFFIXES = {".json", ".md", ".html", ".css", ".js", ".py", ".tsv", ".csv", ".txt", ".yaml", ".yml", ".svg"}
+TEXT_SUFFIXES = {".json", ".md", ".html", ".css", ".js", ".mjs", ".py", ".tsv", ".csv", ".txt", ".yaml", ".yml", ".svg"}
 SECRET_PATTERNS = [
     r"(?i)x-amz-(?:signature|credential)=",
     r"(?i)(?:access_token|refresh_token|client_secret)[\"']?\s*[:=]\s*[\"'][^\"'\s]{12,}",
@@ -196,7 +196,7 @@ def validate_archive(archive: Path, *, submission: bool = False) -> dict:
                 require(bool(name_match) and name_match[1].strip("\"'") == skill_name, f"{path}: frontmatter name must match directory")
                 require(bool(re.search(r"^description:\s*\S", frontmatter[1], re.M)), f"{path}: missing discoverability description")
     require(CORE_SKILLS <= skill_names, f"Missing core skills: {', '.join(sorted(CORE_SKILLS - skill_names))}")
-    require(3 <= len(skill_names) <= 4, "Expect three core skills and at most one evaluated fourth skill")
+    require(skill_names == CORE_SKILLS, "Expect the five documented VMF workflows")
 
     review = extension.get("review", {})
     if not isinstance(review, dict) or not isinstance(review.get("test_cases"), dict):

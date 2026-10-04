@@ -74,6 +74,7 @@ Authoring rules:
 | 2026-10-02 | Phase 7 | Learning experience checks                             | Partial live coverage | Audited one real lecture excerpt across all four skills; three HTML outputs passed desktop/mobile browser checks and tutoring passed a seven-turn agent harness; ingestion, second lecture and installed-host OAuth remain pending. |
 | 2026-10-02 | Phase 7 | Public review preparation                              | Blocked externally | Listing, five positive/three negative cases and recording script prepared; current official policies and live listing URLs blocked by destination policy, while reviewer/publisher/recording facts remain outstanding in docs/plugin/SUBMISSION.md. |
 | 2026-10-02 | Phase 7 | Private release follow-up                             | Validated with release gates | Saved 0.1.1 under the same private identity with publisher/country metadata; official portable schemas passed. Indexed one original narrated lesson, verified full transcript/high-resolution frames/playback, tested a second lecture and reconnected the existing ChatGPT connector. Live policy/page access is restored; production pages still need the prepared updates. Exact remaining gates are in docs/plugin/SUBMISSION.md. |
+| 2026-10-03 | Phase 7 | Playground and Presentation expansion | Implemented | Added a computed vector playground with predictions, pin/reset and observation export; reusable presentation authoring with HTML and editable PPTX, source notes and original work fixtures. Reused cached lecture evidence with zero new VMF calls. Release preparation remains in docs/plugin/SUBMISSION.md. |
 | 2026-10-02 | Phase 7 | Local follow-up validation                            | Passed; isolated DB run in CI | 669 Python tests passed and 17 opt-in PostgreSQL tests skipped locally because Docker was unavailable; 13 archive tests, seven frontend checks and lint passed. Normal frontend build passed after the supported network permission allowed its existing Google Fonts requests. Added nine fixture portability/empty-audio tests; no production dependency added. |
 
 ## Blockers
@@ -95,7 +96,7 @@ Authoring rules:
 - **Direct upload is the primary ingest path**; YouTube URL import remains best effort.
 - **Phase 7 prioritizes acquisition, activation, and monetization learning** before broader platform expansion.
 - **Study-notes generation stays agent-side first**: transcript/frames primitives and the lecture_notes MCP prompt ship with flat per-call unit pricing; a web-UI notes feature waits for dogfooding evidence.
-- **Assumption Lab is included experimentally** after comparing three prototypes; it supports finite case comparisons, with no measured demand claim. See `docs/plugin/fourth-skill-evaluation.md`.
+- **Playground expands the experimental Assumption Lab** with real computed models when justified by the evidence. Finite case comparison remains a mode. Presentation adds a fifth workflow for learning, teaching and work. Neither extension establishes measured demand or learning gains; see `docs/plugin/fourth-skill-evaluation.md`.
 - **Trial enrollment is permanent per verified account** and replaces the remaining legacy free indexing entitlement; new grants remain disabled until separately approved. Deployment and historical-account caveats live in `docs/DEPLOYMENT.md`.
 
 ## Metrics / Measurements
@@ -110,3 +111,4 @@ Authoring rules:
 | Embedding dimension       | -       | 2048        | Qwen3-VL-Embedding-2B output vector size. |
 | Learning development API use (2026-10-02) | ≤700 units, ≤1 new index | 513 actual units, 1 new index | Live ledger reconciled readiness 4 + second lecture 3 + original lesson 506. Reconnect added no grant; available balance 5,437. |
 | Portable package reproducibility (0.1.1) | Identical bytes | 28 files | SHA256 `ddca03a0939c310a98b738323baaa67f164455d8a062a7a06c156c9af7f004a5`; stored portable and generated compatibility manifests verified at 0.1.1. |
+| Portable package reproducibility (0.2.0) | Identical bytes | 44 files, 5 skills | SHA256 `4e05430e8b8a626b53d87dc4fd650d822e63960c8858b6255143ee5c16ece3a4`; private release read back, original PPTX included; zero additional VMF calls. |

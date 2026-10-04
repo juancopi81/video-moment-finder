@@ -2,7 +2,7 @@
 
 Index a lecture once, then reuse its evidence to learn. The plugin connects to your
 VMF library and helps create an HTML study guide, focused flashcards, a conversation
-with a tutor, or an Assumption Lab that compares a rule's conditions. It cites timestamped transcript
+with a tutor, an interactive Playground, or an editable presentation for learning, teaching or work. It cites timestamped transcript
 evidence and describes visuals only after inspecting the returned images.
 
 ## Connect and reach a first result
@@ -14,7 +14,8 @@ evidence and describes visuals only after inspecting the returned images.
    lecture from the returned list. If your library is empty, upload an original
    or authorized video through a supported host or the VMF website first.
 4. Reuse the evidence: “Make flashcards from that guide,” or “Tutor me on the same
-   lecture, one question at a time.” A specific gap may need extra retrieval.
+   lecture, one question at a time.” Also try “Build a playground for that idea” or “Make a teaching presentation
+   from the same evidence.” A specific gap may need extra retrieval.
 
 The endpoint is `https://api.videomomentfinder.com/mcp`, using Streamable HTTP
 and OAuth 2.0 authorization code with PKCE. The server supports dynamic client
@@ -67,10 +68,13 @@ URL expires or cannot be embedded.
 
 Flashcards include an importable CSV with documented quoting and formula protection; they do not
 provide a spaced-repetition scheduler. Tutoring adapts within the conversation
-and does not create a persistent learner profile. Assumption Lab compares a
-finite set of reviewed cases through discrete choices, pinned comparisons,
-applicability warnings and explicit unknowns. Its generated consequences are
-not measured results or a continuous physical simulation. VMF does not edit or publish videos, identify
+and does not create a persistent learner profile. Playground computes supported
+models with meaningful controls, predictions and pinned comparisons. Where the
+evidence supports only discrete cases, its Assumption Lab mode shows the finite
+reviewed table and explicit unknowns. Neither mode is a measured experiment.
+Presentations preserve sources in speaker notes and distinguish proposals from
+recorded decisions. Editable PPTX export uses a compatible host presentation
+runtime; the offline HTML preview uses only the Python standard library. VMF does not edit or publish videos, identify
 unknown people, or provide arbitrary YouTube ingestion through its MCP tools.
 
 The included original examples are redistribution-safe fixtures. They are
@@ -82,8 +86,13 @@ distributed in this package.
 
 - Open the [vector study guide](examples/vector-lab.html) and its [input](examples/vector-lab.json).
 - Review the [flashcards](examples/flashcards.html), download the [CSV](examples/flashcards.csv), and read the [import format](skills/flashcards/format.md).
+- Explore the [computed vector Playground](examples/playground.html): drag a vector, predict a change, pin a reference and download an observation.
+- Review the [teaching presentation](examples/presentation.html) and [fictional work briefing](examples/work-briefing.html), including their speaker notes. An [editable work briefing](examples/work-briefing.pptx) is also included. See the [presentation workflow](skills/presentation/SKILL.md) for editable export.
 - Try the [Assumption Lab](examples/assumption-lab-ohms-law.html): change a discrete choice, pin a case, then compare another and reset.
 - Use the [tutor scenarios](examples/tutor-scenarios.json) to rehearse correct, incorrect and ambiguous responses.
+
+The Playground uses the existing `assumption-lab` skill identity for update
+compatibility; there are exactly five workflows, not an additional duplicate lab.
 
 These examples use original synthetic lessons and run without VMF calls. The
 Assumption Lab is a small set of pre-reviewed teaching cases; its displayed
