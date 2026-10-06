@@ -13,11 +13,28 @@ and three high-resolution frames inspected, and authenticated playback tested.
 The approved production rollout completed on 2026-10-06 at `67f4c28`, including
 neutral VMF consent. By that date the original sample's temporarily retained
 source was unavailable; the timestamp page correctly explained the limitation,
-but actual timestamp seeking remained unverified. Prepare a fresh original
-sample in the dedicated reviewer account only after separate provisioning and
-indexing approval. The previous one-job indexing allowance is exhausted. Reuse
-the resulting ready sample for rehearsal and recording; do not create a duplicate
-package or index again just for a cleaner take.
+but actual timestamp seeking was unverified at that rollout checkpoint. The
+separately approved reviewer test below subsequently verified it. The previous
+publisher one-job allowance is exhausted, and the reviewer one-job allowance has
+now also been used. Reuse the ready reviewer sample for rehearsal and recording;
+do not create a duplicate package or index again just for a cleaner take.
+
+October 6 reviewer preparation is now complete for ingestion and retrieval: the
+publisher approved a once-only 2,000-unit manual allowance and a 600-unit,
+one-job agent cap. The dedicated reviewer connected, indexed the original
+42-second lesson once, and used 507 actual units total. Its balance is 1,493,
+with no API key, purchase or public trial enrollment. Full transcript, targeted
+search, three high-resolution frames and authenticated seek-to-27 playback
+passed; publisher-video access correctly returned 404. Fresh guide, six cards,
+computed Playground and six-slide editable deck are stored privately in
+`docs/private/vmf-learning/release-0.2.0/reviewer-sample/`.
+
+All six final PowerPoint slides were inspected after reopening the export. CSV,
+source references, model calculations and JavaScript syntax passed static
+checks. This browser session denies local-file HTML previews; it did not verify
+these fresh pages' interactions. Live tutor turns, negative prompts, reviewer
+reconnect, installed-version footage and the actual recording remain pending.
+Do not describe these generated artifacts as a completed eight-case live test.
 
 ## Prepare the actual recording
 

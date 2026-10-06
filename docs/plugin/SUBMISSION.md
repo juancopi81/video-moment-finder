@@ -5,8 +5,9 @@ and review cases. This record separates a private working package from a public
 release. Package and guidance checked: 2026-10-06 (America/Bogota). Historical
 production user-flow observations are dated 2026-10-02; subsequent staging and
 production database verification is dated separately below. The approved
-production code rollout and its scoped checks are recorded below; packaged
-OAuth, reviewer access and retained-source timestamp playback remain gates.
+production code rollout and subsequent reviewer ingestion/retrieval/playback
+checks are recorded below. Live review cases, recording, saved portal-release
+validation and developer declarations remain gates.
 
 ## Current release
 
@@ -55,18 +56,18 @@ to fail on external gates; do not fabricate facts to clear it.
 
 | Area | Verified result | Remaining boundary |
 | --- | --- | --- |
-| Package installation | The prior version appeared installed; 0.2.0 source and five skills were read back from the saved private release | A clean-account installation must prove the packaged MCP connection independently of the existing custom connector |
-| Live VMF tools | Listing, status, search, transcripts, frames and one upload worked | Existing publisher account, not a dedicated reviewer account |
-| Original ingestion | One original 42-second narrated MP4: start → PUT HTTP 200 without Authorization → complete → queued → processing → ready | No second upload was attempted; this is not a long-video load test |
-| Source retrieval | Complete original transcript and three inspected 1280×720 high-resolution frames matched the lesson | Original source retention is temporary |
-| Authenticated playback | Original sample loaded and playback time advanced on October 2. After rollout, `?t=27` displayed the correct source timestamp and an expired-source explanation | Original media had expired by October 6, so actual seek-to-27 playback remains unverified; provision a fresh reviewer sample with separate authorization |
+| Package installation | 0.2.0 and five skills were read back from the saved private release. On October 6 the publisher completed the requested private-plugin reviewer connection; the exposed tools switched to the empty reviewer library | Native Codex connection UI was unavailable to automation; recording must show the installed version. A saved portal-release check remains separate |
+| Live VMF tools | All six tools succeeded with the dedicated reviewer account on October 6; an attempt to access the publisher's original sample returned 404 | No public directory installation or saved portal release tested |
+| Original ingestion | A separately approved original reviewer MP4 completed start → PUT HTTP 200 without Authorization → complete → queued → processing → ready; exactly one reviewer indexing charge | 41.776 seconds; not a long-video load test. No duplicate reviewer upload attempted |
+| Source retrieval | Reviewer sample: complete two-segment transcript, targeted search and three inspected 1280×720 frames at 10, 22 and 37 seconds; no fallback or frame errors | Selected visual moments, not every frame; retained source availability throughout review still needs an operational plan |
+| Authenticated playback | Reviewer sample opened at exactly 27 seconds on October 6, then advanced to the end with no media error. The earlier publisher sample correctly explains its expired source | Source retention remains temporary; this does not establish indefinite playback |
 | Second lecture | Cached dot-product evidence now also drives a computed Playground and an eight-slide editable teaching presentation, alongside the existing guide, cards and finite lab | Explicit 20.62–134.75-second excerpt; not full-lecture or duality coverage |
 | Visual evidence | Four actual 320×180 thumbnails inspected; ASR omissions disclosed | No inferred unreadable numbers; generated exercises stay labeled |
 | Browser checks | Guide answers and embedded images; deck navigation/answers/show-all; all four lab cases, pin and reset preserving a note; no lab console errors | Guide narrow view checked; original cloud run checked all three templates on desktop/mobile. This follow-up did not independently complete every mobile/download case |
 | Playground 0.2.0 | Real dragging and keyboard coordinates updated calculations; presets, zero-vector limits, prediction, pin/reset and note preservation passed. Tested narrow/desktop rendering without horizontal overflow or console errors. Model invariants checked across 1,600 vector pairs | Download click produced the correct comparison text; the browser tool could not capture a download receipt, so a visible copyable text fallback is included |
 | Presentation 0.2.0 | Eight-slide lecture deck and six-slide fictional work deck exported with editable text and source notes. All 14 slides inspected. Package/geometry/font/import checks passed; reopened final-file renders were pixel-identical. HTML navigation, source-note disclosure, images and narrow layout checked | No native Microsoft PowerPoint or Google Slides execution claimed; work fixture is original fiction, not a retrieved meeting. Low-resolution lecture frames remain disclosed |
 | CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
-| OAuth reconnect | Existing ChatGPT custom connector reconnected on October 2; a free library call also succeeded on the new production API. Neutral VMF consent rendered after rollout | The browser check used an incomplete connection link, not a new consent flow; the package's independent OAuth path and fresh-account onboarding remain to verify |
+| OAuth reconnect | Publisher custom connector reconnected October 2. October 6 reviewer sign-in created an active production OAuth connection; real calls and account isolation passed without an API key | Reviewer reconnect, expired authorization and saved portal-release connection remain separate checks |
 | Trial | Default-off code, unit tests, isolated migration CI, hosted staging checks, approved production schema migration and approved code rollout passed | Activation remains a separate decision; the flag is absent/default-off and no trial grants were issued |
 | Reviewer cases | Exactly five positive and three negative cases packaged | P3 now covers flashcards plus a teaching deck; P5 covers Playground. A full eight-case run against a saved portal release and dedicated account remains pending |
 | Review recording | Original sample and a concrete walkthrough script are ready | No screen recording or reviewer-accessible recording URL exists |
@@ -230,13 +231,44 @@ occurred during rollout.
 The original sample link with `?t=27` rendered “Source timestamp 0:27,” but its
 temporary source media had expired. The page correctly explained that playback
 was unavailable while transcripts/thumbnails remain usable. Actual timestamp
-seeking still needs a fresh retained sample; do not claim it passed or silently
-reuse the exhausted one-job indexing allowance. Private rollout receipts and
+seeking was not verified by that rollout check. The separately approved reviewer
+test below subsequently verified it. Private rollout receipts and
 screenshots are under `docs/private/vmf-learning/release-0.2.0/`.
 
 The rollout does not establish a clean-account packaged installation, reviewer
 credentials or walkthrough, and does not activate the trial, upload a public
 draft, submit for review or publish the plugin.
+
+## October 6 reviewer validation
+
+The publisher created and signed in to a dedicated, verified-email reviewer
+account with a configured password and no MFA requirement. Credentials were not
+read, changed or stored in repository content. A separately approved manual,
+idempotent grant funded it with 2,000 units once; it was not a purchase or public
+trial enrollment. After the publisher completed the private-plugin connection,
+the exposed tools returned the empty reviewer library and production metadata
+confirmed a new active OAuth connection. No API key was created.
+
+The one approved original upload completed successfully. Actual ledger charges
+were indexing 500, transcript 1, search 1 and high-resolution frame batch 5:
+**507 of the 600-unit agent cap**, with **1,493 units remaining**. The sample's
+full spoken transcript and three actual frames were checked. Authenticated
+playback loaded at 27 seconds and advanced to the end without a media error.
+Access to the publisher's original video correctly returned 404.
+
+Fresh private guide, six-card HTML/CSV, computed Playground and six-slide
+editable presentation use this reviewer sample. Six substantive source claims,
+five independent model results, CSV structure, JavaScript syntax and the deck's
+package/geometry/font/import checks passed. Every final slide was visually
+inspected after reopening the export. These fresh HTML interactions remain
+unverified: the browser's URL policy denied local-file previews, and no alternate
+browser workaround was attempted. Live tutor/negative cases, reconnect, source
+retention throughout review and recording remain open. This is development
+evidence, not a completed eight-case run against a saved portal release.
+
+Private receipts and outputs are in
+`docs/private/vmf-learning/release-0.2.0/reviewer-sample/`; account and allowance
+receipts stay outside the ZIP and Git.
 
 ## Metered validation
 
@@ -299,15 +331,13 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 
 1. Preserve the completed schema/code rollout in `docs/DEPLOYMENT.md`; do not
    replay migrations. Trial activation is still a separate authorized action.
-2. Complete the remaining timestamp-playback and valid-consent checks using a
-   fresh retained sample. Test the packaged server in a clean intended-host
-   account rather than relying on the publisher's existing custom connector.
-3. Provide a dedicated reviewer account with authorized sample material and
-   enough units. It must work without the publisher's personal Google login,
-   phone, mailbox or private network. Store access details only in the secure
-   portal fields. The original sample can be reused with authorized provisioning;
-   do not silently consume another indexing job from the exhausted one-job test
-   allowance.
+2. Preserve the completed reviewer ingestion, retrieval, isolation and timestamp
+   playback checks. Finish live tutor/negative cases and reviewer reconnect; show
+   the installed version in the intended host. Do not re-index for rehearsal.
+3. Use the funded dedicated reviewer account and original sample. Finish access
+   instructions and a source-retention/sample-input plan for the review period.
+   Sign-in must remain independent of the publisher's social login, mailbox,
+   phone or private network. Store credentials only in secure portal fields.
 4. Record the real walkthrough in `docs/plugin/WALKTHROUGH.md`, verify the
    finished video and reviewer-accessible hosting, then add the actual
    `review.demo_recording_url`. No recording API is exposed in this local
