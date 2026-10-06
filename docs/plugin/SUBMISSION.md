@@ -159,9 +159,17 @@ The next check found that MCP SDK 1.26 rejects public-client revocation when the
 secret field is omitted. Three regression cases reproduced the failure locally.
 A narrow form-normalization fix passed full local validation (691 backend tests,
 13 archive tests, seven frontend cases, lint and build); confidential-client
-authentication and cross-client revocation restrictions remain covered. Live
-verification of that fix is pending, using synthetic token fixtures rather than
-another real-account approval. Intended-host package calls remain pending. Staging
+authentication and cross-client revocation restrictions remain covered. Commit
+`d3c3826` passed both GitHub CI runs (703 tracked backend/PostgreSQL cases,
+including all 17 isolated database cases) and deployed successfully to staging.
+All 11 follow-up revocation checks passed with disposable synthetic-account
+token fixtures: both token types invalidate the entire connection, another
+client cannot revoke it, and an unknown token returns empty success. The cleanup
+audit found zero owned fixture records; an independent read-only database audit
+confirmed all 18 application tables are empty and all 20 migrations remain applied.
+This follow-up verifies revocation
+independently; it does not claim another real-account consent flow. Intended-host
+package calls remain pending. Staging
 currently has no worker, storage, embedding or payment credentials, so these
 checks do not validate indexing or playback there.
 Trial grants remain disabled. Production has not been migrated or deployed.
