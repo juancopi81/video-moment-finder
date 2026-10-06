@@ -260,9 +260,13 @@ Fresh private guide, six-card HTML/CSV, computed Playground and six-slide
 editable presentation use this reviewer sample. Six substantive source claims,
 five independent model results, CSV structure, JavaScript syntax and the deck's
 package/geometry/font/import checks passed. Every final slide was visually
-inspected after reopening the export. These fresh HTML interactions remain
-unverified: the browser's URL policy denied local-file previews, and no alternate
-browser workaround was attempted. A subsequent live tutor behavior check used
+inspected after reopening the export. After browser automation's URL policy
+denied local-file previews, the publisher reported completing the requested
+manual preview check: guide answer reveal, flashcard reveal and advance,
+Playground input change and zero-vector preset, and presentation navigation and
+speaker notes. This is a human-reported check of those controls, not automated
+desktop/mobile coverage, a CSV download/import or native PowerPoint validation.
+The live tutor behavior check used
 five actual publisher replies, including deliberately scripted incorrect and
 ambiguous inputs. It confirmed source-cited feedback, a hint before the answer,
 an ambiguity clarification without grading, and acceptance of the clarified

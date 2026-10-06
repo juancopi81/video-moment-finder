@@ -6,9 +6,11 @@ upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
 Preparation status: private version 0.2.0 contains five workflows. Playground keeps the
-existing assumption-lab skill identity, and Presentation is the fifth skill. The existing custom connector passed OAuth reconnect and authenticated
-calls; a clean-account connection using the packaged MCP server remains a
-separate check. One original 42-second lesson was indexed, its full transcript
+existing assumption-lab skill identity, and Presentation is the fifth skill. The
+existing custom connector passed OAuth reconnect and authenticated calls; the
+dedicated reviewer subsequently connected through the private plugin as recorded
+below. Reviewer reconnect remains a separate check. One original 42-second
+lesson was indexed, its full transcript
 and three high-resolution frames inspected, and authenticated playback tested.
 The approved production rollout completed on 2026-10-06 at `67f4c28`, including
 neutral VMF consent. By that date the original sample's temporarily retained
@@ -31,8 +33,12 @@ computed Playground and six-slide editable deck are stored privately in
 
 All six final PowerPoint slides were inspected after reopening the export. CSV,
 source references, model calculations and JavaScript syntax passed static
-checks. This browser session denies local-file HTML previews; it did not verify
-these fresh pages' interactions. Five actual publisher replies subsequently
+checks. After this browser session denied local-file HTML previews, the publisher
+reported checking the four fresh pages: guide answer reveal, flashcard reveal
+and advance, Playground input change and zero-vector preset, and presentation
+navigation and notes. This is a human-reported check of these controls; broader
+interaction, mobile, download/import and native PowerPoint checks remain separate.
+Five actual publisher replies also
 completed a scripted tutor behavior check: correct feedback, a hint before the
 answer, ambiguous-input clarification and acceptance of the clarified answer.
 This was not a learning assessment and consumed zero additional units. Negative
