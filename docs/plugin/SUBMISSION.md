@@ -108,6 +108,47 @@ The portable archive was rebuilt byte-for-byte. Public examples and skill links
 resolve. The private review ZIP has 12 files and validated local links. There
 were no new production dependencies, permissions, API endpoints or data stores.
 
+## Hosted staging database verification (2026-10-05)
+
+An empty, separate Supabase staging project received all 20 repository migrations
+in one transaction. The 17 existing PostgreSQL integration cases passed against
+that hosted database, including concurrent one-time grants, spending and retry
+serialization, refunds, historical offsets, paid-credit fallback and client-role
+restrictions. A separate schema preflight passed. Synthetic accounts were removed;
+an independent audit confirmed that all 18 application tables were empty afterward
+and the migration ledger retained all 20 entries. No production data was copied,
+real-user trial enrolled, VMF tool invoked or production service changed.
+
+The staging project was created without automatic Data API table exposure. Server
+CRUD privileges and the trial owner's RLS-scoped SELECT privilege were explicit.
+This checkpoint verified the hosted database behavior; API and identity checks
+continued separately below. Private receipts and guarded test runners are under
+`docs/private/vmf-learning/release-0.2.0/`; credentials are excluded from Git and are not part of the release package.
+
+## Hosted staging API verification (2026-10-05)
+
+Railway's separate API-staging service deployed commit `d3ba818` from
+`codex/vmf-learning-plugin` to
+`https://api-staging-staging-72b8.up.railway.app` on port 8080. Its OAuth discovery
+health check passed. The first runtime started before its public domain existed;
+redeployment after domain creation resolved the issuer/resource configuration.
+
+All 20 live HTTP checks passed: API version, authorization/protected-resource
+discovery, MCP authentication challenge, authenticated empty-library retrieval
+through the real Supabase SDK, zero balance with disabled trial, free reads,
+JWT-only billing restrictions, missing evidence, CORS, dynamic client
+registration, PKCE redirect, six-tool consent metadata, authenticated-consent
+requirements, invalid-code/resource rejection and revoked-key rejection.
+Disposable client/request/key records were removed; the cleanup audit found zero
+trial grants, videos, balances or usage events. The final complete run needed no
+transport retries; earlier client probes intermittently timed out, with no root
+cause established or long-duration availability measurement.
+
+Real Clerk sign-in, approved OAuth token exchange/reconnect and intended-host MCP
+calls remain pending. Staging currently has no worker, storage, embedding or
+payment credentials, so these checks do not validate indexing or playback there.
+Trial grants remain disabled. Production has not been migrated or deployed.
+
 ## Metered validation
 
 This 0.2.0 update made **zero VMF calls and used zero additional units or indexing
