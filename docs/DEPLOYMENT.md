@@ -112,24 +112,33 @@ Signed API URLs alone do not restrict a bucket with public access enabled. Check
 the Cloudflare dashboard and actual browser delivery; a server-side request
 blocked by browser-signature filtering is not proof that objects are private.
 
-Planned rollout, pending publisher approval:
+Approved production policy (2026-10-06):
 
-1. Deploy signed search-thumbnail responses and verify website/API search.
-2. Disable the bucket's public development URL and verify anonymous source and
-   thumbnail access fails while authorized signed playback and frames still work.
-3. Change only source-object deletion from three to the proposed 30 days;
-   preserve incomplete-upload cleanup and thumbnail retention. Update user-facing
-   retention copy to the effective policy after verifying it. This change does
-   not restore already-deleted originals.
-4. Preserve the one original reviewer fixture under a separate `review-samples/`
-   prefix with a proposed 90-day deletion rule. Update only its source pointer,
-   retain its existing video ID/index and verify playback. Keep an original
-   fixture available and renew review access if review exceeds that window.
+- PR #93 deployed signed search-thumbnail responses at `ed31032` to the API,
+  worker and frontend. Website search returned five loaded signed previews.
+- The bucket's public development URL is disabled, with no public custom domain.
+  The unsigned original fixture URL returned an unauthorized response in the
+  browser. Authorized source playback and actual MCP high-resolution and
+  thumbnail frames remained available afterward.
+- Enabled rule `cleanup-source-prefix` schedules deletion of `source/` objects
+  30 days after upload, preserving its two-day incomplete-multipart cleanup.
+  Lifecycle deletion can complete later; already-deleted originals are not
+  restored. Thumbnail retention is unchanged.
+  Existing objects can still show the old expiration header while Cloudflare
+  applies the changed rule, typically within 24 hours but sometimes longer.
+  See [Cloudflare lifecycle behavior](https://developers.cloudflare.com/r2/buckets/object-lifecycles/#behavior).
+- Enabled rule `cleanup-review-samples-prefix` schedules deletion of
+  `review-samples/` objects after 90 days. The one original reviewer fixture was
+  copied there, its byte length and SHA-256 verified, and only its existing source
+  pointer updated. The object header schedules deletion on January 4, 2027.
+  Keep the original fixture available and renew review access if needed.
+- The global seven-day incomplete-multipart abort rule and CORS policy are
+  unchanged. There are no bucket locks.
 
 Do not use a bucket lock: it would prevent requested deletion. Do not re-enable
 public access as a rollback; restore signed delivery if a regression occurs.
-No storage setting, source copy or production pointer change is part of the
-local implementation validation.
+Storage settings and the reviewer pointer were changed only after separate
+publisher approval. Local implementation tests alone do not prove these settings.
 
 ## Upload Flow Contract
 
@@ -192,8 +201,10 @@ Release checkpoint (2026-10-05): both migrations were separately approved and
 applied to production after hosted staging validation. The production ledger
 records all 20 migrations; independent schema, function and permission checks
 passed, with zero trial enrollments or processing charges. Do not replay the
-already-recorded migrations. The dependent production code rollout and trial
-activation remain unapproved; details are in `docs/plugin/SUBMISSION.md`.
+already-recorded migrations. After separate publisher approval on October 6,
+PR #91 deployed successfully at `67f4c28`; the approved signed-media follow-up
+PR #93 deployed at `ed31032`. Trial activation remains unapproved and disabled;
+details and remaining public-release gates are in `docs/plugin/SUBMISSION.md`.
 
 With grants enabled, an authenticated account is enrolled on a billing summary,
 connector approval, indexing admission, or metered API operation. The backend
