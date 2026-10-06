@@ -7,6 +7,7 @@ import hashlib
 from urllib.parse import parse_qs, urlparse
 
 import anyio
+import pytest
 from fastapi.testclient import TestClient
 from mcp.server.auth.provider import TokenError
 
@@ -517,6 +518,96 @@ def test_token_exchange_refresh_rotation_and_revoke(
         )
 
     assert mcp_response.status_code == 401
+
+
+@pytest.mark.parametrize("token_type", ["access_token", "refresh_token"])
+def test_public_client_revoke_without_client_secret(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+    token_type: str,
+) -> None:
+    with TestClient(app) as client:
+        client_id = _register_public_client(client)
+        _, request_id, verifier = _start_authorization_request(
+            client, client_id=client_id, redirect_uri=LOCALHOST_REDIRECT_URI,
+        )
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+        response = _exchange_code(
+            client, code=code, verifier=verifier, client_id=client_id,
+            redirect_uri=LOCALHOST_REDIRECT_URI, client_secret=None,
+        )
+        assert response.status_code == 200
+        tokens = response.json()
+
+        response = client.post("/revoke", data={
+            "client_id": client_id,
+            "token": tokens[token_type],
+            "token_type_hint": token_type,
+        })
+        assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "no-store"
+        assert client.post(
+            "/mcp", headers={"Authorization": f"Bearer {tokens['access_token']}"}, json={},
+        ).status_code == 401
+        response = client.post("/token", data={
+            "grant_type": "refresh_token", "client_id": client_id,
+            "refresh_token": tokens["refresh_token"],
+        })
+        assert response.status_code == 400
+        assert response.json()["error"] == "invalid_grant"
+
+
+def test_public_client_revoke_unknown_token_is_success(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    with TestClient(app) as client:
+        client_id = _register_public_client(client)
+        response = client.post("/revoke", data={
+            "client_id": client_id, "token": "never-issued",
+        })
+    assert response.status_code == 200, response.text
+    assert not response.content
+
+
+def test_public_client_cannot_revoke_another_clients_token(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+    monkeypatch,
+) -> None:
+    with TestClient(app) as client:
+        client_id = _register_public_client(client)
+        other_client_id = _register_public_client(client)
+        _, request_id, verifier = _start_authorization_request(
+            client, client_id=client_id, redirect_uri=LOCALHOST_REDIRECT_URI,
+        )
+        redirect_url = _approve_request(client, monkeypatch, request_id)
+        code = parse_qs(urlparse(redirect_url).query)["code"][0]
+        response = _exchange_code(
+            client, code=code, verifier=verifier, client_id=client_id,
+            redirect_uri=LOCALHOST_REDIRECT_URI, client_secret=None,
+        )
+        assert response.status_code == 200
+        tokens = response.json()
+        response = client.post("/revoke", data={
+            "client_id": other_client_id, "token": tokens["access_token"],
+        })
+        assert response.status_code == 200
+        response = client.post("/token", data={
+            "grant_type": "refresh_token", "client_id": client_id,
+            "refresh_token": tokens["refresh_token"],
+        })
+        assert response.status_code == 200
+
+
+def test_confidential_client_revoke_still_requires_secret(
+    mcp_oauth_store: InMemoryMcpOAuthStore,
+) -> None:
+    with TestClient(app) as client:
+        response = client.post("/revoke", data={
+            "client_id": CLIENT_ID, "token": "never-issued",
+        })
+    assert response.status_code == 401
+    assert response.json()["error"] == "unauthorized_client"
 
 
 def test_approval_persists_current_tools_version_through_token_exchange(

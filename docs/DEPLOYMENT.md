@@ -138,6 +138,11 @@ Behavior notes:
 - Connector usage bills against the shared API unit balance (existing paid units plus any trial grant) and records `api_usage_events.api_key_id = null`.
 - The connect page blocks approval when `api_units_balance <= 0`, explains the unavailable operation neutrally, and offers denial. It does not advertise or link to digital-credit purchases. Ordinary website checkout remains independent.
 - `HEAD /mcp` must stay tokenless for Claude client compatibility checks.
+- Public clients registered with `token_endpoint_auth_method=none` may omit
+  `client_secret` on token and revocation requests. The authenticator supplies an
+  empty form field after public-client validation for MCP SDK 1.26's revocation
+  model; confidential-client secret checks and token ownership checks still apply.
+  Revoking either token invalidates both access and refresh tokens for that connection.
 
 ## Verified-account trial (inactive proposal)
 

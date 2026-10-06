@@ -379,6 +379,11 @@ class FlexibleClientAuthenticator:
             if not hmac.compare_digest(client.client_secret.encode(), request_client_secret.encode()):
                 raise AuthenticationError("Invalid client_secret")
 
+        if token_auth_method == "none" and not client.client_secret and "client_secret" not in form_data:
+            # MCP SDK 1.26's revocation model makes this nullable field required.
+            # Normalize only authenticated public clients; they have no secret.
+            _set_request_form_field(request, form_data, name="client_secret", value="")
+
         return client
 
 

@@ -144,16 +144,35 @@ trial grants, videos, balances or usage events. The final complete run needed no
 transport retries; earlier client probes intermittently timed out, with no root
 cause established or long-duration availability measurement.
 
-Real Clerk sign-in, approved OAuth token exchange/reconnect and intended-host MCP
-calls remain pending. Staging currently has no worker, storage, embedding or
-payment credentials, so these checks do not validate indexing or playback there.
+Real Clerk sign-in and staging JWT authentication subsequently passed: the API
+dashboard displayed the signed-in account and zero units; key, balance and usage
+requests returned HTTP 200. A disposable 10-unit staging fixture enabled
+publisher-approved PKCE token exchange and real MCP initialization, six-tool
+discovery, prompt discovery and an empty-library call. A second approved
+connection passed 17 checks, including account/resource/consent binding,
+cross-account isolation for all five read tools, single-use authorization codes,
+refresh rotation, rejection of superseded tokens and successful refreshed access.
+Neither trial grants nor usage events were created; the fixture balance was
+unchanged. Both connections and all disposable records were removed and audited.
+
+The next check found that MCP SDK 1.26 rejects public-client revocation when the
+secret field is omitted. Three regression cases reproduced the failure locally.
+A narrow form-normalization fix passed full local validation (691 backend tests,
+13 archive tests, seven frontend cases, lint and build); confidential-client
+authentication and cross-client revocation restrictions remain covered. Live
+verification of that fix is pending, using synthetic token fixtures rather than
+another real-account approval. Intended-host package calls remain pending. Staging
+currently has no worker, storage, embedding or payment credentials, so these
+checks do not validate indexing or playback there.
 Trial grants remain disabled. Production has not been migrated or deployed.
 
 ## Metered validation
 
-This 0.2.0 update made **zero VMF calls and used zero additional units or indexing
-jobs**. It reused the previously retrieved evidence. The prior cumulative usage
-below remains unchanged.
+Artifact generation for this 0.2.0 update reused previously retrieved evidence
+with zero additional VMF calls, units or indexing jobs. Subsequent isolated
+staging checks used free metadata/library calls and denied cross-account reads;
+they created no metered usage events and used no production units or indexing
+jobs. The prior cumulative usage below remains unchanged.
 
 The publisher authorized at most 700 existing units and one new indexing job.
 The live account dashboard reconciled the readiness calls to **4 actual units**,
