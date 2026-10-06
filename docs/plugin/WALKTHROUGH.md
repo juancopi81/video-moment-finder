@@ -32,8 +32,11 @@ computed Playground and six-slide editable deck are stored privately in
 All six final PowerPoint slides were inspected after reopening the export. CSV,
 source references, model calculations and JavaScript syntax passed static
 checks. This browser session denies local-file HTML previews; it did not verify
-these fresh pages' interactions. Live tutor turns, negative prompts, reviewer
-reconnect, installed-version footage and the actual recording remain pending.
+these fresh pages' interactions. Five actual publisher replies subsequently
+completed a scripted tutor behavior check: correct feedback, a hint before the
+answer, ambiguous-input clarification and acceptance of the clarified answer.
+This was not a learning assessment and consumed zero additional units. Negative
+prompts, reviewer reconnect, installed-version footage and recording remain pending.
 Do not describe these generated artifacts as a completed eight-case live test.
 
 ## Prepare the actual recording

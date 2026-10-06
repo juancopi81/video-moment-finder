@@ -262,9 +262,14 @@ five independent model results, CSV structure, JavaScript syntax and the deck's
 package/geometry/font/import checks passed. Every final slide was visually
 inspected after reopening the export. These fresh HTML interactions remain
 unverified: the browser's URL policy denied local-file previews, and no alternate
-browser workaround was attempted. Live tutor/negative cases, reconnect, source
-retention throughout review and recording remain open. This is development
-evidence, not a completed eight-case run against a saved portal release.
+browser workaround was attempted. A subsequent live tutor behavior check used
+five actual publisher replies, including deliberately scripted incorrect and
+ambiguous inputs. It confirmed source-cited feedback, a hint before the answer,
+an ambiguity clarification without grading, and acceptance of the clarified
+answer. The test added zero units and makes no learning-assessment claim.
+Negative cases, reconnect, source retention throughout review and recording
+remain open. This is development evidence, not a completed eight-case run
+against a saved portal release.
 
 Private receipts and outputs are in
 `docs/private/vmf-learning/release-0.2.0/reviewer-sample/`; account and allowance
@@ -332,7 +337,7 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 1. Preserve the completed schema/code rollout in `docs/DEPLOYMENT.md`; do not
    replay migrations. Trial activation is still a separate authorized action.
 2. Preserve the completed reviewer ingestion, retrieval, isolation and timestamp
-   playback checks. Finish live tutor/negative cases and reviewer reconnect; show
+   playback and tutor behavior checks. Finish negative cases and reviewer reconnect; show
    the installed version in the intended host. Do not re-index for rehearsal.
 3. Use the funded dedicated reviewer account and original sample. Finish access
    instructions and a source-retention/sample-input plan for the review period.
