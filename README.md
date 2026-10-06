@@ -8,14 +8,14 @@ Process a video, run text or image queries, and jump to matching timestamps.
 Public agent entrypoints:
 
 - [developers](https://www.videomomentfinder.com/developers)
-- [Claude connector approval](https://www.videomomentfinder.com/connectors/claude)
+- [VMF connection approval](https://www.videomomentfinder.com/connectors/claude)
 - [skill.md](https://www.videomomentfinder.com/skill.md)
 - [openapi.json](https://api.videomomentfinder.com/openapi.json)
 
 Video Moment Finder exposes two external integration surfaces:
 
 - REST API + CLI, authenticated with `vmf_` API keys
-- Remote MCP at `https://api.videomomentfinder.com/mcp`, authenticated with OAuth 2.0 authorization-code + PKCE for Claude-compatible clients
+- Remote MCP at `https://api.videomomentfinder.com/mcp`, authenticated with OAuth 2.0 authorization-code + PKCE for MCP-compatible clients
 
 ## What It Does
 
@@ -35,6 +35,30 @@ Current transcript scope:
 - YouTube videos use existing subtitle tracks or automatic caption tracks when available and index them for semantic transcript retrieval.
 - YouTube videos currently do not fall back to Whisper when no caption track is available.
 - Direct uploads extract speech with Whisper large-v3-turbo via `faster-whisper` and index those transcript segments for spoken-text queries.
+
+## Learn from an indexed lecture
+
+The [portable VMF plugin](plugins/video-moment-finder/README.md) reuses the same
+transcript, search, and frame tools across five experiences:
+
+- Responsive HTML study guides with source timestamps and inspected visuals.
+- Flashcard review and an importable CSV with cited answers.
+- A conversational tutor that asks one question at a time.
+- Interactive Playgrounds with computed models or reviewed assumption cases.
+- Presentations for learning, teaching or work, with source notes, HTML previews
+  and editable PowerPoint export when the host supports it.
+
+Start with “Make a study guide from this lecture,” then reuse its evidence for
+cards or tutoring. Whole-lecture and excerpt coverage are stated explicitly.
+Generated practice is separated from lecture claims. The package includes
+offline, original examples; it does not include a third-party lecture archive.
+
+Connection uses your VMF account. Indexing and retrieval consume its API units;
+listing and status checks are free. The proposed once-only, verified-account
+trial defaults to 600 units **when enabled**, and is disabled by default until
+the migration and activation review in [deployment guidance](docs/DEPLOYMENT.md).
+Reconnecting never renews an enrolled trial. See the package instructions for
+installation, validation, and the remaining public-review steps.
 
 ## Use with MCP clients (Claude, Codex, …)
 
@@ -106,9 +130,9 @@ Claude Code connects the same way but runs locally, which means it can also hand
 
 - The MCP endpoint (`/mcp`) uses OAuth 2.0 authorization-code + PKCE.
 - REST API and CLI keep their existing `vmf_` API-key flow.
-- Connector usage bills against [Developer Pack](https://www.videomomentfinder.com/developers) API units.
+- Connector usage bills against your API-unit balance, including an eligible trial grant when trial enrollment is enabled.
 - Approval page: [videomomentfinder.com/connectors/claude](https://www.videomomentfinder.com/connectors/claude)
-- The approval flow handles sign-in, Developer Pack balance checks, and explicit tool approval for the connected account.
+- The approval flow identifies the signed-in account, checks its available units, and requests explicit tool approval. The historical `/connectors/claude` path remains compatible with existing clients; the page uses neutral VMF language.
 
 Privacy and support:
 

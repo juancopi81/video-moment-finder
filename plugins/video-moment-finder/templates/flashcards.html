@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>{{TITLE}} · VMF flashcards</title>
+<style>
+:root{color-scheme:light;--paper:#f7f5ee;--ink:#183329;--muted:#56665d;--line:#d7ddd2;--accent:#b94b27;--card:#fffef9;--soft:#e7ece1;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:17px;line-height:1.65}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--paper);color:var(--ink)}a{color:inherit;text-underline-offset:.22em}a:hover{color:var(--accent)}a:focus-visible,summary:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:5px}h1,h2,h3,p{margin-top:0}h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:normal;letter-spacing:-.035em;line-height:1.15}h1{font-size:clamp(2.4rem,6vw,4.4rem);margin:.45em 0}h2{font-size:clamp(1.7rem,3vw,2.6rem)}p{max-width:75ch}.skip{position:fixed;top:-100px;left:16px;background:white;padding:12px;z-index:5}.skip:focus{top:10px}.topbar{border-bottom:1px solid var(--line);padding:19px clamp(20px,5vw,80px);font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;font-weight:800}.topbar:before{content:"";display:inline-block;background:var(--accent);width:10px;height:10px;border-radius:50%;margin-right:10px}.hero{max-width:1100px;padding:48px 24px 24px;margin:auto}.scope{display:inline-block;font-size:.76rem;padding:5px 12px;border:1px solid var(--line);border-radius:100px;background:var(--soft)}.subtitle{font-size:1.1rem;color:var(--muted)}.lecture,.muted{font-size:.8rem;color:var(--muted)}.actions{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:22px 0}.download{font-size:.82rem;font-weight:700}.content{max-width:1000px;padding:0 24px 50px;margin:auto}.review-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--soft);padding:16px;border:1px solid var(--line);border-radius:10px;margin-bottom:22px}.review-bar p{margin:0 auto 0 0;font-size:.85rem}.review-bar button{font:inherit;font-size:.78rem;border:1px solid var(--ink);border-radius:6px;background:var(--paper);color:var(--ink);padding:9px 14px;cursor:pointer}.review-bar button:disabled{opacity:.45;cursor:default}.flashcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:clamp(22px,4vw,42px);margin-bottom:22px;scroll-margin-top:24px}.eyebrow{font-size:.7rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}.flashcard h2{max-width:32ch;overflow-wrap:anywhere}.flashcard h2:focus{outline:none}.flashcard h2:focus-visible{outline:2px solid var(--accent);outline-offset:8px}details{border-top:1px solid var(--line);padding:14px 0}summary{cursor:pointer;font-size:.9rem;font-weight:650}details p{margin:18px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.answer-text{font-size:1.08rem}.origin{color:var(--accent);font-size:.7rem}.reasoning{font-size:.85rem}.citations{display:flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:.72rem;color:var(--muted);margin-top:22px}.timestamp{display:inline-block;font-variant-numeric:tabular-nums;font-size:.72rem;font-weight:650;background:var(--soft);border-radius:6px;padding:4px 9px;text-decoration:none}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.source{padding:24px 0;border-top:1px solid var(--line);font-size:.86rem;scroll-margin-top:24px}.source p{margin-top:16px}.source h3{font-size:.85rem;margin-bottom:10px}figure{margin:20px 0;background:var(--card);padding:16px;border:1px solid var(--line);border-radius:10px}figure img{display:block;width:min(100%,640px);height:auto;margin:auto}figcaption{font-size:.75rem;color:var(--muted);margin-top:15px}.image-fallback{padding:15px;background:var(--soft)}.instructions{margin:36px 0;padding:24px;background:var(--soft);border-radius:12px}.instructions h2,#source-notes h2{font-size:1.8rem}.instructions li{margin:.6em 0;font-size:.86rem}.instructions code{font-size:.83em}footer{font-size:.7rem;padding:24px;border-top:1px solid var(--line);color:var(--muted);text-align:center}
+@media(max-width:500px){.review-bar{gap:9px}.review-bar p{width:100%}.review-bar button{flex:1}.hero{padding-top:32px}}
+@media print{.skip,.review-bar,.actions,.instructions{display:none!important}body{background:white;font-size:11pt}.hero{padding-top:0}.flashcard[hidden]{display:block!important}.flashcard{break-inside:avoid}.flashcard details>p,.flashcard details>div{display:block!important}.flashcard summary{display:none}footer{padding:12px}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to cards</a>
+<header class="topbar">Video Moment Finder · Flashcards</header>
+<div class="hero"><span class="scope">{{COVERAGE}} · {{COUNT}} cards</span><h1>{{TITLE}}</h1><p class="subtitle">{{SUBTITLE}}</p><p class="lecture">{{LECTURE}}</p><div class="actions"><a class="download" href="{{CSVURL}}" download="vmf-flashcards.csv">Download importable CSV ↓</a><a class="download" href="#import">Import instructions</a><a class="download" href="#source-notes">Scope & sources</a></div></div>
+<main id="main" class="content">
+<p class="muted">Answer in your own words before revealing each card. Questions are generated practice; each answer labels its relationship to the evidence.</p>
+<div id="review-controls" class="review-bar" hidden><p id="review-status" role="status" aria-live="polite"></p><button id="previous-card" type="button">Previous</button><button id="next-card" type="button">Next</button><button id="toggle-list" type="button" aria-pressed="false">Show all cards</button></div>
+<noscript><p class="muted">All cards are listed below. Hints and answers work without JavaScript.</p></noscript>
+<div id="cards">{{CARDS}}</div>
+<p class="muted">Review position lasts while this page stays open. This deck has no spaced-repetition schedule or saved learning history.</p>
+<section class="instructions" id="import"><h2>Bring these cards with you</h2><ol><li>Download the CSV, or use the companion <code>.csv</code> file. Choose UTF-8, comma separator, and double-quote quoting in your importer.</li><li>The first row contains <code>Front, Back, Tags</code>. Skip it or select “first row is a header.” Map Front and Back to a basic card; map Tags if your app supports it. In Anki, turn off “Allow HTML in fields.”</li><li>Fields are plain text. Each back includes scope, source timestamps, and reasoning where applicable. Choose an importer that supports quoted multiline fields, and preview a card before importing the whole deck.</li><li>Formula-like text is prefixed with an apostrophe for spreadsheet safety. Some card importers display this character literally. The original text is retained in the companion JSON; do not remove the safety prefix in a spreadsheet.</li></ol><p class="muted">The export does not set due dates, intervals, review history, or scheduling preferences.</p></section>
+<section id="source-notes"><p class="eyebrow">Evidence, scope & limitations</p><h2>Check an answer at its source</h2><p class="muted">{{COVERAGE}}. {{GAPS}}</p><p class="muted">Timestamp links may require the same authorized VMF account and retained media. If playback is unavailable, these evidence notes and timestamps still identify the original moment.</p>{{SOURCES}}</section>
+</main><footer>Made with VMF · Index once. Reuse evidence. Keep learning.</footer>
+<script>
+(() => {
+  'use strict';
+  const cards = Array.from(document.querySelectorAll('.flashcard'));
+  if (!cards.length) return;
+  const controls = document.getElementById('review-controls');
+  const previous = document.getElementById('previous-card');
+  const next = document.getElementById('next-card');
+  const toggle = document.getElementById('toggle-list');
+  const status = document.getElementById('review-status');
+  let index = 0, all = false;
+  const show = (moveFocus) => {
+    cards.forEach((card, i) => { card.hidden = !all && i !== index; });
+    previous.disabled = all || index === 0;
+    next.disabled = all || index === cards.length - 1;
+    toggle.setAttribute('aria-pressed', String(all));
+    toggle.textContent = all ? 'Review one at a time' : 'Show all cards';
+    status.textContent = all ? `All ${cards.length} cards` : `Card ${index + 1} of ${cards.length}`;
+    if (moveFocus && !all) cards[index].querySelector('h2').focus();
+  };
+  const move = (offset) => {
+    const target = index + offset;
+    if (all || target < 0 || target >= cards.length) return;
+    index = target;
+    cards[index].querySelectorAll('details').forEach(detail => { detail.open = false; });
+    show(true);
+  };
+  previous.addEventListener('click', () => move(-1));
+  next.addEventListener('click', () => move(1));
+  toggle.addEventListener('click', () => { all = !all; show(false); });
+  controls.hidden = false;
+  show(false);
+})();
+</script>
+</body>
+</html>

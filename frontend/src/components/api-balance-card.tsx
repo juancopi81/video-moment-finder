@@ -1,4 +1,5 @@
 import { ApiBillingSummary } from "@/lib/api-billing";
+import { ApiTrialNotice } from "@/components/api-trial-notice";
 
 type ApiBalanceCardProps = {
   summary: ApiBillingSummary;
@@ -14,7 +15,13 @@ export function ApiBalanceCard({
       className={`rounded-xl border border-zinc-200 bg-surface-card px-4 py-3 text-sm dark:border-zinc-800 ${className}`.trim()}
     >
       <p className="font-medium text-zinc-900 dark:text-zinc-100">
-        {summary.api_units_balance.toLocaleString()} units remaining
+        {summary.api_units_balance.toLocaleString()} API units remaining
+      </p>
+      <ApiTrialNotice summary={summary} />
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        API units cover metered operations in connected apps and the API. Enrolled
+        trial accounts also use this balance for website indexing. Website video
+        credits are tracked separately.
       </p>
       <p className="mt-1 text-zinc-600 dark:text-zinc-400">
         Approximately {summary.approx_videos.toLocaleString()} video

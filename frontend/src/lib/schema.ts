@@ -64,7 +64,7 @@ export const softwareApplicationSchema = {
     price: "0",
     priceCurrency: "USD",
     description:
-      "Free tier includes 1 credit (1 video up to 90 minutes). Paid credit packs available; credits do not expire.",
+      "The signed-in account summary shows the current free allowance. Website video credits and API units are separate balances. Unused website credits do not expire.",
   },
   license: "https://www.gnu.org/licenses/agpl-3.0.html",
   codeRepository: GITHUB_URL,

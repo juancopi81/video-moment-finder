@@ -1,11 +1,14 @@
 import { API_URL, parseApiError } from "@/lib/api";
+import type { ApiUnitTrialSummary } from "@/lib/api-unit-trial";
 
-export type BillingSummary = {
+export type BillingSummary = ApiUnitTrialSummary & {
   credits_balance: number;
   free_videos_limit: number;
   free_videos_used: number;
   free_videos_remaining: number;
   has_unlimited_access: boolean;
+  api_units_balance?: number;
+  unit_cost_index_video?: number;
 };
 
 export async function fetchBillingSummary(token: string): Promise<BillingSummary> {

@@ -1,0 +1,152 @@
+{
+  "format_version": 1,
+  "title": "A pilot decision, with open questions",
+  "lecture": {
+    "title": "Original fictional team review",
+    "video_id": null
+  },
+  "coverage": {
+    "kind": "synthetic",
+    "start_s": 0,
+    "end_s": 180,
+    "gaps": [
+      "Fictional work scenario authored to test the workflow. No customer meeting or real project is represented.",
+      "The sample contains no assigned owner, launch date or measured result."
+    ]
+  },
+  "sources": [
+    {
+      "id": "s-observation",
+      "kind": "synthetic",
+      "start_s": 0,
+      "end_s": 45,
+      "summary": "Fictional meeting excerpt: repeated support questions suggest that a clearer setup walkthrough could help. No quantified baseline was presented."
+    },
+    {
+      "id": "s-proposal",
+      "kind": "synthetic",
+      "start_s": 45,
+      "end_s": 105,
+      "summary": "Fictional meeting excerpt: a participant proposes a new walkthrough for a small pilot. This is a proposal, not approval of a full rollout."
+    },
+    {
+      "id": "s-decision",
+      "kind": "synthetic",
+      "start_s": 105,
+      "end_s": 145,
+      "summary": "Fictional meeting excerpt: the group agrees to draft a pilot plan before deciding whether to launch. No owner or due date is named."
+    },
+    {
+      "id": "s-open",
+      "kind": "synthetic",
+      "start_s": 145,
+      "end_s": 180,
+      "summary": "Fictional meeting excerpt: pilot size, success measure and support capacity remain unresolved."
+    }
+  ],
+  "audience": "Colleagues reviewing a pilot proposal",
+  "purpose": "Separate the recorded decision from the proposal and unresolved choices",
+  "slides": [
+    {
+      "title": "A setup walkthrough pilot",
+      "layout": "cover",
+      "body": [
+        "A proposed response to repeated support questions.",
+        "Original fictional work briefing. No real meeting or customer data."
+      ],
+      "citations": [
+        "s-observation",
+        "s-proposal"
+      ],
+      "origin": "generated",
+      "notes": "This deck demonstrates evidence-aware work recap, using an authored fictional scenario."
+    },
+    {
+      "title": "The reported problem",
+      "layout": "statement",
+      "body": [
+        "The group described repeated setup questions.",
+        "The sample gives no count, baseline or evidence of improvement."
+      ],
+      "citations": [
+        "s-observation"
+      ],
+      "origin": "source",
+      "notes": "The statement is source content within the fictional scenario. Do not invent a percentage or quantify a trend.",
+      "headline": "Repeated setup questions"
+    },
+    {
+      "title": "Proposal and decision",
+      "layout": "comparison",
+      "body": [
+        "The group approved planning work, not a product launch."
+      ],
+      "citations": [
+        "s-proposal",
+        "s-decision"
+      ],
+      "origin": "source",
+      "notes": "Keep the distinction explicit when presenting. There is no named owner or deadline.",
+      "columns": [
+        {
+          "title": "Proposed",
+          "body": "Try a clearer walkthrough with a small pilot group."
+        },
+        {
+          "title": "Agreed",
+          "body": "Draft a pilot plan before deciding whether to launch."
+        }
+      ]
+    },
+    {
+      "title": "The unresolved choices",
+      "layout": "comparison",
+      "body": [
+        "The source leaves the pilot design open."
+      ],
+      "citations": [
+        "s-open"
+      ],
+      "origin": "source",
+      "notes": "These are missing decisions, not errors to fill with invented details.",
+      "columns": [
+        {
+          "title": "Scope and capacity",
+          "body": "How large should the pilot be, and who can support it?"
+        },
+        {
+          "title": "Evidence of success",
+          "body": "What observation would justify continuing or stopping?"
+        }
+      ]
+    },
+    {
+      "title": "A possible next discussion",
+      "layout": "exercise",
+      "body": [
+        "Select a pilot size that the team can support.",
+        "Agree on a baseline and success measure before starting."
+      ],
+      "citations": [
+        "s-open"
+      ],
+      "origin": "generated",
+      "notes": "These are generated facilitation suggestions, not decisions in the fictional recording. Ask the team to choose, and record actual decisions later.",
+      "headline": "What would change our decision?"
+    },
+    {
+      "title": "The decision on record",
+      "layout": "statement",
+      "body": [
+        "Draft the plan before deciding whether to launch.",
+        "Owner and deadline are not specified in the sample."
+      ],
+      "citations": [
+        "s-decision"
+      ],
+      "origin": "source",
+      "notes": "The closing summary preserves the boundary of the source. Do not assign a person or date.",
+      "headline": "Plan first. Launch remains open."
+    }
+  ]
+}

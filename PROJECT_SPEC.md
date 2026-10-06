@@ -39,6 +39,7 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 - Top timestamped matches for a query.
 - Relevance scores.
 - Jump-to-moment playback links.
+- Portable learning artifacts: source-grounded HTML guides, flashcards, conversational tutoring, interactive playgrounds with explicit model limits, and presentations for learning, teaching or work. Editable presentation export uses the host runtime; these workflows reuse the existing video evidence service.
 
 ## MVP Scope
 
@@ -49,11 +50,13 @@ Opportunity: map frames and queries into a shared embedding space so users can s
 - Timestamped results with thumbnails.
 - Authenticated user workflows.
 - Credit-based billing model.
+- One-time verified-account trial proposal, with shared API-unit accounting and explicit rollout gating.
+- A portable plugin using the existing six MCP tools; retrieval is reused across learning experiences.
 
 ### Out of Scope (Current)
 
 - Team collaboration/workspaces.
-- Public API productization.
+- A persistent learning-management system or spaced-repetition backend.
 - Full video editing/export feature set.
 
 ## Constraints

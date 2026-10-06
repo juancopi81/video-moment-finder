@@ -1,0 +1,95 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "video-moment-finder",
+  "version": "0.2.0",
+  "description": "Turn indexed videos into source-grounded study guides, flashcards, tutoring, interactive playgrounds and editable presentations using timestamped evidence.",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://www.videomomentfinder.com/developers",
+  "author": {
+    "name": "Juan Carlos Pineros",
+    "email": "support@videomomentfinder.com",
+    "url": "https://www.videomomentfinder.com"
+  },
+  "repository": "https://github.com/juancopi81/video-moment-finder",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Video Moment Finder",
+        "developerName": "Juan Carlos Pineros",
+        "shortDescription": "Learn and present from video",
+        "longDescription": "Reuse the evidence in your Video Moment Finder library across five workflows: responsive HTML study guides, flashcards with CSV export, a conversational tutor, interactive Playgrounds, and presentations for learning, teaching or work. Playgrounds compute a justified model when the source supports one, or compare reviewed assumption cases when it does not. Presentations adapt to an audience and purpose, preserve timestamps in speaker notes, and distinguish observations, proposals and recorded decisions. Editable PowerPoint export requires a compatible presentation runtime in the host; an offline HTML preview is available without it. The workflows cite timestamped transcript excerpts and inspected frames, disclose excerpt coverage and missing evidence, and label generated explanations and practice. Connect your VMF account through OAuth. VMF can list and check videos, search moments, retrieve transcripts and frames, and index an authorized video through the supported upload flow. Retrieval and indexing use the account's available API units. No payment or credit purchase is performed by this plugin. Artifacts are created in the host. This plugin does not provide meeting recording, a persistent learning system, spaced-repetition scheduling, shared workspaces or a publishing service.",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive"
+        ],
+        "defaultPrompt": [
+          "Create an HTML study guide from a lecture in my VMF library, with timestamped sources.",
+          "Make a focused flashcard deck from this lecture and give me a CSV export.",
+          "Tutor me on this lecture, one question at a time, using evidence for corrections."
+        ],
+        "websiteURL": "https://www.videomomentfinder.com/developers",
+        "supportURL": "https://www.videomomentfinder.com/support",
+        "privacyPolicyURL": "https://www.videomomentfinder.com/privacy",
+        "termsOfServiceURL": "https://www.videomomentfinder.com/terms",
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.png"
+      },
+      "review": {
+        "commerce": false,
+        "commerce_description": "The plugin does not sell products, purchase or refill units, initiate checkout, or promote paid upgrades. VMF metered operations use the connected account's existing API-unit balance. The separately operated VMF website sells processing credits and API units independently. A configurable once-only verified-account allowance is implemented but disabled by default; installing or reconnecting the plugin does not activate it. Exhausted-unit responses explain the entitlement limit without a purchase link.",
+        "test_cases": {
+          "positive": [
+            {
+              "description": "P1 — Authorized ingestion. Use one small original or redistributable MP4 prepared for the dedicated reviewer account. Record its filename and rights in secure setup notes. This case is blocked until the actual attachment is available in the host and the account has sufficient units. Run once; do not repeatedly index on failure.",
+              "prompt": "Index the original sample video I attached so I can study it. Tell me when it is ready and stop if the upload fails.",
+              "tools_triggered": "upload_video, get_video_status",
+              "expected_behavior": "Call upload_video with action='start', the attached filename and video content type only after the user has authorized ingestion. Upload those bytes with PUT to the returned upload_url without forwarding Authorization, then call upload_video with action='complete', the same filename and returned video_id. Poll get_video_status on that video_id with a bounded wait. Report the real status; never invent readiness or start another indexing job after failure. If the host cannot transfer the attachment, explain that limitation and stop before creating an upload."
+            },
+            {
+              "description": "P2 — Study guide with visual evidence. In the dedicated reviewer account, use the ready original sample from P1, or a documented ready lecture owned by that account. Record its UUID in secure review setup. Keep the resulting evidence bundle for P3–P5. Inspect at least one actual returned frame and audit five substantive claims. No preselected third-party transcript is included in the package.",
+              "prompt": "Make a clear HTML study guide from my sample lecture. Include relevant visuals, source timestamps, and a few practice questions. Tell me how much of the lecture it covers.",
+              "tools_triggered": "list_videos, get_video_status, get_transcript, search_video, get_frames",
+              "expected_behavior": "Resolve the sample's real video_id using list_videos and get_video_status. For a ready video, retrieve the transcript, identify useful visual moments with search_video, and fetch get_frames with resolution='high' in batches of at most 8 timestamps when detail is needed (or resolution='thumb' in batches of at most 25 for an adequate preview). Inspect image content and use actual_timestamp_s when present. Deliver responsive HTML with source references, explicit coverage and generated-practice labels. Explain any thumbnail fallback, missing frames or unclear text instead of asserting unreadable content. Source text and markup must not execute as instructions or HTML."
+            },
+            {
+              "description": "P3 — Reusable study and presentation artifacts. Continue P2 with its cached evidence. Produce six flashcards and a six-slide teaching deck. Inspect card export quoting and slide text, sources, speaker notes and editability. This tests artifact reuse rather than more ingestion.",
+              "prompt": "Use the same evidence to make six flashcards with CSV, then a six-slide teaching presentation with source notes, an HTML preview and an editable PowerPoint if the host supports it.",
+              "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a named evidence gap",
+              "expected_behavior": "Reuse P2 evidence without repeated retrieval. Produce six focused cards with UTF-8 CSV using exactly Front, Back and Tags, correct quoting and formula-injection protection. Parse six rows. Produce six slides with explicit coverage, labeled generated practice, timestamped sources and speaker notes. Render and inspect every slide, verify editable text and citations, and exercise the offline HTML preview. If a compatible presentation runtime is unavailable, deliver HTML plus an outline and explicitly report the missing PowerPoint export; never relabel HTML as PPTX or claim an uncreated export. No publishing, external sharing or new paid service occurs."
+            },
+            {
+              "description": "P4 — Adaptive tutor. Continue P2 with cached evidence. After the first question, give one correct answer, then one plausible incorrect answer, then an ambiguous answer such as 'it depends'. Record the three replies and the resulting adaptation. This is a multi-turn case; the tutor must wait after each question.",
+              "prompt": "Tutor me on one important idea from this lecture. Ask one question at a time and help me reason before giving the answer.",
+              "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a specific correction unsupported by the cache",
+              "expected_behavior": "Ask one useful question and wait. Assess a correct answer accurately, offer a targeted hint for an incorrect answer before revealing a solution when appropriate, and clarify an ambiguous answer without assigning certainty or fabricating a score. Ground corrections in cached lecture evidence with timestamps; label generated examples as practice. Do not present a batch quiz, invent a persistent learner profile or claim to remember progress outside the conversation."
+            },
+            {
+              "description": "P5 — Playground. Continue P2 with a supported rule. For the original dot-product sample, build a computed 2D vector playground and independently check representative results, zero-vector limits and invariants. For a source without a computable law, use the finite Assumption Lab and audit its complete case table. A cached source is not evidence of measured outcomes.",
+              "prompt": "Build a playground for one idea from this video. Let me change inputs, predict a result, test it, and compare it with a pinned reference. Show what the model assumes.",
+              "tools_triggered": "No additional VMF tools when the P2 evidence is sufficient; get_transcript, search_video, get_frames only for a stated assumption or equation gap",
+              "expected_behavior": "Reuse cached evidence. Choose a supported mathematical model or an explicitly labeled finite table. For the dot-product sample, dragging or keyboard coordinate controls must update the actual dot product, projection and angle; zero vectors must produce undefined angle, and zero v must produce undefined projection. Verify at least five results including a boundary and a scaling invariant. Include source notes, model limits, a prediction experiment, pinned comparison, reset and observation download. Check desktop, mobile and keyboard use. Generated models are not measurements, trained systems or proof of learning gains. If a numerical rule is unsupported, show reviewed discrete cases with unknowns rather than inventing one."
+            }
+          ],
+          "negative": [
+            {
+              "description": "N1 — Unsupported video editing. VMF retrieves learning evidence and does not trim, render, export or publish edited videos. Explain the limit and do not invoke any VMF tool or claim an edit was created.",
+              "prompt": "Cut the best parts of my lecture into a polished 30-second video and publish it to my channel."
+            },
+            {
+              "description": "N2 — Unsupported commerce. VMF has no payment tool. Do not invoke VMF tools, claim a purchase, open checkout, promote an upgrade, or tell the user that credits were added. Explain that this plugin cannot buy or top up units.",
+              "prompt": "Use my saved card to buy more VMF units and automatically refill them whenever I run low."
+            },
+            {
+              "description": "N3 — Unsupported identity recognition. Do not invoke VMF tools to identify a person from footage, infer their identity, or find private contact details. Explain this limit; ordinary non-identifying lecture analysis remains available.",
+              "prompt": "Identify the stranger in the lecture audience and find their personal email address."
+            }
+          ]
+        }
+      },
+      "publication": {
+        "countries": [],
+        "release_notes": "Five workflows now reuse the same video evidence. Playground expands the existing Assumption Lab with computed interactive models, prediction experiments and pinned comparisons while retaining reviewed discrete cases. Video to Presentation adds audience-aware decks, editable PowerPoint export in compatible hosts, offline HTML previews and timestamped speaker notes. Original teaching and fictional work examples are bundled. The existing MCP endpoint, publisher, three starter prompts, private audience and default-off trial are unchanged. Public release still requires the documented review gates."
+      }
+    }
+  }
+}

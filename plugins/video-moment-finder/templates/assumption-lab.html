@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{TITLE}} · Assumption Lab</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--ink:#182b32;--muted:#51636b;--line:#c9d6d8;--accent:#00676a;--soft:#e4f1ed;--warn:#7e4200;--warn-bg:#fff3df;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}a{color:var(--accent);text-underline-offset:.18em}button,select,textarea{font:inherit}button,select{min-height:44px}button{border:1px solid var(--accent);border-radius:8px;padding:.55rem 1rem;background:var(--card);color:var(--accent);cursor:pointer}button:hover{background:var(--soft)}:focus-visible{outline:3px solid #bc5100;outline-offset:3px}[hidden]{display:none!important}.skip{position:absolute;left:1rem;top:-5rem;background:var(--card);padding:.5rem}.skip:focus{top:1rem}.wrap{max-width:1180px;margin:auto;padding:1.5rem}header{padding:3rem 0 2rem;border-bottom:1px solid var(--line)}.eyebrow{text-transform:uppercase;letter-spacing:.1em;font-size:.75rem;font-weight:750;color:var(--accent);margin:.2rem 0}.meta,.quiet{color:var(--muted);font-size:.9rem}h1{font-size:clamp(2.2rem,5vw,4.1rem);line-height:1.08;letter-spacing:-.04em;max-width:950px;margin:.7rem 0 1.3rem}h2{font-size:1.65rem;line-height:1.25}h3{font-size:1.25rem;line-height:1.3}h4{font-size:1rem;margin:1.5rem 0 .35rem}p{max-width:78ch}nav{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1.5rem}.intro{max-width:860px;margin:2rem 0}.intro p:first-child{font-size:1.22rem}.controls{display:flex;gap:1rem;flex-wrap:wrap;padding:1.25rem;background:var(--soft);border:1px solid var(--line);border-radius:12px}.controls label{font-weight:650;flex:1;min-width:220px}.controls select{display:block;margin-top:.4rem;width:100%;max-width:100%;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);padding:.5rem}.toolbar{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin:1rem 0}.comparison{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}.pane{min-width:0}.pane>h2{font-size:1rem;text-transform:uppercase;letter-spacing:.1em}.scenario{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1.5rem;margin-bottom:1rem;overflow-wrap:anywhere}.entities{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:1.3rem 0}.entity{padding:.7rem;border:1px dashed var(--line);border-radius:8px;font-size:.88rem}.outcome{font-size:1.4rem;font-weight:750;border-left:4px solid var(--accent);padding-left:.8rem}.boundary{padding:1rem;border-radius:8px;background:var(--soft)}.boundary.caution,.boundary.not-supported{color:var(--warn);background:var(--warn-bg)}ul{padding-left:1.25rem;margin:.4rem 0}li{margin:.25rem 0}.next{font-size:.9rem;border-top:1px solid var(--line);padding-top:1rem}.citations{font-size:.82rem;display:flex;flex-wrap:wrap;gap:.3rem .5rem}.timestamp{font-variant-numeric:tabular-nums}.delta{padding:.75rem 1rem;border-left:4px solid var(--accent);background:var(--card);min-height:3rem}.notebook{margin:2rem 0;padding:1.5rem;border:1px solid var(--line);border-radius:12px}.notebook label{display:block;font-weight:650}.notebook textarea{display:block;width:100%;min-height:100px;margin:.7rem 0;padding:.75rem;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}.sources{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem}.source{background:var(--card);border:1px solid var(--line);padding:1rem;border-radius:10px;overflow-wrap:anywhere}.source h3{font-size:1rem}figure{margin:1rem 0}img{max-width:100%;height:auto;display:block}figcaption,.image-fallback{font-size:.82rem;color:var(--muted)}footer{margin:3rem 0;color:var(--muted);font-size:.85rem}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+@media(max-width:740px){.wrap{padding:1rem}.comparison{grid-template-columns:1fr}header{padding-top:2rem}.controls label{min-width:min(100%,220px)}.scenario{padding:1.1rem}.sources{grid-template-columns:1fr}}
+@media(prefers-color-scheme:dark){:root{--bg:#121f25;--card:#192b33;--ink:#e5eef1;--muted:#bbccd2;--line:#40575f;--accent:#8bddcd;--soft:#193d3b;--warn:#ffdfaa;--warn-bg:#473315;color-scheme:dark}}
+@media print{.toolbar,.controls,.notebook button,nav,.skip{display:none}.wrap{max-width:none}.comparison{display:block}.scenario,.source{break-inside:avoid}body{font-size:11pt}.notebook{break-inside:avoid}a{color:inherit}header{padding:0}h1{font-size:26pt}}
+</style>
+</head>
+<body>
+<a href="#workbench" class="skip">Skip to the experiment</a>
+<div class="wrap">
+<header><p class="eyebrow">Video Moment Finder / Assumption Lab</p><p class="meta">{{LECTURE}} · {{COVERAGE}}</p><h1>{{TITLE}}</h1><p>{{QUESTION}}</p><nav aria-label="Page"><a href="#workbench">Change an assumption</a><a href="#notebook">Keep a comparison</a><a href="#evidence">Check the evidence</a></nav></header>
+<main>
+<section class="intro" aria-label="What this experiment shows"><p>{{PREMISE}}</p><p><strong>A bounded teaching model.</strong> {{LIMIT}}</p><p class="quiet">{{GAPS}}</p></section>
+<section id="workbench" aria-labelledby="workbench-heading"><h2 id="workbench-heading">Change one thing. Find the boundary.</h2><p>Keep one case on the left, change an assumption on the right, and compare what follows. Each result separates the source rule from a generated consequence. There is no score.</p>
+<div id="interactive-controls" hidden><div class="controls">{{CONTROLS}}</div><div class="toolbar"><button id="pin" type="button">Use current case as comparison</button><button id="reset" type="button">Reset both cases</button></div><p id="delta" class="delta" aria-live="polite" aria-atomic="true"></p></div>
+<noscript><p>JavaScript is off. The reference case and every reviewed case are shown below; the evidence and explanations still work.</p></noscript>
+<div class="comparison"><section class="pane" aria-labelledby="pinned-heading"><h2 id="pinned-heading">Reference case</h2><div id="pinned">{{BASELINE}}</div></section><section class="pane" aria-labelledby="current-heading"><h2 id="current-heading">Explore a case</h2><div id="states">{{STATES}}</div></section></div></section>
+<section id="notebook" class="notebook" aria-labelledby="notebook-heading"><h2 id="notebook-heading">Keep the useful distinction</h2><label for="learner-note">Which change mattered, and what did the evidence leave open?</label><textarea id="learner-note" placeholder="My prediction, what changed, and the next thing I would check…" maxlength="12000"></textarea><p class="quiet">Your note stays in this page only. It is not sent or saved to a server. Download it to keep it after closing or reloading.</p><button id="download" type="button" hidden>Download comparison + note</button><p id="download-status" class="quiet" role="status"></p></section>
+<section id="evidence" aria-labelledby="evidence-heading"><h2 id="evidence-heading">Evidence you can return to</h2><p>Timestamp links require access to the source video and retained media. The readable notes and embedded images remain available offline. A source supports the stated rule; it does not turn a generated case into a lecture experiment.</p><div class="sources">{{SOURCES}}</div></section>
+</main>
+<footer>Generated what-if cases · No trained-model simulation, automatic grading, tracking, or persistent learner profile.</footer>
+</div>
+<script type="application/json" id="lab-data">{{DATA}}</script>
+<script>
+(() => {
+  'use strict';
+  const data = JSON.parse(document.getElementById('lab-data').textContent);
+  const byId = new Map(data.states.map(state => [state.id, state]));
+  const selectNodes = [...document.querySelectorAll('[data-control]')];
+  const stateNodes = [...document.querySelectorAll('#states [data-state]')];
+  const pinnedNode = document.getElementById('pinned');
+  const delta = document.getElementById('delta');
+  let current = data.baseline;
+  let pinned = data.baseline;
+
+  const optionLabel = (control, value) => control.options.find(option => option.id === value).label;
+  const selectionText = state => data.controls.map(control => `${control.label}: ${optionLabel(control, state.when[control.id])}`).join('; ');
+  function update() {
+    const selected = Object.fromEntries(selectNodes.map(node => [node.dataset.control, node.value]));
+    const match = data.states.find(state => data.controls.every(control => state.when[control.id] === selected[control.id]));
+    if (!match) return; // Python validation makes an undefined state impossible.
+    current = match.id;
+    stateNodes.forEach(node => { node.hidden = node.dataset.state !== current; });
+    const reference = byId.get(pinned);
+    const changes = data.controls.filter(control => reference.when[control.id] !== match.when[control.id]);
+    const consequence = reference.outcome === match.outcome ? 'The stated outcome is unchanged.' : 'The stated outcome changes.';
+    const boundary = reference.boundary === match.boundary ? '' : ' The assumption warning changes too.';
+    delta.textContent = changes.length ? `${changes.length} changed assumption${changes.length === 1 ? '' : 's'}: ${changes.map(control => control.label).join(', ')}. ${consequence}${boundary}` : 'Same case on both sides. Change one assumption to isolate its effect.';
+  }
+  function pin() {
+    pinned = current;
+    const clone = stateNodes.find(node => node.dataset.state === current).cloneNode(true);
+    clone.hidden = false;
+    pinnedNode.replaceChildren(clone);
+    update();
+  }
+  function reset() {
+    const baseline = byId.get(data.baseline);
+    selectNodes.forEach(node => { node.value = baseline.when[node.dataset.control]; });
+    update();
+    pin();
+  }
+  selectNodes.forEach(node => node.addEventListener('change', update));
+  document.getElementById('pin').addEventListener('click', pin);
+  document.getElementById('reset').addEventListener('click', reset);
+  document.getElementById('download').addEventListener('click', () => {
+    const reference = byId.get(pinned), changed = byId.get(current);
+    const note = document.getElementById('learner-note').value;
+    const describe = (label, state) => `${label}: ${state.title}\n${selectionText(state)}\n${state.outcome}\nBoundary: ${state.boundary_note}\nEvidence IDs: ${state.citations.join(', ')}`;
+    const content = `${data.title}\nGenerated what-if comparison; this is not measured lecture data.\n\n${describe('REFERENCE', reference)}\n\n${describe('CURRENT', changed)}\n\nMY NOTE\n${note}\n\nKeep the HTML artifact for full evidence notes and timestamps.\n`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'vmf-assumption-comparison.txt';
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    document.getElementById('download-status').textContent = 'Comparison download requested. Your note remains in this page.';
+  });
+  update();
+  document.getElementById('interactive-controls').hidden = false;
+  document.getElementById('download').hidden = false;
+})();
+</script>
+</body>
+</html>

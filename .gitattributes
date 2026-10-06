@@ -1,0 +1,2 @@
+# Preserve CSV writer bytes: CRLF records can contain quoted LF field content.
+plugins/video-moment-finder/examples/*.csv -text whitespace=cr-at-eol

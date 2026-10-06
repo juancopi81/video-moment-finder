@@ -652,6 +652,13 @@ def test_billing_summary_returns_usage_and_balance(monkeypatch) -> None:
         "free_videos_used": 3,
         "free_videos_remaining": 2,
         "has_unlimited_access": False,
+        "api_units_balance": 0,
+        "unit_cost_index_video": 500,
+        "trial_enabled": False,
+        "trial_status": "disabled",
+        "trial_allowance_units": 600,
+        "trial_units_granted": 0,
+        "trial_legacy_units_offset": 0,
     }
 
 
@@ -672,6 +679,13 @@ def test_billing_summary_clamps_non_positive_remaining(monkeypatch) -> None:
         "free_videos_used": 6,
         "free_videos_remaining": 0,
         "has_unlimited_access": True,
+        "api_units_balance": 0,
+        "unit_cost_index_video": 500,
+        "trial_enabled": False,
+        "trial_status": "disabled",
+        "trial_allowance_units": 600,
+        "trial_units_granted": 0,
+        "trial_legacy_units_offset": 0,
     }
 
 
@@ -692,6 +706,13 @@ def test_billing_summary_clamps_negative_credit_balance(monkeypatch) -> None:
         "free_videos_used": 1,
         "free_videos_remaining": 4,
         "has_unlimited_access": False,
+        "api_units_balance": 0,
+        "unit_cost_index_video": 500,
+        "trial_enabled": False,
+        "trial_status": "disabled",
+        "trial_allowance_units": 600,
+        "trial_units_granted": 0,
+        "trial_legacy_units_offset": 0,
     }
 
 

@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function Footer() {
+  const isConnectorRoute = usePathname().startsWith("/connectors/");
   return (
     <footer className="border-t border-zinc-200 bg-surface-card dark:border-zinc-800">
       <div className="mx-auto max-w-5xl px-4 py-10">
@@ -22,11 +26,11 @@ export function Footer() {
                   About
                 </Link>
               </li>
-              <li>
+              {!isConnectorRoute && <li>
                 <Link href="/pricing" className="hover:text-foreground">
                   Pricing
                 </Link>
-              </li>
+              </li>}
               <li>
                 <Link href="/how-it-works" className="hover:text-foreground">
                   How it works
@@ -37,11 +41,11 @@ export function Footer() {
                   Support
                 </Link>
               </li>
-              <li>
+              {!isConnectorRoute && <li>
                 <Link href="/developers" className="hover:text-foreground">
                   Developers
                 </Link>
-              </li>
+              </li>}
             </ul>
           </div>
 

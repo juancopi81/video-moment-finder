@@ -12,7 +12,7 @@ export default function TermsPage() {
       <h1 className="font-heading text-4xl font-bold">
         Terms of Service
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: March 10, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: October 2, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -104,11 +104,23 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground">6. Credit-Based Billing</h2>
+          <h2 className="text-lg font-semibold text-foreground">6. Website Credits and API Units</h2>
           <p className="mt-2">
-            The Service uses a credit-based pricing model. Each credit allows processing of one
-            video. Credits are non-refundable once used. Unused credits do not expire. Pricing
-            and credit allocations may change with notice.
+            Website video credits and API units are separate balances. A website
+            video credit allows processing of one video. Connected apps and direct
+            API use consume API units at the operation rates shown in the connection
+            approval screen and developer documentation. Website credits are
+            non-refundable once used, and unused website credits do not expire.
+            Pricing and credit allocations may change with notice.
+          </p>
+          <p className="mt-2">
+            Where enabled, an eligible verified account may receive a one-time API-unit
+            trial. Prior free website processing can count toward that allowance.
+            An enrolled account uses the shared API-unit allowance for free website
+            processing as well as connected app operations. The account summary shows
+            the actual grant and current balance. Reconnecting an app or creating an
+            API key does not reset the trial. Metered operations require sufficient
+            allowance for their cost.
           </p>
         </section>
 

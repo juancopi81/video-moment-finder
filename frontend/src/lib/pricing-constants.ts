@@ -16,9 +16,10 @@ export const tiers: Tier[] = [
     id: "free",
     name: "Free Trial",
     price: "$0",
-    description: "Try it out with one video",
+    description: "Start with your account's free allowance",
     features: [
-      "1 video credit",
+      "Allowance shown after sign-in",
+      "Shared with an API trial when available",
       "Up to 90-minute videos",
       "Text & image moment search",
       "Thumbnail previews",

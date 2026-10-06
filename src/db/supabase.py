@@ -100,6 +100,18 @@ class ApiBillingCreditGrantResult:
     applied: bool
 
 
+@dataclass(frozen=True)
+class ApiTrialGrantRecord:
+    """Permanent account enrollment, independent of the mutable unit balance."""
+
+    user_id: str
+    allowance_units: int
+    legacy_units_offset: int
+    granted_units: int
+    verified_email_id: str
+    created_at: str | None = None
+
+
 @dataclass
 class ApiUsageEventRecord:
     """API usage event ledger entry."""
@@ -1582,6 +1594,67 @@ def get_api_credits(user_id: str) -> ApiCreditRecord | None:
     return _row_to_api_credit(result.data[0])
 
 
+def _row_to_api_trial_grant(row: dict) -> ApiTrialGrantRecord:
+    return ApiTrialGrantRecord(
+        user_id=row["user_id"],
+        allowance_units=int(row["allowance_units"]),
+        legacy_units_offset=int(row["legacy_units_offset"]),
+        granted_units=int(row["granted_units"]),
+        verified_email_id=row["verified_email_id"],
+        created_at=row.get("created_at"),
+    )
+
+
+def get_api_trial_grant(user_id: str) -> ApiTrialGrantRecord | None:
+    result = get_client().table("api_trial_grants").select("*").eq("user_id", user_id).execute()
+    return _row_to_api_trial_grant(result.data[0]) if result.data else None
+
+
+def apply_api_trial_grant(
+    *, user_id: str, verified_email_id: str, allowance_units: int,
+    legacy_free_videos: int, index_cost_units: int,
+) -> ApiTrialGrantRecord:
+    if not user_id.strip() or not verified_email_id.strip():
+        raise ValueError("user_id and verified_email_id must be non-empty")
+    if allowance_units <= 0 or legacy_free_videos < 0 or index_cost_units <= 0:
+        raise ValueError("Invalid trial units or legacy allowance")
+    result = get_client().rpc("apply_api_trial_grant", {
+        "p_user_id": user_id,
+        "p_verified_email_id": verified_email_id,
+        "p_allowance_units": allowance_units,
+        "p_legacy_free_videos": legacy_free_videos,
+        "p_index_cost_units": index_cost_units,
+    }).execute()
+    row = _rpc_first_item(result.data)
+    if not isinstance(row, dict):
+        raise RuntimeError("Invalid trial grant response")
+    return _row_to_api_trial_grant(row)
+
+
+def consume_trial_or_processing_credit(
+    *, user_id: str, video_id: str, units: int,
+) -> ProcessingCreditConsumeResult:
+    """Atomically use shared API units, falling back to one paid web credit."""
+    result = get_client().rpc("consume_trial_or_processing_credit", {
+        "p_user_id": user_id, "p_video_id": video_id, "p_units": units,
+    }).execute()
+    row = _rpc_first_item(result.data)
+    if not isinstance(row, dict):
+        raise RuntimeError("Invalid shared processing charge response")
+    return ProcessingCreditConsumeResult(
+        allowed=bool(row.get("allowed")),
+        remaining_balance=int(row.get("remaining_balance", 0)),
+    )
+
+
+def has_video_processing_charge(user_id: str, video_id: str) -> bool:
+    """Whether an owned video's processing admission has committed a debit."""
+    result = get_client().rpc("has_video_processing_charge", {
+        "p_user_id": user_id, "p_video_id": video_id,
+    }).execute()
+    return _rpc_first_item(result.data) is True
+
+
 def apply_api_billing_credit_grant(
     *,
     provider: str,
@@ -1676,11 +1749,13 @@ def compensate_api_units(
     request_id: str | None = None,
     metadata: dict | None = None,
 ) -> None:
-    """Compensate (refund) API units. Idempotent on request_id."""
+    """Refund one matching original debit, exactly once by its request_id."""
     if not user_id.strip():
         raise ValueError("user_id must be non-empty")
     if units <= 0:
         raise ValueError("units must be > 0")
+    if request_id is None or not request_id.strip():
+        raise ValueError("request_id must identify the original debit")
 
     client = get_client()
     client.rpc(

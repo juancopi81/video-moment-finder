@@ -51,7 +51,10 @@
 ### 7.6 Agent Productization on Evidence
 
 - Improve the current API, CLI, and OAuth MCP onboarding without adding broad new agent surface area.
-- Add non-repo-clone quickstarts and end-to-end examples for REST, CLI, and the four-tool MCP flow.
+- Validate the portable package's independent MCP connection in a clean host account and complete dedicated reviewer onboarding.
+- Verify deployed neutral consent, updated listing/policy pages and timestamp playback after an authorized rollout.
+- Finish reviewer access and the actual walkthrough recording, then complete saved-release cases and publisher/domain verification before submission.
+- Review trial migrations and legacy allowance reconciliation before a separately authorized production rollout; reconnect must not grant another allowance.
 - Validate repeated successful Claude connector sessions before broader promotion or MCP expansion.
 
 ---
@@ -62,7 +65,7 @@
 
 ### 8.1 Agent Surface Expansion
 
-- Expand beyond the thin four-tool MCP surface only after repeated end-to-end use justifies broader connector investment.
+- Expand beyond the current six-tool MCP surface only after repeated end-to-end use justifies broader connector investment.
 - Expand image-search and richer automation flows only after the core text-search path has traction.
 - Add more developer onboarding assets when evidence shows the API wedge is working.
 

@@ -7,7 +7,7 @@ import { PricingTiers } from "./pricing-tiers";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Credit-based pricing for Video Moment Finder. Free tier includes 1 credit. Paid packs: Starter ($5, 5 credits) and Pro ($15, 20 credits). Credits do not expire.",
+    "Website video credits and API units for Video Moment Finder. Check your free allowance after sign-in. Starter: $5 for 5 website credits; Pro: $15 for 20.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -19,7 +19,7 @@ export default function PricingPage() {
           Simple, credit-based pricing
         </h1>
         <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
-          Pay for what you use. Each credit processes one video up to 90
+          Pay for what you use. Each website video credit processes one video up to 90
           minutes.
         </p>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -30,6 +30,11 @@ export default function PricingPage() {
         <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Beta pricing: current introductory rates may change as the product
           matures.
+        </p>
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+          Your signed-in summary shows the free allowance available to your account.
+          An enrolled API trial shares its unit balance with website indexing;
+          website video credits remain a separate balance.
         </p>
 
         <PricingInteractions />

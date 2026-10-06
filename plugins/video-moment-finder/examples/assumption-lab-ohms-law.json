@@ -1,0 +1,63 @@
+{
+  "format_version": 1,
+  "title": "When does doubling voltage double current?",
+  "lecture": {"title": "Original micro-lesson: a resistor and an assumption", "video_id": null},
+  "coverage": {"kind": "synthetic", "start_s": 0, "end_s": 90, "gaps": ["This is an original, redistribution-safe fixture, not a retrieved lecture or a measured circuit. No VMF calls were made to produce it."]},
+  "sources": [
+    {"id": "s-law", "kind": "synthetic", "start_s": 0, "end_s": 35, "summary": "Original lesson: for an ideal ohmic resistor at fixed resistance R, voltage V and current I satisfy V = IR. In this example R = 100 ohms. At 2 V the current is 0.02 A; at 4 V it is 0.04 A."},
+    {"id": "s-condition", "kind": "synthetic", "start_s": 35, "end_s": 60, "summary": "Original lesson: the proportionality assumes resistance stays fixed between the two operating points. If heating changes resistance, the starting value of 100 ohms alone cannot determine the new current."},
+    {"id": "s-gap", "kind": "synthetic", "start_s": 60, "end_s": 90, "summary": "Original lesson: this fixture supplies no temperature coefficient, thermal model, measured final resistance, or component power rating. It cannot predict the new resistance, exact heated current, or a safe real circuit operating point."}
+  ],
+  "lab": {
+    "question": "Change the voltage, then remove the fixed-resistance assumption. Which conclusion survives?",
+    "premise": "A rule can be correct while its extension to a new situation is unjustified. This lab keeps the equation visible and lets you compare a numerical result with a case the evidence cannot determine.",
+    "model_limit": "Four reviewed cases apply the original lesson's assumptions. This does not simulate heating or certify hardware safety. Current values are generated calculations checked with I = V/R.",
+    "baseline": "two-fixed",
+    "controls": [
+      {"id": "voltage", "label": "Applied voltage", "options": [{"id": "two", "label": "2 V"}, {"id": "four", "label": "4 V"}]},
+      {"id": "resistance", "label": "Resistance assumption", "options": [{"id": "fixed", "label": "Stays at 100 ohms"}, {"id": "changes", "label": "Heating changes R; final R unknown"}]}
+    ],
+    "states": [
+      {
+        "id": "two-fixed", "when": {"voltage": "two", "resistance": "fixed"},
+        "title": "The reference operating point", "entities": ["Applied voltage: 2 V", "Fixed resistance: 100 ohms"],
+        "outcome": "Current = 20 mA", "explanation": "I = V/R = 2/100 A = 0.02 A = 20 mA.",
+        "boundary": "applies", "boundary_note": "This follows from the stated ideal, fixed-resistance model.",
+        "assumptions": ["The element obeys V = IR.", "Resistance is 100 ohms at this operating point."],
+        "reasoning": ["Divide voltage by resistance to find current.", "Multiply amperes by 1000 to express milliamperes."],
+        "unknowns": ["No component power rating or real heating behavior is supplied."],
+        "citations": ["s-law", "s-gap"], "next_step": "Change only voltage to 4 V. Does the result scale by the same factor?"
+      },
+      {
+        "id": "four-fixed", "when": {"voltage": "four", "resistance": "fixed"},
+        "title": "Double the voltage, keep the condition", "entities": ["Applied voltage: 4 V", "Fixed resistance: 100 ohms"],
+        "outcome": "Current = 40 mA", "explanation": "I = V/R = 4/100 A = 0.04 A = 40 mA. This is twice the reference current because R did not change.",
+        "boundary": "applies", "boundary_note": "Doubling current follows only while resistance stays fixed.",
+        "assumptions": ["The element obeys V = IR.", "Resistance stays at 100 ohms despite the changed voltage."],
+        "reasoning": ["Both operating points use the same denominator, 100 ohms.", "Therefore I₂/I₁ = V₂/V₁ = 2 within this model."],
+        "unknowns": ["The arithmetic does not establish whether a real resistor can sustain this operating point."],
+        "citations": ["s-law", "s-condition", "s-gap"], "next_step": "Keep 4 V and change the resistance assumption. Can the number 40 mA still be justified?"
+      },
+      {
+        "id": "two-changes", "when": {"voltage": "two", "resistance": "changes"},
+        "title": "A known voltage with an unknown final resistance", "entities": ["Applied voltage: 2 V", "Final resistance: unknown"],
+        "outcome": "Exact current is undetermined", "explanation": "Even retaining V = IR at the new operating point, I = 2/R_final A needs the final resistance. The initial 100 ohms is insufficient.",
+        "boundary": "not-supported", "boundary_note": "The provided evidence cannot supply a numerical heated current.",
+        "assumptions": ["The element still obeys V = IR at each operating point.", "Heating changes resistance, and no final value is supplied."],
+        "reasoning": ["An equation with an unknown denominator does not yield a unique numerical current.", "No sign or size of the resistance change is specified; do not invent one."],
+        "unknowns": ["Final resistance and current.", "The temperature coefficient and thermal environment."],
+        "citations": ["s-condition", "s-gap"], "next_step": "Pin this case, then change only voltage. Notice that both exact currents remain undetermined."
+      },
+      {
+        "id": "four-changes", "when": {"voltage": "four", "resistance": "changes"},
+        "title": "Doubling voltage no longer fixes the ratio", "entities": ["Applied voltage: 4 V", "Final resistance: unknown"],
+        "outcome": "Exact current is undetermined", "explanation": "I = 4/R_final A. Compared with the fixed 2 V reference, the ratio is 200/R_final when R_final is in ohms. It equals two only when R_final = 100 ohms.",
+        "boundary": "not-supported", "boundary_note": "The two-times current conclusion requires the very assumption removed in this case.",
+        "assumptions": ["The element still obeys V = IR at this operating point.", "The new resistance differs from 100 ohms by an unspecified amount."],
+        "reasoning": ["Divide 4/R_final A by the reference current 0.02 A to obtain the dimensionless current ratio.", "A changed denominator prevents inferring a two-times ratio from voltage alone."],
+        "unknowns": ["The final resistance, exact current, and direction of the resistance change.", "Whether any proposed physical component tolerates the operating point."],
+        "citations": ["s-law", "s-condition", "s-gap"], "next_step": "Return resistance to fixed. Name the condition that made proportional reasoning valid."
+      }
+    ]
+  }
+}

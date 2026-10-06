@@ -10,12 +10,17 @@ const navLinks = [
   { href: "/developers", label: "Developers" },
   { href: "/support", label: "Support" },
 ];
+const connectorNavLinks = [
+  { href: "/support", label: "Support" },
+  { href: "/privacy", label: "Privacy" },
+];
 
-function MobileMenu({ onClose }: { onClose: () => void }) {
+function MobileMenu({ onClose, isConnectorRoute }: { onClose: () => void; isConnectorRoute: boolean }) {
+  const links = isConnectorRoute ? connectorNavLinks : navLinks;
   return (
-    <nav className="border-t border-zinc-200 bg-background px-4 py-3 dark:border-zinc-800 md:hidden">
+    <nav id="mobile-navigation" aria-label="Mobile navigation" className="border-t border-zinc-200 bg-background px-4 py-3 dark:border-zinc-800 md:hidden">
       <div className="flex flex-col gap-3">
-        {navLinks.map((link) => (
+        {links.map((link) => (
           <Link
             key={link.href}
             href={link.href}
@@ -25,7 +30,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
             {link.label}
           </Link>
         ))}
-        <SignedIn>
+        {!isConnectorRoute && <SignedIn>
           <Link
             href="/dashboard"
             className="text-sm text-zinc-600 hover:text-foreground dark:text-zinc-400"
@@ -33,7 +38,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
           >
             Dashboard
           </Link>
-        </SignedIn>
+        </SignedIn>}
         <SignedOut>
           <SignInButton mode="modal">
             <button className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white">
@@ -52,6 +57,8 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
 export function Header() {
   const [menuOpenOnPath, setMenuOpenOnPath] = useState<string | null>(null);
   const pathname = usePathname();
+  const isConnectorRoute = pathname.startsWith("/connectors/");
+  const links = isConnectorRoute ? connectorNavLinks : navLinks;
 
   // Clear stale menu state when pathname changes (React render-time adjustment)
   if (menuOpenOnPath !== null && menuOpenOnPath !== pathname) {
@@ -75,8 +82,8 @@ export function Header() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-6 md:flex">
-          {navLinks.map((link) => (
+        <nav aria-label="Main navigation" className="hidden items-center gap-6 md:flex">
+          {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -85,14 +92,14 @@ export function Header() {
               {link.label}
             </Link>
           ))}
-          <SignedIn>
+          {!isConnectorRoute && <SignedIn>
             <Link
               href="/dashboard"
               className="text-sm text-zinc-600 hover:text-foreground dark:text-zinc-400"
             >
               Dashboard
             </Link>
-          </SignedIn>
+          </SignedIn>}
           <SignedOut>
             <SignInButton mode="modal">
               <button className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white">
@@ -111,6 +118,8 @@ export function Header() {
           className="md:hidden p-2 text-zinc-600 dark:text-zinc-400"
           onClick={toggleMenu}
           aria-label="Toggle menu"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
         >
           <svg
             className="h-5 w-5"
@@ -138,7 +147,7 @@ export function Header() {
       </div>
 
       {menuOpen && (
-        <MobileMenu onClose={() => setMenuOpenOnPath(null)} />
+        <MobileMenu onClose={() => setMenuOpenOnPath(null)} isConnectorRoute={isConnectorRoute} />
       )}
     </header>
   );

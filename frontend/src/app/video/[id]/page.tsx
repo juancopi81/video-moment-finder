@@ -12,9 +12,11 @@ import {
 import { usePostHog } from "posthog-js/react";
 import { AuthLoadingFallback } from "@/components/auth-loading-fallback";
 import { API_URL, parseApiError } from "@/lib/api";
+import { boundedVideoTimestamp, buildTimestampUrl, parseVideoTimestamp } from "@/lib/video-timestamps";
 
 type VideoPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ t?: string | string[] }>;
 };
 
 type VideoStatus = "queued" | "processing" | "ready" | "failed";
@@ -81,18 +83,10 @@ function formatTimestamp(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-function buildTimestampUrl(baseUrl: string, seconds: number): string | null {
-  try {
-    const url = new URL(baseUrl);
-    url.searchParams.set("t", Math.floor(seconds).toString());
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-export default function VideoPage({ params }: VideoPageProps) {
+export default function VideoPage({ params, searchParams }: VideoPageProps) {
   const { id } = use(params);
+  const { t } = use(searchParams);
+  const initialTimestamp = parseVideoTimestamp(t);
   const { getToken, isLoaded, userId } = useAuth();
   const posthog = usePostHog();
 
@@ -102,6 +96,8 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<"youtube" | "upload" | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [videoUnavailable, setVideoUnavailable] = useState(false);
+  const [playbackUnavailable, setPlaybackUnavailable] = useState(false);
   const [searchMode, setSearchMode] = useState<SearchMode>("text");
   const [searchQuery, setSearchQuery] = useState("");
   const [queryImageFile, setQueryImageFile] = useState<File | null>(null);
@@ -146,6 +142,18 @@ export default function VideoPage({ params }: VideoPageProps) {
     setQueryImageFile(file);
   }
 
+  useEffect(() => {
+    setStatus("queued");
+    setVideoUnavailable(false);
+    setVideoUrl(null);
+    setSourceUrl(null);
+    setSourceType(null);
+    setError(null);
+    setStatusMessage(null);
+    setResults([]);
+    setHasSearched(false);
+  }, [id, userId]);
+
   // Poll for video status
   useEffect(() => {
     if (!isLoaded || !userId) return;
@@ -179,8 +187,15 @@ export default function VideoPage({ params }: VideoPageProps) {
         const res = await fetch(`${API_URL}/api/v1/videos/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (stopped) return;
         if (res.status === 401) {
           setError("Session expired. Please sign in again.");
+          stopped = true;
+          if (interval) clearInterval(interval);
+          return;
+        }
+        if (res.status === 403 || res.status === 404) {
+          setVideoUnavailable(true);
           stopped = true;
           if (interval) clearInterval(interval);
           return;
@@ -189,6 +204,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           throw new Error("Failed to fetch video status");
         }
         const data: VideoStatusResponse = await res.json();
+        if (stopped) return;
         setStatus(data.status);
         setStatusMessage(data.error_message);
         if (data.youtube_url) {
@@ -213,6 +229,18 @@ export default function VideoPage({ params }: VideoPageProps) {
       if (interval) clearInterval(interval);
     };
   }, [getToken, id, isLoaded, status, userId]);
+
+  useEffect(() => {
+    setPlaybackUnavailable(false);
+  }, [sourceUrl]);
+
+  // Wait for metadata before seeking; never autoplay a source deep link.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 1) return;
+    const seconds = boundedVideoTimestamp(initialTimestamp, video.duration);
+    if (seconds !== null) video.currentTime = seconds;
+  }, [initialTimestamp, sourceUrl, status]);
 
   useEffect(() => {
     if (!queryImageFile) {
@@ -297,6 +325,11 @@ export default function VideoPage({ params }: VideoPageProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center p-8">
       <h1 className="text-2xl font-bold mb-2">Video: {id}</h1>
+      {initialTimestamp !== null && (
+        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+          Source timestamp: {formatTimestamp(initialTimestamp)}. Playback depends on the original video being available.
+        </p>
+      )}
       {error && (
         <p className="mb-4 text-sm text-red-600 dark:text-red-400 text-center">
           {error}
@@ -317,7 +350,14 @@ export default function VideoPage({ params }: VideoPageProps) {
       </SignedOut>
 
       <SignedIn>
-        {(status === "queued" || status === "processing") && (
+        {videoUnavailable && (
+          <p role="alert" className="mb-6 max-w-xl text-center text-sm text-amber-600 dark:text-amber-400">
+            This video is unavailable to this account. Use the account that holds
+            the video, or choose another video.
+            {initialTimestamp !== null && " The source timestamp above remains a reference even when playback is unavailable."}
+          </p>
+        )}
+        {!videoUnavailable && (status === "queued" || status === "processing") && (
           <div className="text-center">
             <p className="text-zinc-600 dark:text-zinc-400 mb-4">
               {status === "queued" ? "Queued for processing..." : "Processing your video..."}
@@ -361,7 +401,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           </div>
         )}
 
-        {status === "ready" && (
+        {!videoUnavailable && status === "ready" && (
           <div className="w-full max-w-xl">
             {sourceType === "upload" && sourceUrl && (
               <div className="mb-6">
@@ -369,6 +409,12 @@ export default function VideoPage({ params }: VideoPageProps) {
                   ref={videoRef}
                   src={sourceUrl}
                   controls
+                  preload="metadata"
+                  onLoadedMetadata={(event) => {
+                    const seconds = boundedVideoTimestamp(initialTimestamp, event.currentTarget.duration);
+                    if (seconds !== null) event.currentTarget.currentTime = seconds;
+                  }}
+                  onError={() => setPlaybackUnavailable(true)}
                   className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700"
                 />
                 <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
@@ -377,10 +423,23 @@ export default function VideoPage({ params }: VideoPageProps) {
               </div>
             )}
 
-            {sourceType === "upload" && !sourceUrl && (
+            {sourceType === "upload" && (!sourceUrl || playbackUnavailable) && (
               <p className="mb-6 text-sm text-amber-600 dark:text-amber-400">
-                The original video file has expired and is no longer available for playback. Your search results and thumbnails are not affected.
+                The original video is unavailable or its playback link has expired.
+                Source timestamps remain useful references. You can still search
+                available indexed content and thumbnails.
               </p>
+            )}
+
+            {initialTimestamp !== null && videoUrl && buildTimestampUrl(videoUrl, initialTimestamp) && (
+              <a
+                href={buildTimestampUrl(videoUrl, initialTimestamp)!}
+                target="_blank"
+                rel="noreferrer"
+                className="mb-6 block text-sm text-accent underline underline-offset-4"
+              >
+                Open original video at {formatTimestamp(initialTimestamp)}
+              </a>
             )}
 
             <form onSubmit={handleSearch}>

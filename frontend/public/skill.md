@@ -1,6 +1,6 @@
 ---
 name: video-moment-finder
-description: Public bootstrap for the Video Moment Finder REST API, CLI, and Claude-compatible remote MCP connector.
+description: Public bootstrap for the Video Moment Finder REST API, CLI, and client-neutral remote MCP connection.
 homepage: https://www.videomomentfinder.com
 api_host: https://api.videomomentfinder.com
 openapi: https://api.videomomentfinder.com/openapi.json
@@ -19,7 +19,7 @@ Video Moment Finder exposes two integration surfaces:
 
 - Site: `https://www.videomomentfinder.com`
 - Developers overview: `https://www.videomomentfinder.com/developers`
-- Claude connector approval page: `https://www.videomomentfinder.com/connectors/claude`
+- MCP approval page: `https://www.videomomentfinder.com/connectors/claude` (existing compatibility URL; start the flow in your app)
 - Public skill file: `https://www.videomomentfinder.com/skill.md`
 - Privacy policy: `https://www.videomomentfinder.com/privacy`
 - Support: `https://www.videomomentfinder.com/support`
@@ -38,9 +38,9 @@ Video Moment Finder exposes two integration surfaces:
 - fetch the full transcript with per-segment timestamps
 - fetch frames at specific timestamps (stored thumbnails or on-demand high-resolution)
 
-REST is the canonical public contract for all five capabilities above: one-shot upload, status polling, search, transcript fetch, and frame retrieval. The CLI wraps only upload, status polling, and search — there is no CLI wrapper yet for transcript or frame retrieval; use REST directly for those two.
+REST is the canonical public contract for these capabilities. The CLI wraps only upload, status polling, and search — there is no CLI wrapper yet for transcript or frame retrieval; use REST directly for those two.
 
-## Claude Connector
+## Connect Video Moment Finder
 
 Remote MCP tools:
 
@@ -53,14 +53,38 @@ Remote MCP tools:
 
 The server also ships the `lecture_notes` MCP prompt, a guided workflow that turns an indexed lecture video into Markdown study notes from its transcript and board-moment frames. MCP prompts are user-invoked (not callable by agents as tools); clients without prompt support get the same workflow from the server's MCP instructions.
 
-How the Claude connect flow works:
+How the connection works:
 
-1. Add a custom connector in Claude with server URL `https://api.videomomentfinder.com/mcp`.
-2. Use guided OAuth. Claude surfaces that support dynamic client registration can self-register, and internal review flows may still use provided static credentials.
-3. Click `Connect`.
-4. Sign in to Video Moment Finder if needed.
-5. Buy a Developer Pack if your API-unit balance is zero.
-6. Review the tools and approve access.
+1. Add Video Moment Finder in a supported app, or use the remote server URL `https://api.videomomentfinder.com/mcp`.
+2. Start `Connect` and follow guided OAuth. Clients that support dynamic client registration can register automatically.
+3. Sign in to the Video Moment Finder account that holds your videos. Do not paste API keys or tokens into chat.
+4. Review the requesting app, six tools, current allowance, and operation costs, then approve access. Approval requires a positive API-unit balance. Approval itself does not run a video operation.
+5. Return to your app and ask: `List my ready videos, then help me understand one key idea from a lecture, with a timestamp and a frame where available.`
+
+Access is scoped to the connected account. Use a returned video ID and wait for `ready` status. A public video URL alone does not make its content available through MCP. If the video is missing, inaccessible, or failed, explain that state and choose another available video. Do not repeatedly retry a failed or inaccessible video.
+
+## Units and account limits
+
+Website video credits and API units are separate balances. MCP and API operations use API units. Default costs are:
+
+| Operation | API units |
+| --- | --- |
+| Index a new video | 500 |
+| Search a ready video | 1 per call |
+| Retrieve a transcript or range | 1 per call |
+| Retrieve thumbnail frames | 1 per call, up to 25 timestamps |
+| Retrieve high-resolution frames | 5 per call, up to 8 timestamps |
+| List videos or check status | 0 |
+
+The consent screen reports the server's configured rates. Batch timestamps, reuse retrieved evidence, and explain the expected cost before indexing. One transcript plus one thumbnail call is 2 units at the default rates; one transcript plus one high-resolution call is 6. Treat these as estimates, not charge receipts. Do not assume a high-resolution request with thumbnail fallback is free.
+
+An available verified-account trial is granted at most once per account. Its actual grant and status appear after sign-in; prior free website processing can count toward the allowance. Trial availability is deployment-controlled, so do not promise a grant or a fixed amount before the server reports it. Reconnecting, signing in again, or creating a new API key does not reset a trial.
+
+When the account has insufficient units, stop metered calls and explain the limitation without steering to a purchase or upgrade. Continue teaching from evidence already retrieved when useful. If the connection is still active, video listing and status checks remain free. Do not make paid operations to test whether an allowance changed.
+
+If transcripts or frames are unavailable, identify that gap. Inspect actual returned images before making visual claims; report unreadable labels instead of guessing. Keep video IDs and timestamps as source references. Link to `https://www.videomomentfinder.com/video/<video_id>?t=<seconds>` for an account-scoped source location; playback may be unavailable after source cleanup. Do not embed expiring or signed storage URLs in saved learning artifacts.
+
+## File upload
 
 Current MCP upload behavior:
 
@@ -68,7 +92,9 @@ Current MCP upload behavior:
 - write the file bytes to that URL with a plain `PUT`
 - `upload_video(action="complete")` finalizes the upload
 
-## Other MCP Clients
+This requires a client capable of transferring file bytes; a tool call alone does not upload the file. Upload only material the user owns or is authorized to use, with their instruction to index it and awareness of the indexing cost.
+
+## MCP client example
 
 The MCP endpoint is client-neutral: Streamable HTTP with OAuth authorization-code + PKCE and dynamic client registration. Any MCP client supporting remote OAuth servers can connect. For example, Codex:
 
@@ -145,7 +171,7 @@ uv run vmf videos search <video_id> --query-text "when do they explain the model
 ## Example Prompts
 
 1. `List my recent videos in Video Moment Finder.`
-   Expected behavior: the agent or Claude connector returns recent video IDs, status, and source details.
+   Expected behavior: the connected app returns recent video IDs, status, and source details from the authorized account.
 
 2. `Check whether video <video_id> is ready and tell me if it failed.`
    Expected behavior: status polling plus failure detail when present.
@@ -170,6 +196,5 @@ uv run vmf videos search <video_id> --query-text "when do they explain the model
 - Developers overview: `https://www.videomomentfinder.com/developers`
 - OpenAPI schema: `https://api.videomomentfinder.com/openapi.json`
 - Swagger UI: `https://api.videomomentfinder.com/docs`
-- API dashboard: `https://www.videomomentfinder.com/dashboard/api`
 - Privacy policy: `https://www.videomomentfinder.com/privacy`
 - Support: `https://www.videomomentfinder.com/support`
