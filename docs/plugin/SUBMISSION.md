@@ -271,9 +271,14 @@ five actual publisher replies, including deliberately scripted incorrect and
 ambiguous inputs. It confirmed source-cited feedback, a hint before the answer,
 an ambiguity clarification without grading, and acceptance of the clarified
 answer. The test added zero units and makes no learning-assessment claim.
-Negative cases, reconnect, source retention throughout review and recording
-remain open. This is development evidence, not a completed eight-case run
-against a saved portal release.
+The publisher also sent the three packaged negative requests in one message.
+The response explained that VMF cannot edit/publish a video, purchase or refill
+units, or identify a stranger and find private contact details. No VMF tool was
+invoked, purchase/checkout initiated or unsupported result claimed; this added
+zero units. These are three bounded development responses in this chat, not an
+independent reliability evaluation or saved portal-release passes. Reconnect,
+source retention throughout review and recording remain open. This is development
+evidence, not a completed eight-case run against a saved portal release.
 
 Private receipts and outputs are in
 `docs/private/vmf-learning/release-0.2.0/reviewer-sample/`; account and allowance
@@ -341,8 +346,9 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 1. Preserve the completed schema/code rollout in `docs/DEPLOYMENT.md`; do not
    replay migrations. Trial activation is still a separate authorized action.
 2. Preserve the completed reviewer ingestion, retrieval, isolation and timestamp
-   playback and tutor behavior checks. Finish negative cases and reviewer reconnect; show
-   the installed version in the intended host. Do not re-index for rehearsal.
+   playback, tutor and three negative-response development checks. Finish reviewer
+   reconnect; show the installed version in the intended host. Do not re-index
+   for rehearsal.
 3. Use the funded dedicated reviewer account and original sample. Finish access
    instructions and a source-retention/sample-input plan for the review period.
    Sign-in must remain independent of the publisher's social login, mailbox,

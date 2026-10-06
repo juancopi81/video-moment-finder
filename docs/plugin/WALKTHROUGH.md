@@ -41,8 +41,11 @@ interaction, mobile, download/import and native PowerPoint checks remain separat
 Five actual publisher replies also
 completed a scripted tutor behavior check: correct feedback, a hint before the
 answer, ambiguous-input clarification and acceptance of the clarified answer.
-This was not a learning assessment and consumed zero additional units. Negative
-prompts, reviewer reconnect, installed-version footage and recording remain pending.
+This was not a learning assessment and consumed zero additional units. The
+publisher then sent all three packaged negative prompts in one message; the
+response explained each unsupported action without invoking VMF tools, opening
+checkout or claiming success. That bounded development check added zero units.
+Reviewer reconnect, installed-version footage and recording remain pending.
 Do not describe these generated artifacts as a completed eight-case live test.
 
 ## Prepare the actual recording
