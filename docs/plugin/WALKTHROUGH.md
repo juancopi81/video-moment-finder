@@ -6,13 +6,56 @@ upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
 Preparation status: private version 0.2.0 contains five workflows. Playground keeps the
-existing assumption-lab skill identity, and Presentation is the fifth skill. The existing custom connector passed OAuth reconnect and authenticated
-calls; a clean-account connection using the packaged MCP server remains a
-separate check. One original 42-second lesson was indexed, its full transcript
-and three high-resolution frames inspected, and authenticated playback tested.
-Reuse that sample for rehearsal. Do not create a duplicate package or index
-again just for a cleaner take. Current production consent still has Claude
-wording, so record the neutral flow after the authorized deployment.
+existing assumption-lab skill identity, and Presentation is the fifth skill. The
+existing custom connector passed OAuth reconnect and authenticated calls; the
+dedicated reviewer subsequently connected through the private plugin as recorded
+below. Reviewer reconnect also passed the bounded development check. One original
+42-second lesson was indexed, its full transcript and three high-resolution
+frames inspected, and authenticated playback tested.
+The approved production rollout completed on 2026-10-06 at `67f4c28`, including
+neutral VMF consent. By that date the original sample's temporarily retained
+source was unavailable; the timestamp page correctly explained the limitation,
+but actual timestamp seeking was unverified at that rollout checkpoint. The
+separately approved reviewer test below subsequently verified it. The previous
+publisher one-job allowance is exhausted, and the reviewer one-job allowance has
+now also been used. Reuse the ready reviewer sample for rehearsal and recording;
+do not create a duplicate package or index again just for a cleaner take.
+
+October 6 reviewer preparation is now complete for ingestion and retrieval: the
+publisher approved a once-only 2,000-unit manual allowance and a 600-unit,
+one-job agent cap. The dedicated reviewer connected, indexed the original
+42-second lesson once, and used 507 actual units total. Its balance is 1,493,
+with no API key, purchase or public trial enrollment. Full transcript, targeted
+search, three high-resolution frames and authenticated seek-to-27 playback
+passed; publisher-video access correctly returned 404. Fresh guide, six cards,
+computed Playground and six-slide editable deck are stored privately in
+`docs/private/vmf-learning/release-0.2.0/reviewer-sample/`.
+
+All six final PowerPoint slides were inspected after reopening the export. CSV,
+source references, model calculations and JavaScript syntax passed static
+checks. After this browser session denied local-file HTML previews, the publisher
+reported checking the four fresh pages: guide answer reveal, flashcard reveal
+and advance, Playground input change and zero-vector preset, and presentation
+navigation and notes. This is a human-reported check of these controls; broader
+interaction, mobile, download/import and native PowerPoint checks remain separate.
+Five actual publisher replies also
+completed a scripted tutor behavior check: correct feedback, a hint before the
+answer, ambiguous-input clarification and acceptance of the clarified answer.
+This was not a learning assessment and consumed zero additional units. The
+publisher then sent all three packaged negative prompts in one message; the
+response explained each unsupported action without invoking VMF tools, opening
+checkout or claiming success. That bounded development check added zero units.
+Reviewer reconnect subsequently passed: a new OAuth record, successful free
+list/status calls, unchanged 1,493-unit balance and one original grant, with no
+trial or API key. This did not revoke the previous connection or test expired
+authorization. Installed-version footage and recording remain pending. The
+source originally expired on October 9. A separately approved retention rollout
+preserved it under a 90-day rule, verified its integrity, and kept the same video
+ID/index. Its expiry header now schedules deletion for January 4, 2027. Actual
+high-resolution and thumbnail retrieval still work with public bucket access
+disabled. Reviewer usage is now 514 of the 600-unit agent cap, with 1,486 units
+remaining; recording and installed-version footage are still pending.
+Do not describe these generated artifacts as a completed eight-case live test.
 
 ## Prepare the actual recording
 

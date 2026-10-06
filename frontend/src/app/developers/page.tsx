@@ -123,10 +123,12 @@ export default function DevelopersPage() {
           temporary upload URL; never send your account token to that URL.
         </p>
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          Original video files are temporary, so playback and high-resolution frames
-          can become unavailable while transcripts and thumbnails remain. A learning
-          answer should name evidence gaps, keep source timestamps, and avoid guessing
-          details from an unreadable frame.
+          Original uploaded video files are scheduled for deletion 30 days after
+          upload; cleanup may complete later. Playback and high-resolution frames
+          need the original, while stored transcripts and thumbnails remain available
+          after source cleanup. Media links are temporary and may need refreshing
+          independently of source retention. A learning answer should name evidence
+          gaps, keep source timestamps, and avoid guessing details from an unreadable frame.
         </p>
       </section>
 

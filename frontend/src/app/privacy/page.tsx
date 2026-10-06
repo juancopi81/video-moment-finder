@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: October 2, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: October 6, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -77,8 +77,10 @@ export default function PrivacyPage() {
             <li>Metadata (timestamps, video ID, processing status)</li>
           </ul>
           <p className="mt-2">
-            Original uploaded video files are stored temporarily for processing and are subject to
-            automatic cleanup via storage lifecycle rules.
+            Original uploaded video files are stored temporarily for processing, playback,
+            and high-resolution frame retrieval. A storage lifecycle rule schedules their
+            deletion 30 days after upload. Account-owned originals and thumbnails are
+            delivered through temporary signed links rather than a public bucket URL.
           </p>
           <p className="mt-2">
             If you submit a YouTube URL, we use that URL to attempt a server-side import for the
@@ -138,8 +140,12 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-foreground">5. Data Retention</h2>
           <p className="mt-2">
             Processed video data (embeddings, thumbnails, and transcripts) is retained as long as your account
-            is active. Uploaded source video files are automatically deleted after a short
-            retention period. You can request deletion of all your data by contacting us.
+            is active. Uploaded source video files are scheduled for automatic deletion
+            30 days after upload; cleanup may complete later. Playback and high-resolution
+            frames become unavailable when the original is deleted, while stored transcripts
+            and thumbnails remain available. Temporary link expiration does not delete the
+            stored video. Already-deleted originals are not restored by this retention policy.
+            You can request deletion of all your data by contacting us.
           </p>
         </section>
 

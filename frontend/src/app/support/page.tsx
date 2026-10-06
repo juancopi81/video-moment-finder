@@ -38,8 +38,8 @@ const faqs = [
   {
     question: "What happens to my video data?",
     answer:
-      "We store thumbnail images, search vectors, and available transcripts with timestamps. Uploaded source files are temporary and subject to automatic cleanup. Hosting and processing providers help operate the service, as described in the privacy policy. If you authorize a connected app, the requested video evidence is returned to that app through its approved tools.",
-    dateModified: "2026-10-02",
+      "We store thumbnail images, search vectors, and available transcripts with timestamps. Original uploaded video files are scheduled for deletion 30 days after upload; cleanup may complete later. Playback and high-resolution frames need the retained original. Stored transcripts and thumbnails remain available after source cleanup. Original videos and account-owned thumbnails use temporary signed links; link expiration is separate from source deletion. Hosting and processing providers help operate the service, as described in the privacy policy. If you authorize a connected app, the requested video evidence is returned to that app through its approved tools.",
+    dateModified: "2026-10-06",
   },
   {
     question: "How do website credits and API units differ?",
