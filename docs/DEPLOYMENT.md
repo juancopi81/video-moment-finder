@@ -124,6 +124,9 @@ Approved production policy (2026-10-06):
   30 days after upload, preserving its two-day incomplete-multipart cleanup.
   Lifecycle deletion can complete later; already-deleted originals are not
   restored. Thumbnail retention is unchanged.
+  Existing objects can still show the old expiration header while Cloudflare
+  applies the changed rule, typically within 24 hours but sometimes longer.
+  See [Cloudflare lifecycle behavior](https://developers.cloudflare.com/r2/buckets/object-lifecycles/#behavior).
 - Enabled rule `cleanup-review-samples-prefix` schedules deletion of
   `review-samples/` objects after 90 days. The one original reviewer fixture was
   copied there, its byte length and SHA-256 verified, and only its existing source
