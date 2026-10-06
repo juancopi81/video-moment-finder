@@ -10,9 +10,14 @@ existing assumption-lab skill identity, and Presentation is the fifth skill. The
 calls; a clean-account connection using the packaged MCP server remains a
 separate check. One original 42-second lesson was indexed, its full transcript
 and three high-resolution frames inspected, and authenticated playback tested.
-Reuse that sample for rehearsal. Do not create a duplicate package or index
-again just for a cleaner take. Current production consent still has Claude
-wording, so record the neutral flow after the authorized deployment.
+The approved production rollout completed on 2026-10-06 at `67f4c28`, including
+neutral VMF consent. By that date the original sample's temporarily retained
+source was unavailable; the timestamp page correctly explained the limitation,
+but actual timestamp seeking remained unverified. Prepare a fresh original
+sample in the dedicated reviewer account only after separate provisioning and
+indexing approval. The previous one-job indexing allowance is exhausted. Reuse
+the resulting ready sample for rehearsal and recording; do not create a duplicate
+package or index again just for a cleaner take.
 
 ## Prepare the actual recording
 
