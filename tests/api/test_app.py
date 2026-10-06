@@ -2320,6 +2320,10 @@ def test_search_video_by_image_returns_results(monkeypatch) -> None:
         "src.api.app.db_get_video",
         lambda video_id, user_id=None: _video_record(video_id, status="ready"),
     )
+    monkeypatch.setattr(
+        "src.api.app._search_thumbnail_urls",
+        lambda record, results: {0: "https://storage.example.com/signed-thumbnail?token=test"},
+    )
 
     def _fake_search_video_by_image_service(
         *,
@@ -2359,7 +2363,7 @@ def test_search_video_by_image_returns_results(monkeypatch) -> None:
     }
     payload = response.json()
     assert payload["results"][0]["timestamp_s"] == 9.5
-    assert payload["results"][0]["thumbnail_url"] == "https://cdn.example.com/thumb.jpg"
+    assert payload["results"][0]["thumbnail_url"] == "https://storage.example.com/signed-thumbnail?token=test"
     assert payload["results"][0]["source"] == "visual"
 
 

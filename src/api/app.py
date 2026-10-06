@@ -1313,10 +1313,49 @@ def _get_ready_video_for_search(video_id: str, user_id: str) -> VideoRecord:
     return record
 
 
+def _search_thumbnail_urls(record: VideoRecord, results: list[Any]) -> dict[int, str]:
+    """Issue temporary thumbnail links after the route checks video ownership."""
+    frames = [
+        result for result in results
+        if result.source == "visual" and result.thumbnail_url
+        and isinstance(result.frame_index, int) and result.frame_index >= 0
+    ]
+    if not frames:
+        return {}
+
+    try:
+        config = R2Config.from_env()
+    except StorageConfigError:
+        logger.warning("R2 config missing; cannot sign search thumbnails for video_id=%s", record.id)
+        return {}
+    store = R2Store(config)
+    urls: dict[int, str] = {}
+    for result in frames:
+        if result.frame_index in urls:
+            continue
+        key = thumbnail_key(record.id, result.frame_index)
+        # Older indexes stored thumbnails directly under the video UUID.
+        # The cached URL is only a layout hint; never sign another video's key.
+        legacy_key = f"{record.id}/thumb_{result.frame_index:05d}.jpg"
+        if urlsplit(result.thumbnail_url).path in {
+            f"/{legacy_key}", f"/{config.bucket_name}/{legacy_key}",
+        }:
+            key = legacy_key
+        try:
+            urls[result.frame_index] = store.generate_presigned_url(
+                key, expires_in=_source_url_ttl_s(),
+            )
+        except R2StorageError:
+            logger.warning("Failed to sign search thumbnail for video_id=%s frame_index=%s",
+                           record.id, result.frame_index)
+    return urls
+
+
 def _build_video_search_response(
     record: VideoRecord,
     results: list[Any],
 ) -> "VideoSearchResponse":
+    thumbnail_urls = _search_thumbnail_urls(record, results)
     return VideoSearchResponse(
         video_id=record.id,
         youtube_url=record.youtube_url,
@@ -1325,7 +1364,10 @@ def _build_video_search_response(
         results=[
             SearchResult(
                 timestamp_s=r.timestamp_s,
-                thumbnail_url=r.thumbnail_url,
+                thumbnail_url=(
+                    thumbnail_urls.get(r.frame_index)
+                    if r.source == "visual" and r.thumbnail_url else None
+                ),
                 score=r.score,
                 source=r.source,
                 transcript_text=r.transcript_text,

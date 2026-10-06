@@ -95,6 +95,42 @@ Example verification query:
 SELECT event_name, count(*), count(distinct user_id) FROM analytics_events GROUP BY 1;
 ```
 
+## Private media storage and retention
+
+Buckets containing uploaded originals or account-owned thumbnails must not expose
+their objects through an R2 public development URL or public custom domain.
+API routes first verify video ownership, then issue expiring signed links.
+Search responses sign visual thumbnails instead of returning their cached public
+URLs; `VIDEO_SOURCE_URL_TTL_S` controls these links as well as source playback
+links (default 3,600 seconds). The URL lifetime is separate from object retention.
+Missing storage configuration or signing failures omit the thumbnail URL while
+preserving the textual result. Cached URLs are only layout hints for legacy
+thumbnails stored directly under a video's UUID; objects under `thumb/<uuid>/`
+also work without re-indexing or rewriting Qdrant payloads.
+
+Signed API URLs alone do not restrict a bucket with public access enabled. Check
+the Cloudflare dashboard and actual browser delivery; a server-side request
+blocked by browser-signature filtering is not proof that objects are private.
+
+Planned rollout, pending publisher approval:
+
+1. Deploy signed search-thumbnail responses and verify website/API search.
+2. Disable the bucket's public development URL and verify anonymous source and
+   thumbnail access fails while authorized signed playback and frames still work.
+3. Change only source-object deletion from three to the proposed 30 days;
+   preserve incomplete-upload cleanup and thumbnail retention. Update user-facing
+   retention copy to the effective policy after verifying it. This change does
+   not restore already-deleted originals.
+4. Preserve the one original reviewer fixture under a separate `review-samples/`
+   prefix with a proposed 90-day deletion rule. Update only its source pointer,
+   retain its existing video ID/index and verify playback. Keep an original
+   fixture available and renew review access if review exceeds that window.
+
+Do not use a bucket lock: it would prevent requested deletion. Do not re-enable
+public access as a rollback; restore signed delivery if a regression occurs.
+No storage setting, source copy or production pointer change is part of the
+local implementation validation.
+
 ## Upload Flow Contract
 
 Preferred large-file flow (direct-to-R2, reliable production ingest path):
