@@ -152,6 +152,13 @@ These migrations create schema/functions only and grant no trial units. Keep
 `API_TRIAL_ENABLED=false` until activation is separately approved. No production
 migration, activation, or live grant is part of the implementation validation.
 
+Release checkpoint (2026-10-05): both migrations were separately approved and
+applied to production after hosted staging validation. The production ledger
+records all 20 migrations; independent schema, function and permission checks
+passed, with zero trial enrollments or processing charges. Do not replay the
+already-recorded migrations. The dependent production code rollout and trial
+activation remain unapproved; details are in `docs/plugin/SUBMISSION.md`.
+
 With grants enabled, an authenticated account is enrolled on a billing summary,
 connector approval, indexing admission, or metered API operation. The backend
 fetches that same immutable Clerk user ID from `https://api.clerk.com/v1/users/`

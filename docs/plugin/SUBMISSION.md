@@ -2,8 +2,10 @@
 
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
-release. Package and guidance checked: 2026-10-03 (America/Bogota). Deployed-service
-observations below are dated 2026-10-02 and have not been rerun for this artifact-only update.
+release. Package and guidance checked: 2026-10-03 (America/Bogota). Historical
+production user-flow observations are dated 2026-10-02; subsequent staging and
+production database verification is dated separately below. Updated production
+user flows still require deployment and verification.
 
 ## Current release
 
@@ -64,7 +66,7 @@ to fail on external gates; do not fabricate facts to clear it.
 | Presentation 0.2.0 | Eight-slide lecture deck and six-slide fictional work deck exported with editable text and source notes. All 14 slides inspected. Package/geometry/font/import checks passed; reopened final-file renders were pixel-identical. HTML navigation, source-note disclosure, images and narrow layout checked | No native Microsoft PowerPoint or Google Slides execution claimed; work fixture is original fiction, not a retrieved meeting. Low-resolution lecture frames remain disclosed |
 | CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
 | OAuth reconnect | Existing ChatGPT custom connector returned to connected state; subsequent free list succeeded | Current consent still has Claude branding; new package's independent OAuth path and fresh-account onboarding remain to verify |
-| Trial | Default-off code, unit tests and isolated migration CI prepared | No production migrations, trial grants or activation performed |
+| Trial | Default-off code, unit tests, isolated migration CI, hosted staging checks and approved production schema migration passed | Dependent code deployment and trial activation remain separate; no trial grants issued |
 | Reviewer cases | Exactly five positive and three negative cases packaged | P3 now covers flashcards plus a teaching deck; P5 covers Playground. A full eight-case run against a saved portal release and dedicated account remains pending |
 | Review recording | Original sample and a concrete walkthrough script are ready | No screen recording or reviewer-accessible recording URL exists |
 | Submission/publication | None performed | Developer/domain verification, account access, scans, legal attestations and release authorization remain |
@@ -172,7 +174,32 @@ independently; it does not claim another real-account consent flow. Intended-hos
 package calls remain pending. Staging
 currently has no worker, storage, embedding or payment credentials, so these
 checks do not validate indexing or playback there.
-Trial grants remain disabled. Production has not been migrated or deployed.
+Trial grants remain disabled. Production schema was subsequently migrated as
+recorded below; the dependent production code remains undeployed.
+
+## Approved production database checkpoint (2026-10-05)
+
+After explicit publisher approval, the two missing migrations were applied in
+one guarded transaction: `20261002120000_api_billing_retry_safety.sql` and
+`20261002121000_verified_account_trial.sql`. Production now records all 20
+repository migrations. The first preflight stopped before DDL because the SQL
+editor's displayed function text normalized indentation. A byte-preserving
+database snapshot confirmed the same original definitions; only the guard
+digests were corrected before retrying the unchanged migration SQL.
+
+All 11 independent read-only database checks passed: the ledger, billing/refund
+functions, row-level security, owner-select policies and server-only mutating
+RPC permissions. Both new tables remain empty: zero trial enrollments and zero
+processing-charge records. No account balances were changed by the migrations.
+Three free public production HTTP checks also passed afterward: OAuth discovery,
+protected-resource discovery and tokenless MCP HEAD (204). These checks do not
+establish authenticated production billing, packaged OAuth or playback behavior.
+
+Production API trial enablement was absent at preflight; the new code defaults
+off. No code deployment, trial activation, public submission or publication was
+authorized or performed. Local frontend and callback services were stopped for
+the end-of-day handoff. Resume with deployment review; do not replay these
+already-recorded migrations.
 
 ## Metered validation
 
@@ -232,11 +259,11 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 
 ## Finish release in this order
 
-1. Review PR #91 and the default-off rollout in `docs/DEPLOYMENT.md`. Production
-   database migrations, backend/frontend deployment and trial activation remain
-   separate authorized actions. Apply schema before the dependent backend.
-   Validate in staging or an equivalent isolated deployment first; local
-   migration tests are not a staging OAuth test.
+1. Review PR #91 and the default-off rollout in `docs/DEPLOYMENT.md`. Hosted
+   staging verification and the approved production schema migration are
+   complete. Confirm the recorded ledger before the dependent backend rollout;
+   do not replay the migrations. Backend/frontend deployment and trial
+   activation remain separate authorized actions.
 2. Verify deployed neutral consent, informational listing pages and timestamp
    playback. Test the packaged server in a clean intended-host account rather
    than relying on the publisher's existing custom connector.
