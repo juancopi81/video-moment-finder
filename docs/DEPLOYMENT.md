@@ -156,8 +156,14 @@ Release checkpoint (2026-10-05): both migrations were separately approved and
 applied to production after hosted staging validation. The production ledger
 records all 20 migrations; independent schema, function and permission checks
 passed, with zero trial enrollments or processing charges. Do not replay the
-already-recorded migrations. The dependent production code rollout and trial
-activation remain unapproved; details are in `docs/plugin/SUBMISSION.md`.
+already-recorded migrations. After separate publisher approval on 2026-10-06,
+PR #91 merged as `67f4c28` and the production API, worker and frontend all
+deployed that commit successfully. Public endpoint/page checks and the existing
+publisher's free MCP library call passed; the API dashboard balance remained
+5,437 units. A fresh read-only database check again found no trial enrollments
+or shared website charges. Trial activation remains unapproved and disabled;
+details and the remaining packaged-OAuth/playback gates are in
+`docs/plugin/SUBMISSION.md`.
 
 With grants enabled, an authenticated account is enrolled on a billing summary,
 connector approval, indexing admission, or metered API operation. The backend
