@@ -9,9 +9,9 @@ Preparation status: private version 0.2.0 contains five workflows. Playground ke
 existing assumption-lab skill identity, and Presentation is the fifth skill. The
 existing custom connector passed OAuth reconnect and authenticated calls; the
 dedicated reviewer subsequently connected through the private plugin as recorded
-below. Reviewer reconnect remains a separate check. One original 42-second
-lesson was indexed, its full transcript
-and three high-resolution frames inspected, and authenticated playback tested.
+below. Reviewer reconnect also passed the bounded development check. One original
+42-second lesson was indexed, its full transcript and three high-resolution
+frames inspected, and authenticated playback tested.
 The approved production rollout completed on 2026-10-06 at `67f4c28`, including
 neutral VMF consent. By that date the original sample's temporarily retained
 source was unavailable; the timestamp page correctly explained the limitation,
@@ -45,7 +45,12 @@ This was not a learning assessment and consumed zero additional units. The
 publisher then sent all three packaged negative prompts in one message; the
 response explained each unsupported action without invoking VMF tools, opening
 checkout or claiming success. That bounded development check added zero units.
-Reviewer reconnect, installed-version footage and recording remain pending.
+Reviewer reconnect subsequently passed: a new OAuth record, successful free
+list/status calls, unchanged 1,493-unit balance and one original grant, with no
+trial or API key. This did not revoke the previous connection or test expired
+authorization. Installed-version footage and recording remain pending. The
+source expiration header is October 9 at 15:35:15 UTC; preserve access throughout
+review before relying on this fixture for submission.
 Do not describe these generated artifacts as a completed eight-case live test.
 
 ## Prepare the actual recording

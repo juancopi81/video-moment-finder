@@ -60,14 +60,14 @@ to fail on external gates; do not fabricate facts to clear it.
 | Live VMF tools | All six tools succeeded with the dedicated reviewer account on October 6; an attempt to access the publisher's original sample returned 404 | No public directory installation or saved portal release tested |
 | Original ingestion | A separately approved original reviewer MP4 completed start → PUT HTTP 200 without Authorization → complete → queued → processing → ready; exactly one reviewer indexing charge | 41.776 seconds; not a long-video load test. No duplicate reviewer upload attempted |
 | Source retrieval | Reviewer sample: complete two-segment transcript, targeted search and three inspected 1280×720 frames at 10, 22 and 37 seconds; no fallback or frame errors | Selected visual moments, not every frame; retained source availability throughout review still needs an operational plan |
-| Authenticated playback | Reviewer sample opened at exactly 27 seconds on October 6, then advanced to the end with no media error. The earlier publisher sample correctly explains its expired source | Source retention remains temporary; this does not establish indefinite playback |
+| Authenticated playback | Reviewer sample opened at exactly 27 seconds on October 6, then advanced to the end with no media error. A subsequent read-only storage check found the source present, 464,090 bytes, with an expiration header for October 9 at 15:35:15 UTC. The earlier publisher sample correctly explains its expired source | Preserve the reviewer sample through review; current storage expiry does not provide that guarantee |
 | Second lecture | Cached dot-product evidence now also drives a computed Playground and an eight-slide editable teaching presentation, alongside the existing guide, cards and finite lab | Explicit 20.62–134.75-second excerpt; not full-lecture or duality coverage |
 | Visual evidence | Four actual 320×180 thumbnails inspected; ASR omissions disclosed | No inferred unreadable numbers; generated exercises stay labeled |
 | Browser checks | Guide answers and embedded images; deck navigation/answers/show-all; all four lab cases, pin and reset preserving a note; no lab console errors | Guide narrow view checked; original cloud run checked all three templates on desktop/mobile. This follow-up did not independently complete every mobile/download case |
 | Playground 0.2.0 | Real dragging and keyboard coordinates updated calculations; presets, zero-vector limits, prediction, pin/reset and note preservation passed. Tested narrow/desktop rendering without horizontal overflow or console errors. Model invariants checked across 1,600 vector pairs | Download click produced the correct comparison text; the browser tool could not capture a download receipt, so a visible copyable text fallback is included |
 | Presentation 0.2.0 | Eight-slide lecture deck and six-slide fictional work deck exported with editable text and source notes. All 14 slides inspected. Package/geometry/font/import checks passed; reopened final-file renders were pixel-identical. HTML navigation, source-note disclosure, images and narrow layout checked | No native Microsoft PowerPoint or Google Slides execution claimed; work fixture is original fiction, not a retrieved meeting. Low-resolution lecture frames remain disclosed |
 | CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
-| OAuth reconnect | Publisher custom connector reconnected October 2. October 6 reviewer sign-in created an active production OAuth connection; real calls and account isolation passed without an API key | Reviewer reconnect, expired authorization and saved portal-release connection remain separate checks |
+| OAuth reconnect | Publisher custom connector reconnected October 2. On October 6 the reviewer connected and subsequently reconnected through the private plugin; a new production OAuth record and successful free list/status calls confirmed access. The single 2,000-unit grant, 507 units used and 1,493 balance were unchanged; no trial or API key | The prior reviewer connection remains active; this step did not test revocation or expired-token recovery. Saved portal-release connection remains separate |
 | Trial | Default-off code, unit tests, isolated migration CI, hosted staging checks, approved production schema migration and approved code rollout passed | Activation remains a separate decision; the flag is absent/default-off and no trial grants were issued |
 | Reviewer cases | Exactly five positive and three negative cases packaged | P3 now covers flashcards plus a teaching deck; P5 covers Playground. A full eight-case run against a saved portal release and dedicated account remains pending |
 | Review recording | Original sample and a concrete walkthrough script are ready | No screen recording or reviewer-accessible recording URL exists |
@@ -276,8 +276,16 @@ The response explained that VMF cannot edit/publish a video, purchase or refill
 units, or identify a stranger and find private contact details. No VMF tool was
 invoked, purchase/checkout initiated or unsupported result claimed; this added
 zero units. These are three bounded development responses in this chat, not an
-independent reliability evaluation or saved portal-release passes. Reconnect,
-source retention throughout review and recording remain open. This is development
+independent reliability evaluation or saved portal-release passes. The publisher
+then completed reviewer reconnect. A new OAuth record and two successful free
+list/status calls confirmed access to the same one-video reviewer library.
+Read-only accounting checks found exactly one original 2,000-unit grant, unchanged
+usage of 507 and balance of 1,493, no trial and no API key. The previous connection
+remains active; no revocation or expired-token recovery is claimed by this check.
+The source object remains present, but its storage expiration header is October 9
+at 15:35:15 UTC under `cleanup-source-prefix`. Full lifecycle-rule inspection was
+denied to the existing storage credential. Source retention throughout review
+and recording remain open. This is development
 evidence, not a completed eight-case run against a saved portal release.
 
 Private receipts and outputs are in
@@ -346,8 +354,8 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 1. Preserve the completed schema/code rollout in `docs/DEPLOYMENT.md`; do not
    replay migrations. Trial activation is still a separate authorized action.
 2. Preserve the completed reviewer ingestion, retrieval, isolation and timestamp
-   playback, tutor and three negative-response development checks. Finish reviewer
-   reconnect; show the installed version in the intended host. Do not re-index
+   playback, tutor, three negative-response and reviewer reconnect development
+   checks. Show the installed version in the intended host. Do not re-index
    for rehearsal.
 3. Use the funded dedicated reviewer account and original sample. Finish access
    instructions and a source-retention/sample-input plan for the review period.
