@@ -17,6 +17,7 @@ const button = (text, handler, cls = 'quiet') => {
 const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, xhr: null, poll: null, busy: false, frameUrl: null, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
 const app = new App({name: 'Video Moment Finder', version: '0.3.0'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
+let connected = false, libraryLoaded = false, libraryPending = false;
 
 function notice(text = '') { $('notice').textContent = text; }
 function showError(error) { notice(messageForError(error)); }
@@ -29,16 +30,18 @@ function theme(context) {
   if (context?.theme === 'dark' || context?.theme === 'light') document.documentElement.dataset.theme = context.theme;
 }
 function receive(result) {
+  if (result.isError) { showError(new Error(result.content?.find(c => c.type === 'text')?.text ?? 'Tool failed')); return; }
   const data = result.structuredContent ?? {};
   const privateData = result._meta?.vmf ?? {};
   if (privateData.config) state.config = privateData.config;
-  if (data.videos) state.videos = data.videos;
+  if (data.videos) { state.videos = data.videos; libraryLoaded = true; }
   if (data.allowance) state.allowance = data.allowance;
   renderLibrary(); updateUpload();
   if (data.video) {
     const changed = state.selected?.id !== data.video.id;
     if (changed) { clearTimeout(state.poll); state.segment = null; state.time = 0; clearFrame(); $('player').removeAttribute('src'); }
     state.selected = data.video;
+    if (!state.videos.some(v => v.id === data.video.id)) state.videos.push(data.video);
     if (data.view) {
       [...(data.companion_views ?? []), data.view].forEach(view => state.views.set(`${view.video_id}:${view.kind}`, view));
       state.active = data.view.kind;
@@ -48,6 +51,13 @@ function receive(result) {
   const balance = state.allowance?.api_units_balance;
   $('balance').textContent = balance === undefined ? '' : `${balance.toLocaleString()} units available`;
   $('welcome-access').textContent = balance === 0 ? 'This account has no available units. You can still browse existing videos and reuse evidence already in your conversation.' : '';
+  if (connected && data.video && !libraryLoaded) ensureLibrary();
+}
+async function ensureLibrary() {
+  if (libraryPending || libraryLoaded || !state.selected) return;
+  libraryPending = true;
+  try { await refreshLibrary(); } catch (error) { showError(error); }
+  finally { libraryPending = false; }
 }
 function renderLibrary() {
   const list = $('videos'); list.replaceChildren();
@@ -97,7 +107,7 @@ function seek(time, segment = null) {
   state.time = time; state.segment = segment;
   if (state.resumeTime !== null) state.resumeTime = time;
   $('moment-time').value = Math.round(time);
-  if ($('player').readyState >= 1) $('player').currentTime = Math.min(time, $('player').duration || time);
+  if ($('player').readyState >= 1 && Math.abs($('player').currentTime - time) > .001) $('player').currentTime = Math.min(time, $('player').duration || time);
   renderTranscript(); updateFrameButton();
 }
 function renderTranscript() {
@@ -254,7 +264,7 @@ function renderVectors(root, view) {
   const controls = el('div', undefined, 'vector-controls'), inputs = [];
   ['vₓ', 'vᵧ', 'wₓ', 'wᵧ'].forEach((name, i) => {
     const label = el('label', name), input = el('input'); input.type = 'number'; input.min = '-5'; input.max = '5'; input.step = '.25';
-    input.addEventListener('input', () => { const x = Number(input.value); if (!Number.isFinite(x) || x < -5 || x > 5 || input.value === '') return; (i < 2 ? v : w)[i % 2] = x; draw(); });
+    input.addEventListener('input', () => { const x = Number(input.value); if (!Number.isFinite(x) || x < -5 || x > 5 || input.value === '') return; (i < 2 ? v : w)[i % 2] = x; feedback.textContent = 'Inputs changed. Compare the updated result or test a new prediction.'; draw(); });
     label.append(input); controls.append(label); inputs.push(input);
   });
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 320 320'); svg.classList.add('vector-plot'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Two vectors. Use the coordinate controls to change them with the keyboard.');
@@ -265,7 +275,7 @@ function renderVectors(root, view) {
     const color = i ? '#dd7022' : '#1e55ce'; const line = shape('line', {x1: 160, y1: 160, stroke: color, 'stroke-width': 4}); const dot = shape('circle', {r: 9, fill: color, cursor: 'grab'});
     dot.addEventListener('pointerdown', e => { drag = i; svg.setPointerCapture(e.pointerId); e.preventDefault(); }); svg.append(line, dot); return [line, dot];
   });
-  svg.addEventListener('pointermove', e => { if (drag === null) return; const rect = svg.getBoundingClientRect(); const x = Math.round(Math.max(-5, Math.min(5, ((e.clientX - rect.left) / rect.width * 320 - 160) / 28)) * 4) / 4; const y = Math.round(Math.max(-5, Math.min(5, (160 - (e.clientY - rect.top) / rect.height * 320) / 28)) * 4) / 4; if (drag === 0) v = [x, y]; else w = [x, y]; draw(); });
+  svg.addEventListener('pointermove', e => { if (drag === null) return; const rect = svg.getBoundingClientRect(); const x = Math.round(Math.max(-5, Math.min(5, ((e.clientX - rect.left) / rect.width * 320 - 160) / 28)) * 4) / 4; const y = Math.round(Math.max(-5, Math.min(5, (160 - (e.clientY - rect.top) / rect.height * 320) / 28)) * 4) / 4; if (drag === 0) v = [x, y]; else w = [x, y]; feedback.textContent = 'Inputs changed. Compare the updated result or test a new prediction.'; draw(); });
   svg.addEventListener('pointerup', () => { drag = null; }); svg.addEventListener('pointercancel', () => { drag = null; });
   const metrics = el('div', undefined, 'metrics'), comparison = el('div', undefined, 'comparison'); comparison.hidden = true;
   const prediction = el('label', 'Predict the dot product before revealing it', 'prediction'), input = el('input'), feedback = el('p'); input.type = 'number'; input.step = 'any'; prediction.append(input);
@@ -433,5 +443,7 @@ app.ontoolresult = receive;
 app.onhostcontextchanged = theme;
 app.onerror = showError;
 await app.connect();
+connected = true;
 theme(app.getHostContext());
+if (state.selected && !libraryLoaded) ensureLibrary();
 if (app.getHostContext()?.displayMode === 'inline' && app.getHostContext()?.availableDisplayModes?.includes('fullscreen')) await app.requestDisplayMode({mode: 'fullscreen'});

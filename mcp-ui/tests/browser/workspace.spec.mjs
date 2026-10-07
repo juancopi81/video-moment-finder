@@ -22,6 +22,22 @@ async function open(page, query = '') {
   return {ui, errors};
 }
 const calls = (page, name) => page.evaluate(name => window.fixtureHost.calls.filter(c => c.name === name), name);
+
+test('opening a generated view directly enriches its missing library exactly once', async ({page}) => {
+  const {ui, errors} = await open(page, '?render-only');
+  await expect(ui.locator('#videos button')).toHaveCount(2);
+  await expect(ui.getByRole('heading', {name: 'Dot products, made tangible'})).toBeVisible();
+  expect(await calls(page, 'open_workspace')).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
+test('an initial authorization error explains reconnecting and never attempts ingestion', async ({page}) => {
+  await page.goto('/?unauthorized');
+  const ui = page.frameLocator('#workspace');
+  await expect(ui.locator('#notice')).toContainText('Reconnect Video Moment Finder');
+  expect(await calls(page, 'upload_video')).toHaveLength(0);
+  expect(await calls(page, 'open_workspace')).toHaveLength(0);
+});
 async function chooseUpload(ui) {
   await ui.getByRole('button', {name: 'Upload video', exact: true}).click();
   await ui.locator('#file').setInputFiles({name: 'My lesson.mp4', mimeType: 'video/mp4', buffer: Buffer.from('fixture transfer bytes')});
@@ -85,6 +101,7 @@ test('Playground computes changes, preserves comparisons and handles zero and fi
   await ui.getByRole('button', {name: 'Pin comparison'}).click();
   await ui.getByLabel('vₓ', {exact: true}).fill('-3');
   await expect(ui.locator('.metrics')).toContainText('-6');
+  await expect(ui.locator('#learning')).not.toContainText('Your prediction matches this model.');
   await expect(ui.locator('.comparison')).toContainText('dot=6');
   await ui.getByRole('button', {name: 'Zero-vector example'}).click();
   await expect(ui.locator('.metrics')).toContainText('Undefined');

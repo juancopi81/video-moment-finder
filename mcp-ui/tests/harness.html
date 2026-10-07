@@ -9,7 +9,7 @@ let playbackSequence = 0;
 const playback = (v) => toolResult({video: v}, {source_url: query.has('no-media') ? null : `${mediaOrigin}/lesson.webm?fixture=temporary&refresh=${++playbackSequence}`});
 host.push = (result) => iframe.contentWindow.postMessage({jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result}, '*');
 host.theme = (theme) => iframe.contentWindow.postMessage({jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: {theme}}, '*');
-host.initial = () => query.has('empty') || query.has('library') ? library() : toolResult({...library().structuredContent, video, view: guide, companion_views: initialViews.slice(1)}, playback(video)._meta.vmf);
+host.initial = () => query.has('unauthorized') ? {isError: true, content: [{type: 'text', text: '401 invalid_token: reconnect required'}]} : query.has('empty') || query.has('library') ? library() : toolResult({...query.has('render-only') ? {} : library().structuredContent, video, view: guide, companion_views: initialViews.slice(1)}, playback(video)._meta.vmf);
 async function tool(name, args) {
   host.calls.push({name, args});
   const delay = host.delays[`${name}:${args.video_id}`] ?? host.delays[name];

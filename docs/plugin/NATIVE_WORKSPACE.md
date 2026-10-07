@@ -63,7 +63,7 @@ to YouTube are separate. No cookies or yt-dlp instructions are requested.
 ## Current verification and gate
 
 October 7: **717 backend cases** passed; **17 PostgreSQL cases** skipped locally.
-Four browser-core Node cases, 11 strict-CSP SDK browser cases and 14 archive cases
+Four browser-core Node cases, 13 strict-CSP SDK browser cases and 14 archive cases
 passed, along with seven frontend checks, lint and an 18-page production build.
 The browser cases cover source seek/link refresh, inert source markup, exact
 context/image handoff, cached retrieval, cards/CSV, slides/notes, computed and
