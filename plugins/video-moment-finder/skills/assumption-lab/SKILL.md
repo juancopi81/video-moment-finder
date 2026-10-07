@@ -45,3 +45,7 @@ See [finite lab format](references/lab-format.md). Clearly identify it as a revi
 - Keep credentials, signed URLs and unrelated account metadata out of outputs. Keep third-party lecture evidence private. Public examples must be original or redistributable.
 
 Finish with the working artifact, one concrete experiment to try, coverage and model limits. The hypothesis is that manipulating a concept helps understanding; the output does not establish demand or learning gains. For 401/403 use supported reconnect; for exhausted units use sufficient cached/supplied evidence or state the gap without promoting a purchase.
+
+## Native workspace
+
+When `render_learning_view` is available, offer the native display as the immediate experience, following the [native view contract](../../references/native-views.md). Reuse the same inspected evidence and prepared content; include other prepared workflows from this video as companion views. Native rendering uses no additional units. Preserve this skill’s offline export when requested or when native UI is unavailable. Schema validation is separate from claim verification and actual host interaction testing.

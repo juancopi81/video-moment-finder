@@ -55,12 +55,13 @@ DEFAULT_MCP_OAUTH_SCOPE = "vmf:mcp"
 # Bump this whenever the displayed tool list changes in a way that requires
 # users to re-consent. Grants persisted with an older version are rejected at
 # token validation (401 invalid_token) and at refresh exchange (invalid_grant),
-# which forces Claude clients to re-run the OAuth flow once — no mass token
+# which forces clients to re-run the OAuth flow once — no mass token
 # deletion is involved.
 #   1 = historical four-tool approval (upload_video, get_video_status,
 #       list_videos, search_video)
 #   2 = six-tool approval (adds get_transcript and get_frames)
-MCP_APPROVED_TOOLS_VERSION = 2
+#   3 = native workspace (adds library/allowance, playback and learning views)
+MCP_APPROVED_TOOLS_VERSION = 3
 MCP_TOOLS_REAPPROVAL_DESCRIPTION = (
     "This connection was approved for an older tool list. "
     "Reconnect Video Moment Finder in your MCP client to approve the updated tool list."

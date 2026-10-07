@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
+from src.api.workspace import LearningView, UI_MIME, UI_PATH, UI_URI, origin, result as workspace_result
 from pydantic import BaseModel, Field
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse, Response
@@ -305,6 +306,21 @@ def mcp_tool_approval_items() -> list[dict[str, str]]:
 
     return [
         {
+            "name": "open_workspace", "title": "Video Workspace",
+            "description": "Open your video library, current allowance and learning workspace.",
+            "cost": "No units",
+        },
+        {
+            "name": "get_workspace_video", "title": "Open Video Source",
+            "description": "Open an owned video's retained source in the workspace.",
+            "cost": "No units",
+        },
+        {
+            "name": "render_learning_view", "title": "Show Learning View",
+            "description": "Display a cited guide, cards, Playground or presentation prepared from video evidence.",
+            "cost": "No units; evidence retrieval uses the costs below",
+        },
+        {
             "name": "upload_video",
             "title": "Upload Video",
             "description": "Start a presigned video upload or complete it after the file bytes are uploaded.",
@@ -344,6 +360,140 @@ def mcp_tool_approval_items() -> list[dict[str, str]]:
             ),
         },
     ]
+
+
+def _workspace_video(response: Any) -> dict:
+    video = _video_record_from_response(response).model_dump(mode="json")
+    # Only the UI receives ephemeral playback capabilities.
+    video.pop("source_url", None)
+    return video
+
+
+def _workspace_config() -> dict:
+    import os
+    from src.api.app import (
+        API_UNIT_COST_FRAMES_HIGH, API_UNIT_COST_FRAMES_THUMB,
+        API_UNIT_COST_TRANSCRIPT_FETCH, VIDEO_MAX_UPLOAD_BYTES,
+    )
+    endpoint = os.environ.get("R2_ENDPOINT_URL", "")
+    return {
+        "media_origin": origin(endpoint) if endpoint else None,
+        "max_upload_bytes": VIDEO_MAX_UPLOAD_BYTES,
+        "transcript_units": API_UNIT_COST_TRANSCRIPT_FETCH,
+        "frame_thumb_units": API_UNIT_COST_FRAMES_THUMB,
+        "frame_high_units": API_UNIT_COST_FRAMES_HIGH,
+    }
+
+
+@vmf_mcp.resource(
+    UI_URI, name="vmf-workspace", title="Video Workspace", mime_type=UI_MIME,
+    meta={"openai/ui": {"availableDisplayModes": ["fullscreen"], "preferredDisplayMode": "fullscreen"}},
+)
+def workspace_resource() -> str:
+    """Return a bundled component, with an exact storage-origin CSP."""
+    return UI_PATH.read_text(encoding="utf-8")
+
+
+# FastMCP resource descriptors carry metadata; ChatGPT also reads it on each
+# resources/read content item. Register a low-level reader to preserve both.
+@vmf_mcp._mcp_server.read_resource()
+async def _read_workspace_resource(uri):
+    from mcp.server.lowlevel.helper_types import ReadResourceContents
+
+    if str(uri) != UI_URI:
+        # Preserve FastMCP's normal resource and template lookup.
+        resource = await vmf_mcp._resource_manager.get_resource(str(uri))
+        return [ReadResourceContents(content=await resource.read(), mime_type=resource.mime_type)]
+    config = _workspace_config()
+    origins = [config["media_origin"]] if config["media_origin"] else []
+    return [ReadResourceContents(
+        content=workspace_resource(), mime_type=UI_MIME,
+        meta={
+            "ui": {
+                "domain": origin(mcp_oauth_resource_url()),
+                "prefersBorder": False,
+                "csp": {"connectDomains": origins, "resourceDomains": origins},
+            },
+            "openai/ui": {"availableDisplayModes": ["fullscreen"], "preferredDisplayMode": "fullscreen"},
+        },
+    )]
+
+
+@vmf_mcp.tool(
+    title="Video Workspace",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+    meta={"ui": {"resourceUri": UI_URI}, "openai/ui": {"entrypoints": [{"type": "global"}, {"type": "thread"}]}},
+)
+def open_workspace(ctx: Context | None = None):
+    """Open VMF beside this conversation. Accepts {}. Listing and allowance are free.
+
+    Use the initial result to populate the UI; do not immediately call again.
+    Native results reuse evidence, never index another video automatically.
+    """
+    if ctx is None:
+        raise RuntimeError("MCP context is required")
+    from src.api.app import v1_api_billing_summary, v1_list_my_videos
+
+    identity = _request_identity(ctx)
+    videos = [_workspace_video(v) for v in v1_list_my_videos(identity=identity)[:50]]
+    balance = v1_api_billing_summary(identity=identity).model_dump(mode="json")
+    return workspace_result({"videos": videos, "allowance": balance}, config=_workspace_config())
+
+
+@vmf_mcp.tool(
+    title="Open Video Source",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+)
+def get_workspace_video(video_id: str, ctx: Context | None = None):
+    """Refresh playback for an owned video, without retrieving/billing evidence.
+
+    Source URL is ephemeral and UI-only; do not save it in an artifact.
+    """
+    if ctx is None:
+        raise RuntimeError("MCP context is required")
+    from src.api.app import v1_get_video
+
+    response = v1_get_video(video_id=video_id, identity=_request_identity(ctx))
+    return workspace_result({"video": _workspace_video(response)}, source_url=_optional_str(response.source_url), config=_workspace_config())
+
+
+@vmf_mcp.tool(
+    title="Show Learning View",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+    meta={"ui": {"resourceUri": UI_URI}},
+)
+def render_learning_view(
+    view: LearningView,
+    companion_views: Annotated[list[LearningView], Field(max_length=3)] | None = None,
+    ctx: Context | None = None,
+):
+    """Display prepared, cited content in VMF's native workspace. No new units.
+
+    Retrieve/inspect evidence first; reuse cached evidence across views. This
+    validates shape and citations, not educational correctness. Exactly one of
+    sections, cards, slides or playground matches kind. No HTML, scripts, signed
+    URLs, local image paths or third-party exports. Tutor remains in chat.
+    Pass other prepared views from this conversation in companion_views to keep
+    them in one workspace. Every view must refer to the same owned video.
+    Offline exports are prepared separately by the packaged skills. Views belong
+    to the current conversation; this does not save a cross-session learner profile.
+    """
+    if ctx is None:
+        raise RuntimeError("MCP context is required")
+    companions = companion_views or []
+    if any(v.video_id != view.video_id for v in companions):
+        raise ValueError("Companion views must refer to the same video")
+    if len({v.kind for v in [view, *companions]}) != len(companions) + 1:
+        raise ValueError("Include only one view per workflow")
+    from src.api.app import v1_get_video
+
+    response = v1_get_video(video_id=str(view.video_id), identity=_request_identity(ctx))
+    if response.status != "ready":
+        raise ValueError("Choose a ready video before preparing a learning view")
+    return workspace_result(
+        {"view": view.model_dump(mode="json"), "companion_views": [v.model_dump(mode="json") for v in companions], "video": _workspace_video(response)},
+        source_url=_optional_str(response.source_url), config=_workspace_config(),
+    )
 
 
 @vmf_mcp.tool(

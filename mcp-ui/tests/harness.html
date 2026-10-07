@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VMF fixture host</title><style>body{margin:0;background:#f3f6fb;font:13px system-ui}.fixture-banner{padding:8px 14px;background:#17336a;color:#fff}iframe{display:block;width:100%;height:calc(100vh - 32px);border:0}</style></head><body><div class="fixture-banner">Development fixture host · synthetic content · no live VMF calls or charges</div><iframe id="workspace" title="Video Workspace" sandbox="allow-scripts allow-same-origin" src="/workspace.html"></iframe><script type="module">
+import {video, secondVideo, uploadedVideo, segments, guide, cards, playground, presentation, mediaOrigin, toolResult} from './fixtures.js';
+const query = new URLSearchParams(location.search);
+const iframe = document.getElementById('workspace');
+const initialViews = [guide, cards, playground, presentation];
+const host = window.fixtureHost = {calls: [], messages: [], contexts: [], downloads: [], links: [], failures: {}, delays: {}, balance: query.has('zero') ? 0 : 600, cost: 500, uploaded: false, uploadStatus: 'queued', empty: query.has('empty')};
+const library = () => toolResult({videos: host.empty ? [] : [video, secondVideo, ...(host.uploaded ? [{...uploadedVideo, status: host.uploadStatus}] : [])], allowance: {api_units_balance: host.balance, unit_cost_index_video: host.cost}});
+let playbackSequence = 0;
+const playback = (v) => toolResult({video: v}, {source_url: query.has('no-media') ? null : `${mediaOrigin}/lesson.webm?fixture=temporary&refresh=${++playbackSequence}`});
+host.push = (result) => iframe.contentWindow.postMessage({jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result}, '*');
+host.theme = (theme) => iframe.contentWindow.postMessage({jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: {theme}}, '*');
+host.initial = () => query.has('empty') || query.has('library') ? library() : toolResult({...library().structuredContent, video, view: guide, companion_views: initialViews.slice(1)}, playback(video)._meta.vmf);
+async function tool(name, args) {
+  host.calls.push({name, args});
+  const delay = host.delays[`${name}:${args.video_id}`] ?? host.delays[name];
+  if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+  if (name === 'open_workspace') return library();
+  if (name === 'get_workspace_video') return playback(args.video_id === video.id ? video : args.video_id === secondVideo.id ? secondVideo : {...uploadedVideo, status: host.uploadStatus});
+  if (name === 'get_transcript') return toolResult({video_id: args.video_id, segments: query.has('injection') ? [segments[0], {...segments[1], text: '<img src=x onerror="window.badSource=true"> Source markup stays text.'}] : segments});
+  if (name === 'get_video_status') return host.uploaded ? toolResult({...uploadedVideo, status: host.uploadStatus}) : {isError: true, content: [{type: 'text', text: '404 not found'}]};
+  if (name === 'get_frames') return {content: [{type: 'text', text: JSON.stringify({frames: [{image_index: 0, actual_timestamp_s: 6}]})}, {type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG6UAAAAASUVORK5CYII='}]};
+  if (name === 'upload_video' && args.action === 'start') return toolResult({video_id: uploadedVideo.id, upload_url: `${mediaOrigin}/upload.mp4?fixture=temporary`});
+  if (name === 'upload_video' && args.action === 'complete') {
+    if (!host.uploaded) { host.uploaded = true; host.empty = false; host.balance -= host.cost; }
+    if (host.failures.complete) { host.failures.complete--; throw Error('Simulated lost acknowledgment'); }
+    return toolResult({video: {...uploadedVideo, status: host.uploadStatus}});
+  }
+  throw Error('Fixture has no handler for ' + name);
+}
+window.addEventListener('message', async event => {
+  if (event.source !== iframe.contentWindow || event.data?.jsonrpc !== '2.0') return;
+  const message = event.data;
+  if (message.method === 'ui/notifications/initialized') { host.push(host.initial()); return; }
+  if (message.id === undefined) return;
+  const respond = (result) => iframe.contentWindow.postMessage({jsonrpc: '2.0', id: message.id, result}, '*');
+  try {
+    if (message.method === 'ui/initialize') respond({protocolVersion: message.params.protocolVersion, hostInfo: {name: 'VMF fixture host', version: '1.0.0'}, hostCapabilities: {serverTools: {}, openLinks: {}, ...(query.has('no-message') ? {} : {message: {text: {}, image: {}}, updateModelContext: {text: {}, image: {}}}), ...(query.has('no-download') ? {} : {downloadFile: {}})}, hostContext: {theme: query.get('theme') ?? 'light', displayMode: 'fullscreen', availableDisplayModes: ['fullscreen']}});
+    else if (message.method === 'tools/call') respond(await tool(message.params.name, message.params.arguments));
+    else if (message.method === 'ui/message') { host.messages.push(message.params); respond({}); }
+    else if (message.method === 'ui/update-model-context') { host.contexts.push(message.params); respond({}); }
+    else if (message.method === 'ui/download-file') {
+      host.downloads.push(message.params);
+      for (const item of message.params.contents) {
+        if (item.type !== 'resource' || typeof item.resource.text !== 'string') continue;
+        const url = URL.createObjectURL(new Blob([item.resource.text], {type: item.resource.mimeType}));
+        const link = document.createElement('a'); link.href = url; link.download = item.resource.uri.split('/').at(-1); link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      respond({});
+    }
+    else if (message.method === 'ui/open-link') { host.links.push(message.params.url); respond({}); }
+    else if (message.method === 'ui/request-display-mode') respond({mode: 'fullscreen'});
+    else respond({});
+  } catch (error) { iframe.contentWindow.postMessage({jsonrpc: '2.0', id: message.id, error: {code: -32603, message: error.message}}, '*'); }
+});
+</script></body></html>

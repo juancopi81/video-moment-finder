@@ -35,3 +35,7 @@ If the host cannot create PPTX, deliver the actual HTML preview and a complete s
 Audit at least five claims, all numbers and every decision/owner/date against the evidence. Render and visually inspect **every slide**, then check text fit, image clarity, contrast and order. Validate slide count, source notes and editable elements in the exported file. Check the HTML preview on desktop/mobile, navigation and speaker notes. An original work-briefing fixture is included to test reuse beyond lectures; it is fictional, not a customer meeting.
 
 Deliver the final editable deck, preview and exact coverage. Mention any missing export, unreadable source or untested viewer. The deck does not establish new meeting permissions, persistent team access or a presentation publishing service. Reuse sufficient cached evidence on unit exhaustion; authentication failures use supported reconnect, without upgrade promotion.
+
+## Native workspace
+
+When `render_learning_view` is available, offer the native display as the immediate experience, following the [native view contract](../../references/native-views.md). Reuse the same inspected evidence and prepared content; include other prepared workflows from this video as companion views. Native rendering uses no additional units. Preserve this skill’s offline export when requested or when native UI is unavailable. Schema validation is separate from claim verification and actual host interaction testing.

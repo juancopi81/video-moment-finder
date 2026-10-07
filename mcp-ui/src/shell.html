@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Video Workspace</title><style>/*VMF_CSS*/</style></head>
+<body>
+  <!--VMF_NOTICES-->
+  <header class="topbar">
+    <div class="brand"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="m11 8 9 6-9 6z" fill="currentColor"/></svg><strong>Video Moment Finder</strong></div>
+    <div class="top-actions"><span id="balance"></span><button id="refresh" class="quiet">Refresh library</button><button id="add" class="primary">Upload video</button></div>
+  </header>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <section id="copy-panel" class="upload-panel" hidden aria-labelledby="copy-title"><div class="section-heading"><h2 id="copy-title"></h2><button id="close-copy">Close text</button></div><textarea id="copy-text" readonly aria-label="Text to copy" rows="10"></textarea></section>
+  <div class="workspace">
+    <aside class="library" aria-label="Your video library"><h2>Your videos</h2><label class="search-label" for="filter">Find a video</label><input id="filter" type="search" placeholder="Search filenames"><div id="videos" class="video-list"></div><p class="library-foot">Index once. Explore in different ways.</p></aside>
+    <main>
+      <section id="upload" class="upload-panel" hidden aria-labelledby="upload-heading">
+        <div class="section-heading"><h2 id="upload-heading">Bring your video</h2><button id="close-upload" class="quiet">Close</button></div>
+        <p>Upload a lecture, lesson or recording you own or have permission to use. MP4, MOV or WebM.</p>
+        <label class="file-choice"><span>Choose a video file</span><input id="file" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.mov,.webm"></label>
+        <p id="file-details"></p><label class="rights"><input id="rights" type="checkbox">I own this video or have permission to use it.</label>
+        <p id="upload-cost"></p><progress id="upload-progress" max="100" value="0" hidden></progress><p id="upload-state" role="status" aria-live="polite"></p>
+        <div class="button-row"><button id="start-upload" class="primary" disabled>Upload and process</button><button id="cancel-upload" class="quiet" hidden>Cancel transfer</button></div>
+        <details class="youtube-help"><summary>My video is on YouTube</summary><p>Use your original file for the best quality. You can also download your own upload from YouTube Studio: Content → video menu → Download. Then choose that file here.</p><button id="youtube-help" class="quiet">Open YouTube’s instructions</button></details>
+      </section>
+      <section id="welcome" class="welcome"><div class="welcome-visual" aria-hidden="true"><span>▶</span><span class="moment-mark"></span></div><h1>Find the moment.<br>Make the idea yours.</h1><p>Choose a ready video, or upload your own. Keep the source beside your notes, practice and experiments.</p><button id="welcome-upload" class="primary">Upload your first video</button><p id="welcome-access"></p></section>
+      <div id="video-workbench" hidden>
+        <div class="section-heading"><div><h1 id="video-title"></h1><p id="video-status"></p></div><button id="web-source" class="quiet">Open source on VMF</button></div>
+        <div class="workbench">
+          <section class="source-pane" aria-label="Source evidence">
+            <video id="player" controls playsinline preload="metadata" aria-label="Source video"></video><p id="media-state"></p><button id="refresh-media" class="quiet" hidden>Refresh playback link</button>
+            <div class="moment"><label for="moment-time">Moment in seconds</label><input id="moment-time" type="number" min="0" step="1" value="0"><button id="seek" class="quiet">Go</button></div>
+            <div class="ask-row"><button id="explain" class="primary">Explain this moment</button><button id="quiz" class="quiet">Quiz me</button><button id="visual" class="quiet">Make it visual</button></div>
+            <button id="inspect-frame" class="quiet">Show this frame</button><figure id="frame-preview" hidden><img id="frame" alt="Retrieved source frame"><figcaption id="frame-caption"></figcaption></figure>
+            <div class="section-heading transcript-heading"><h2>Transcript</h2><button id="load-transcript" class="quiet">Load transcript</button></div><p id="transcript-cost"></p><div id="transcript" class="transcript"></div>
+          </section>
+          <section class="learning-pane" aria-label="Learning workspace"><nav id="workflows" aria-label="Learning workflows"></nav><div id="learning"></div></section>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module">/*VMF_JS*/</script>
+</body></html>

@@ -5,7 +5,7 @@ description: Turn an indexed lecture, or a clearly bounded excerpt, into a sourc
 
 # Make a study guide
 
-Use VMF's existing six MCP tools; discover their installed schemas rather than inventing arguments. Start with the learner's selected ready video, or use `list_videos` and clarify only if the intended lecture is ambiguous. Follow [shared evidence rules](../../references/evidence-format.md) before retrieving or writing.
+Use VMF's existing six evidence tools; discover their installed schemas rather than inventing arguments. Start with the learner's selected ready video, or use `list_videos` and clarify only if the intended lecture is ambiguous. Follow [shared evidence rules](../../references/evidence-format.md) before retrieving or writing.
 
 1. Confirm status. A failed/queued/processing video is not evidence. Explain the state and offer another ready video or existing supplied material. Do not re-upload/index without the user's instruction and a checked allowance.
 2. Set scope: whole lecture or specific timestamps/topic. Retrieve the transcript once, reuse task-local evidence, and search only to close a specific gap. Report missing transcript sections. An excerpt must never be titled or described as full-lecture coverage.
@@ -17,3 +17,7 @@ Use VMF's existing six MCP tools; discover their installed schemas rather than i
 The tool renders text as text, not source-supplied HTML. Keep full third-party transcripts and lecture frames private; publish examples only when redistribution is permitted. The final artifact should say what it covers, link to the source when available, and remain readable when playback URLs expire.
 
 If authorization expires, request reconnection through the host's supported flow and pause new calls. If units are unavailable, explain the limit without purchases, upgrades, or checkout links; offer already-cached evidence or a learner-supplied excerpt. Never request credentials in chat.
+
+## Native workspace
+
+When `render_learning_view` is available, offer the native display as the immediate experience, following the [native view contract](../../references/native-views.md). Reuse the same inspected evidence and prepared content; include other prepared workflows from this video as companion views. Native rendering uses no additional units. Preserve this skill’s offline export when requested or when native UI is unavailable. Schema validation is separate from claim verification and actual host interaction testing.

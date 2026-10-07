@@ -4,6 +4,15 @@ This file is the concise operations reference that was intentionally removed fro
 
 ## Source of Truth for Environment Variables
 
+The native workspace candidate is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
+Before staging, configure private R2 CORS for the actual sandbox origin using
+`GET`, `HEAD`, `PUT` and `Content-Type`. Preserve website origins and keep the
+bucket private. The component's CSP permits only the exact `R2_ENDPOINT_URL`
+origin for media/transfer and uses the MCP resource origin as its widget domain.
+Inspect the effective host origin rather than adding a wildcard. API calls go
+through MCP's host bridge and need no new public API CORS origin. Verify actual
+transfer/playback in the intended host before recording or submission.
+
 - Backend and infrastructure variables: `.env.example`
 - Frontend variables: `frontend/.env.example`
 

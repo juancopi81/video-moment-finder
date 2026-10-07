@@ -11,6 +11,12 @@ validation and developer declarations remain gates.
 
 ## Current release
 
+An authorized **0.3.0 native workspace candidate** is in preparation. See
+[native workspace](NATIVE_WORKSPACE.md) for its build/browser evidence, expanded
+consent and required host checks. The deployed/installed 0.2.0 evidence below is
+historical proof of that release, not validation of the new UI. Record the
+candidate only after its actual host checks pass.
+
 Version **0.2.0** has **44 portable files and five workflows**. It was saved
 over the same USER-scoped PRIVATE plugin. Read-back confirmed both root and
 compatibility manifests at 0.2.0, all five skill files, unchanged starter prompts,
@@ -22,7 +28,7 @@ Playground expands the existing `assumption-lab` skill in place so installations
 do not accumulate duplicate skills. It supports computed models where justified
 and retains the finite case-table mode. Presentation is the new fifth skill.
 Editable PPTX export requires the host's presentation runtime; HTML generation
-uses Python's standard library. No production dependencies were added.
+uses Python's standard library. That 0.2.0 package added no production dependencies.
 
 ```sh
 uv run python -m unittest discover -s scripts/plugin -p 'test_*.py'

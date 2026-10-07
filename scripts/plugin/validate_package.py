@@ -196,7 +196,12 @@ def validate_archive(archive: Path, *, submission: bool = False) -> dict:
                 require(bool(name_match) and name_match[1].strip("\"'") == skill_name, f"{path}: frontmatter name must match directory")
                 require(bool(re.search(r"^description:\s*\S", frontmatter[1], re.M)), f"{path}: missing discoverability description")
     require(CORE_SKILLS <= skill_names, f"Missing core skills: {', '.join(sorted(CORE_SKILLS - skill_names))}")
-    require(skill_names == CORE_SKILLS, "Expect the five documented VMF workflows")
+    onboarding = extension.get("onboardingSkill")
+    expected_skills = CORE_SKILLS | ({"setup"} if onboarding is not None else set())
+    require(skill_names == expected_skills, "Expect five VMF workflows and the declared setup skill")
+    if onboarding is not None:
+        require(onboarding == "./skills/setup/SKILL.md", "onboardingSkill must reference the packaged setup skill")
+        require("skills/setup/SKILL.md" in inventory, "Missing declared onboarding skill")
 
     review = extension.get("review", {})
     if not isinstance(review, dict) or not isinstance(review.get("test_cases"), dict):

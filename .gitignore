@@ -12,6 +12,9 @@ wheels/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+mcp-ui/node_modules/
+mcp-ui/test-results/
+mcp-ui/playwright-report/
 .coverage
 .coverage.*
 htmlcov/

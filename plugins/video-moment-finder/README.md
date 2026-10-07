@@ -1,5 +1,15 @@
 # Video Moment Finder learning plugin
 
+## Native workspace (0.3.0)
+
+Where supported, open Video Workspace from the sidebar or conversation panel.
+Choose a ready video or upload a file you own, select a source moment and ask
+ChatGPT to explain it. Guides, cards, Playgrounds and slide previews sit beside
+the source; tutoring stays in chat. Run Setup for a first useful result. Offline
+exports remain available. Prepared views belong to this conversation, not a
+permanent learner profile. Native features require the matching deployed server
+and host support; package installation alone does not establish that.
+
 Index a lecture once, then reuse its evidence to learn. The plugin connects to your
 VMF library and helps create an HTML study guide, focused flashcards, a conversation
 with a tutor, an interactive Playground, or an editable presentation for learning, teaching or work. It cites timestamped transcript

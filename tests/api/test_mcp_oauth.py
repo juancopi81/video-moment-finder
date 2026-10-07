@@ -297,6 +297,9 @@ def test_authorize_creates_request_and_redirects_to_frontend(
     assert payload["status"] == "pending"
     assert payload["scope"] == "vmf:mcp"
     assert {tool["name"] for tool in payload["tools"]} == {
+        "open_workspace",
+        "get_workspace_video",
+        "render_learning_view",
         "upload_video",
         "get_video_status",
         "list_videos",

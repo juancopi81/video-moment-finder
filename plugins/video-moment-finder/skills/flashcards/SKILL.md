@@ -21,3 +21,7 @@ Follow the [shared evidence rules](../../references/evidence-format.md). Reuse t
 6. Open/render the HTML when supported. Exercise hint/answer reveal, next/previous, show-all, source navigation, narrow viewport, and the CSV download. Parse the exported CSV with a proper CSV reader and confirm the count, three columns, quoting, source references, and formula safety. State when visual or importer testing was unavailable. Do not claim a specific app import succeeded merely because parsing passed.
 
 Deliver the HTML and CSV links with the actual scope and limitations. The offline deck offers manual review; it does not implement spaced-repetition scheduling, learning analytics, or saved progress. A host without file execution may create equivalent escaped HTML and a standards-compliant CSV, but must disclose which checks were actually performed.
+
+## Native workspace
+
+When `render_learning_view` is available, offer the native display as the immediate experience, following the [native view contract](../../references/native-views.md). Reuse the same inspected evidence and prepared content; include other prepared workflows from this video as companion views. Native rendering uses no additional units. Preserve this skill’s offline export when requested or when native UI is unavailable. Schema validation is separate from claim verification and actual host interaction testing.
