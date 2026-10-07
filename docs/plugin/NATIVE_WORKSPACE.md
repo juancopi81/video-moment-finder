@@ -9,7 +9,9 @@ Video Workspace opens from the sidebar or beside a conversation. Choose a ready
 video or upload an authorized original file. Source playback and transcript
 selection sit beside guides, cards, Playground and slides. Explain this moment,
 Quiz me and Make it visual send the selected UUID, time and optional passage to
-chat. The tutor remains in the conversation. Ordinary skills/exports remain the
+chat. Ask about this experiment includes the current inputs, prediction, pinned
+comparison and checked model/case result, marked as generated practice. The tutor
+remains in the conversation. Ordinary skills/exports remain the
 fallback when the host does not support the native view.
 
 The design uses a video library and two working panes, with system typography.

@@ -103,6 +103,14 @@ test('Playground computes changes, preserves comparisons and handles zero and fi
   await expect(ui.locator('.metrics')).toContainText('-6');
   await expect(ui.locator('#learning')).not.toContainText('Your prediction matches this model.');
   await expect(ui.locator('.comparison')).toContainText('dot=6');
+  await ui.getByRole('button', {name: 'Ask about this experiment'}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.contexts.length)).toBe(1);
+  const experiment = await page.evaluate(() => JSON.parse(window.fixtureHost.contexts[0].content[0].text.split('\n').slice(1).join('\n')).generated_experiment);
+  expect(experiment.v).toEqual([-3, 4]);
+  expect(experiment.metrics.dot).toBe(-6);
+  expect(experiment.pinned.dot).toBe(6);
+  expect(experiment.prediction).toBe('6');
+  expect(experiment.generated_model_not_observation).toBe(true);
   await ui.getByRole('button', {name: 'Zero-vector example'}).click();
   await expect(ui.locator('.metrics')).toContainText('Undefined');
   await expect(ui.locator('#learning')).toContainText('does not guarantee a right angle');

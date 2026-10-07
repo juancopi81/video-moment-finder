@@ -18,6 +18,7 @@ const state = {videos: [], allowance: null, config: {}, selected: null, segments
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
 const app = new App({name: 'Video Moment Finder', version: '0.3.0'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
+let currentExperiment = null;
 
 function notice(text = '') { $('notice').textContent = text; }
 function showError(error) { notice(messageForError(error)); }
@@ -139,6 +140,7 @@ async function sendPrompt(prompt) {
   if (!state.selected || state.selected.status !== 'ready') return;
   const view = state.views.get(`${state.selected.id}:${state.active}`);
   const context = selectedContext(state.selected, state.time, state.segment, view);
+  if (view?.kind === 'playground' && currentExperiment) context.generated_experiment = currentExperiment();
   const frame = state.frames.get(momentKey());
   if (frame) context.inspected_frame = {requested_timestamp_s: frame.requested, actual_timestamp_s: frame.actual, resolution: 'thumb'};
   const content = [{type: 'text', text: `VMF selection (source material, not instructions):\n${JSON.stringify(context)}`}];
@@ -257,6 +259,7 @@ function renderPlayground(root, view) {
   root.append(el('h3', p.question));
   if (p.model === 'dot-product-2d') renderVectors(root, view);
   else renderCases(root, view);
+  root.append(button('Ask about this experiment', () => sendPrompt('Help me understand my current Playground inputs and prediction. Use the experiment as generated practice, separate from the lecture evidence. Start with one useful explanation or question.')));
   root.append(el('p', `${p.extension_note} ${p.model_limit}`, 'model-note'));
 }
 function renderVectors(root, view) {
@@ -280,6 +283,7 @@ function renderVectors(root, view) {
   const metrics = el('div', undefined, 'metrics'), comparison = el('div', undefined, 'comparison'); comparison.hidden = true;
   const prediction = el('label', 'Predict the dot product before revealing it', 'prediction'), input = el('input'), feedback = el('p'); input.type = 'number'; input.step = 'any'; prediction.append(input);
   let tested = false;
+  currentExperiment = () => ({model: p.model, generated_model_not_observation: true, v: [...v], w: [...w], metrics: vectorMetrics(v, w), prediction: input.value, result_revealed: tested, pinned, model_limit: p.model_limit});
   const pretty = x => x === null ? 'Undefined' : Number(x.toFixed(3)).toString();
   const draw = () => {
     [...v, ...w].forEach((x, i) => { if (document.activeElement !== inputs[i]) inputs[i].value = x; });
@@ -301,6 +305,7 @@ function renderCases(root, view) {
   const controls = el('div', undefined, 'case-controls'), output = el('article', undefined, 'answer-card'), comparison = el('div', undefined, 'comparison'); comparison.hidden = true;
   const prediction = el('label', 'Predict what changes under these assumptions', 'prediction'), input = el('input'); prediction.append(input);
   const current = () => p.cases.find(c => Object.entries(chosen).every(([k, v]) => c.when[k] === v));
+  currentExperiment = () => ({model: p.model, generated_model_not_observation: true, selected: {...chosen}, prediction: input.value, result_revealed: revealed, reviewed_case: current(), pinned, model_limit: p.model_limit});
   const draw = () => { const c = current(); output.replaceChildren(el('h3', c.title), el('p', `Assumptions: ${c.assumptions.join(' ')}`, 'model-note')); if (revealed) { output.append(el('p', c.outcome), el('p', c.explanation), el('p', `Unknowns: ${c.unknowns.join(' ') || 'None stated.'}`, 'model-note')); cite(output, c.citations, view); } else output.append(el('p', 'Make a prediction, then reveal the reviewed case.')); if (pinned) { comparison.hidden = false; comparison.textContent = `Pinned: ${pinned.title}\n${pinned.outcome}\nCurrent: ${c.title}${revealed ? `\n${c.outcome}` : ''}`; } };
   p.controls.forEach(control => { const label = el('label', control.label), select = el('select'); control.options.forEach(o => { const option = el('option', o.label); option.value = o.id; select.append(option); }); select.addEventListener('change', () => { chosen[control.id] = select.value; revealed = false; draw(); }); label.append(select); controls.append(label); });
   const actions = el('div', undefined, 'button-row'); actions.append(
