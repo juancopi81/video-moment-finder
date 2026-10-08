@@ -1,7 +1,7 @@
 # Native workspace candidate: 0.3.0
 
-This is an implementation candidate, not the installed or deployed release.
-Preserve the existing private plugin identity and original reviewer video.
+This is a staging candidate. Production and the existing private plugin remain
+on 0.2.0. Preserve that plugin identity and the original reviewer video.
 
 ## Experience and source ownership
 
@@ -90,22 +90,40 @@ though the separate PR run passed. The fixture host could load its iframe before
 its module had registered the SDK listener. Deferring iframe startup until the
 listener exists fixes that test-host race; a controlled delayed-module case was
 added. All 14 browser scenarios passed three consecutive repetitions (42 cases).
-Private plugin saving and staging/production deployment remain separate gates;
-the portable 0.3.0 ZIP still references the production endpoint.
+Both push and PR CI runs passed at `300297f`, including isolated PostgreSQL
+checks. Railway deployed that commit successfully to the existing isolated
+staging API. Fifteen free protocol checks passed: OAuth discovery, old-consent
+rejection, nine tools, global/thread entrypoints, byte-identical 0.3.0 HTML
+resource, empty owned library, zero allowance and denied foreign-video access.
+Those checks used short-lived synthetic OAuth fixtures; cleanup was verified.
+They do not establish real account consent or ChatGPT rendering.
+
+A separate USER-private **VMF Staging** package was saved at 0.3.0 with six
+skills and the staging MCP URL. The web page exposes its portable MCP declaration
+but no account-connection control. A separate custom MCP connection form,
+**VMF Staging Tools**, is prepared for the supported ChatGPT test flow; creation
+and human OAuth consent are pending. Bind only its verified staging app identity
+to the private staging package after creation, never the production app identity.
+
+Staging has no configured media storage or processing worker, so its component
+CSP has no external media origins. Playback and real upload tests remain gates.
+No indexing, API units, migration or trial grant occurred during this checkpoint.
+Production deployment remains separately gated; the portable 0.3.0 ZIP still
+references the production endpoint.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
 
 ## Release validation
 
-Review the local fixture experience using `mcp-ui/README.md`. For the next
-release checkpoint, deploy the reviewed branch to the existing isolated staging
-API without changing production or trial enrollment. Install a private staging
-candidate with that staging MCP URL, then verify the following in ChatGPT:
+Review the local fixture experience using `mcp-ui/README.md`. Staging transport
+and private-package saving passed on October 7. Continue with the following
+checks in ChatGPT before requesting production rollout:
 
 1. Reconnect with consent version 3. Confirm nine tools, the sidebar/thread
    entrypoints and the initial library/allowance result without a duplicate call.
-2. Use an already-ready account-owned staging sample for source playback,
+2. Configure isolated staging media/processing and an approved account-owned
+   sample; the current staging library is empty. Verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.
 3. Identify the actual component origin and allow only it in the private R2

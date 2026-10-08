@@ -11,7 +11,10 @@ validation and developer declarations remain gates.
 
 ## Current release
 
-An authorized **0.3.0 native workspace candidate** is in preparation. See
+An authorized **0.3.0 native workspace candidate** is deployed to isolated
+staging at `300297f`, with a separate private staging package saved. Fifteen free
+protocol checks passed using disposable OAuth fixtures; real account consent,
+ChatGPT rendering, storage and processing remain unverified for this candidate. See
 [native workspace](NATIVE_WORKSPACE.md) for its build/browser evidence, expanded
 consent and required host checks. The deployed/installed 0.2.0 evidence below is
 historical proof of that release, not validation of the new UI. Record the
