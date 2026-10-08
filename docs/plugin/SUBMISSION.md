@@ -12,12 +12,18 @@ validation and developer declarations remain gates.
 ## Current release
 
 An authorized **0.3.0 native workspace candidate** is deployed to isolated
-staging with the zero-balance consent fix at `9ec44e5`, and the separate private
-staging package is at 0.3.1 with its verified app binding. Real zero-balance OAuth,
+staging with the zero-balance consent fix and vector isolation at `ccdca31`.
+The separate private staging package is at 0.3.1 with its verified app binding.
+Real zero-balance OAuth,
 the global empty workspace and initial combined onboarding passed. On October 8,
 private bucket-scoped storage and exact-origin CORS were configured; nine storage
-checks and seventeen free deployed protocol checks passed. Actual host file
-transfer/playback, conversation-side views and processing remain unverified. See
+checks and seventeen free deployed protocol checks passed. The staging API now
+uses an isolated Qdrant collection and a read-only, collection-scoped key;
+eighteen hosted vector checks passed, including production-access and API-write
+denials. The scoped worker key is saved privately; inference and the processing
+worker still need configuration. Both vector keys expire November 7, 2026.
+Actual host file transfer/playback, conversation-side views and processing
+remain unverified. See
 [native workspace](NATIVE_WORKSPACE.md) for its build/browser evidence, expanded
 consent and required host checks. The deployed/installed 0.2.0 evidence below is
 historical proof of that release, not validation of the new UI. Record the

@@ -141,24 +141,37 @@ checks passed, including the exact account S3 origin in the component CSP and
 workspace configuration, unchanged UI bundle, access restrictions and trial-off
 behavior; disposable authentication fixtures were removed and cleanup verified.
 
-The staging processing worker, vector storage and inference credentials are not
-configured. The scoped storage credential is saved privately for the future
-worker, but has not been installed on a worker service. Actual ChatGPT file
-transfer and playback remain gates; backend HTTP checks do not establish them.
-No indexing, API units, migration or trial grant occurred during these checks.
+The staging processing worker and inference credentials are not configured.
+The scoped storage and vector write credentials are saved privately for the
+future worker, but have not been installed on a worker service. Actual ChatGPT
+file transfer and playback remain gates; backend HTTP checks do not establish
+them. No indexing, API units, migration or trial grant occurred during these
+checks.
 
-The Qdrant dashboard was inspected after user sign-in. The existing free cluster
-supports collection-scoped credentials and has one production collection. A
-separate staging collection is prepared but not created; scoped keys have not
-been issued. `QDRANT_COLLECTION_NAME` now selects the same explicit collection for
-search and processing, preserves `video_frames` when unset, and rejects blank
-configuration. Nineteen focused storage tests and full validation passed: 722
-backend tests, 17 PostgreSQL cases skipped locally, 14 archive cases, four core
-browser cases, 14 SDK browser scenarios, seven frontend checks, lint and build.
-Collection creation, short-lived credentials and staging variable installation
-await the publisher's scoped approval; no production vector data was changed.
-Production deployment remains separately gated; the portable 0.3.0 ZIP still
-references the production endpoint.
+On October 8, after the publisher's scoped approval, `video_frames_staging` was
+created on the existing free Qdrant cluster with a default 2048-dimensional
+cosine vector and keyword indexes on `video_id` and `source`. Two collection-only
+keys expire November 7: read-only for the staging API and read/write for the
+future staging worker. The API's three vector variables are deployed with commit
+`ccdca31`; the worker key remains private pending worker setup. Eighteen hosted
+checks passed: exact scope and expiry, filtered collection listing, default
+vector configuration, indexes, repository storage initialization, a synthetic
+upsert and filtered queries, denial of API writes, and denial of production
+collection access for both keys. One clearly labeled synthetic point remains;
+it is not an indexed lecture. Production vector data was not read or changed.
+CPU, RAM and capacity remain shared with production.
+
+`QDRANT_COLLECTION_NAME` selects the same explicit collection for search and
+processing, preserves `video_frames` when unset, and rejects blank configuration.
+Nineteen focused storage tests and full validation passed: 722 backend tests,
+17 PostgreSQL cases skipped locally, 14 archive cases, four core browser cases,
+14 SDK browser scenarios, seven frontend checks, lint and build. All three CI
+jobs passed for `ccdca31`. Production deployment remains separately gated; the
+portable 0.3.0 ZIP still references the production endpoint.
+
+Seventeen free protocol checks passed again after the vector configuration
+redeploy, with the same reviewed UI bundle, exact storage-origin CSP, zero
+allowance and disabled trial; disposable authentication cleanup was verified.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
@@ -173,8 +186,9 @@ checks in ChatGPT before requesting production rollout:
    combined setup workflow are verified. Test ready-video onboarding and the
    conversation-side entrypoint; check initial result reuse without a duplicate
    call. Nine tools and both entrypoint declarations passed protocol checks.
-2. Complete isolated staging vector/inference/worker configuration, install its
-   saved bucket-scoped storage credential, and prepare an approved account-owned
+2. Complete staging inference and worker configuration, install the saved
+   bucket-scoped storage and collection-scoped write credentials on the worker,
+   set its explicit staging collection, and prepare an approved account-owned
    sample; the current staging library is empty. Verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.
