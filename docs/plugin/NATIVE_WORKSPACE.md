@@ -141,12 +141,11 @@ checks passed, including the exact account S3 origin in the component CSP and
 workspace configuration, unchanged UI bundle, access restrictions and trial-off
 behavior; disposable authentication fixtures were removed and cleanup verified.
 
-The staging processing worker and inference credentials are not configured.
-The scoped storage and vector write credentials are saved privately for the
-future worker, but have not been installed on a worker service. Actual ChatGPT
-file transfer and playback remain gates; backend HTTP checks do not establish
-them. No indexing, API units, migration or trial grant occurred during these
-checks.
+The staging processing worker has not been created. The bucket-scoped storage,
+collection-scoped vector write and approved inference credentials are saved
+privately for that worker. Actual ChatGPT file transfer and playback remain
+gates; backend HTTP checks do not establish them. No indexing, API units,
+migration or trial grant occurred during these checks.
 
 On October 8, after the publisher's scoped approval, `video_frames_staging` was
 created on the existing free Qdrant cluster with a default 2048-dimensional
@@ -173,6 +172,16 @@ Seventeen free protocol checks passed again after the vector configuration
 redeploy, with the same reviewed UI bundle, exact storage-origin CSP, zero
 allowance and disabled trial; disposable authentication cleanup was verified.
 
+After the publisher approved staging inference access, a dedicated Modal token
+was created with a 30-day lifetime ending November 7. On Starter it has
+workspace-wide permissions; its configured use is the existing VMF inference
+app in `main`. The three Modal variables were installed on the staging API.
+Five metadata-only function/class hydration checks passed without invoking GPU
+inference or redeploying the production model app. Seventeen free protocol checks
+passed after that deployment, including verified disposable-auth cleanup. The
+staging queue and video table were empty at the worker preflight. This verifies
+access, not execution of the processing pipeline.
+
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
 
@@ -186,10 +195,12 @@ checks in ChatGPT before requesting production rollout:
    combined setup workflow are verified. Test ready-video onboarding and the
    conversation-side entrypoint; check initial result reuse without a duplicate
    call. Nine tools and both entrypoint declarations passed protocol checks.
-2. Complete staging inference and worker configuration, install the saved
-   bucket-scoped storage and collection-scoped write credentials on the worker,
-   set its explicit staging collection, and prepare an approved account-owned
-   sample; the current staging library is empty. Verify source playback,
+2. Configure an isolated staging worker with its staging database, saved
+   bucket-scoped storage, collection-scoped write and approved Modal credentials.
+   Set its explicit staging collection and `MODAL_ENVIRONMENT=main` for the
+   reused inference app. Recheck the empty queue before starting it and prepare
+   an approved account-owned sample; the current staging library is empty.
+   Verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.
 3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks. Preserve

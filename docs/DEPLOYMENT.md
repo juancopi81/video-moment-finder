@@ -27,6 +27,7 @@ Use those files as the canonical variable list and defaults. This document expla
 | `QDRANT_COLLECTION_NAME` | Optional | Optional | - | Defaults to `video_frames`. Set the same distinct collection on both staging services; a blank value fails configuration. An explicit Python collection argument takes precedence. |
 | `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` | Required | Required | - | API handles upload/presign; worker handles processing outputs. |
 | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Required | Required | - | Required for Modal calls from both services. |
+| `MODAL_ENVIRONMENT` | Optional | Optional | - | SDK default is `main`. Set the same explicit environment on API and worker; the embedding app must already be deployed there. This selects a namespace and does not restrict a token's permissions. |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Optional | Optional | - | Runtime monitoring for API and worker. |
 | `CLERK_ISSUER`, `CLERK_AUDIENCE`, `CLERK_JWKS_URL` | Required | - | - | API JWT verification only. |
 | `CLERK_SECRET_KEY`, `API_TRIAL_ENABLED`, `API_TRIAL_UNITS` | Optional | - | - | Server-verified, once-per-account trial. Grants default OFF; secret required only to enroll new eligible accounts. |
@@ -60,6 +61,15 @@ a collection read-only key; an API deployment that also removes vector data need
 collection write access. Collection isolation restricts data access, while CPU,
 RAM and capacity remain shared. Keep production's collection and credentials
 unchanged.
+
+Staging may reuse the existing stateless inference app in Modal's `main`
+environment while keeping its database, media bucket and vector collection
+separate. A dedicated staging API token on Starter still has workspace-wide
+permissions; selecting `MODAL_ENVIRONMENT` does not narrow them. Limit its
+lifetime and store it only in service secrets and ignored private setup files.
+The October 8 staging token expires November 7, 2026. Authentication and metadata
+lookups do not prove actual GPU processing; verify that separately with an
+approved bounded video job.
 
 ## Worker Database Recovery
 
