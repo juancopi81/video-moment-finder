@@ -190,7 +190,7 @@ Behavior notes:
 
 - `/mcp` only accepts OAuth bearer tokens. Legacy `vmf_` API keys remain valid for REST and CLI, not for MCP.
 - Connector usage bills against the shared API unit balance (existing paid units plus any trial grant) and records `api_usage_events.api_key_id = null`.
-- The connect page blocks approval when `api_units_balance <= 0`, explains the unavailable operation neutrally, and offers denial. It does not advertise or link to digital-credit purchases. Ordinary website checkout remains independent.
+- Account consent is free and may be approved without API units or a billing record. Approval does not enroll a trial or change a balance. Library, status and native workspace tools remain free; metered operations enforce the required allowance when called. The connect page explains zero/unavailable balances without blocking consent or advertising digital-credit purchases. Ordinary website checkout remains independent.
 - `HEAD /mcp` must stay tokenless for Claude client compatibility checks.
 - Public clients registered with `token_endpoint_auth_method=none` may omit
   `client_secret` on token and revocation requests. The authenticator supplies an
@@ -216,7 +216,8 @@ PR #93 deployed at `ed31032`. Trial activation remains unapproved and disabled;
 details and remaining public-release gates are in `docs/plugin/SUBMISSION.md`.
 
 With grants enabled, an authenticated account is enrolled on a billing summary,
-connector approval, indexing admission, or metered API operation. The backend
+indexing admission, or metered API operation. Account consent itself does not
+enroll a trial. The backend
 fetches that same immutable Clerk user ID from `https://api.clerk.com/v1/users/`
 using the server-only `CLERK_SECRET_KEY`. Only a verified **primary** email on an
 unlocked, unbanned account qualifies. Client booleans, editable metadata, and an

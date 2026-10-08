@@ -304,15 +304,16 @@ function ConnectorContent() {
                       <ApiTrialNotice summary={apiBillingSummary} />
                       {!hasApiBalance && (
                         <p id="connection-limit" className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                          This account has no API units available, so this connection cannot
-                          be approved yet. Metered video operations pause when the balance
-                          is exhausted. You can continue studying material already retrieved
-                          in your chat. Reconnecting does not reset an allowance.
+                          You can approve this connection with zero API units. Your video
+                          library, workspace, and status checks remain available. Indexing,
+                          searches, transcripts, and frames require enough API units.
+                          You can continue using material already retrieved in your chat.
+                          Reconnecting does not reset an allowance.
                         </p>
                       )}
                     </>
                   )}
-                  {apiBillingSummaryError && <p id="connection-limit" className="text-sm">Account allowance could not be checked. Refresh before approving.</p>}
+                  {apiBillingSummaryError && <p id="connection-limit" className="text-sm">Account allowance could not be checked. You can still approve the connection; metered operations check your allowance separately.</p>}
                 </div>
                 <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
                   Website video credits and API units are different balances. This
@@ -330,7 +331,7 @@ function ConnectorContent() {
                   <button
                     type="button"
                     onClick={() => void handleDecision("approve")}
-                    disabled={decisionLoading !== null || !hasApiBalance}
+                    disabled={decisionLoading !== null}
                     aria-describedby={!hasApiBalance && !isLoadingBalance ? "connection-limit" : undefined}
                     className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >

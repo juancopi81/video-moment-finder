@@ -1539,11 +1539,7 @@ def approve_mcp_connector_request(
     request_id: str,
     user_id: str = Depends(get_current_user_id),
 ) -> McpConnectorDecisionResponse:
-    ensure_trial_state(user_id)
-    api_credits = db_get_api_credits(user_id)
-    if api_credits is None or api_credits.balance <= 0:
-        raise HTTPException(status_code=402, detail=INSUFFICIENT_API_UNITS_DETAIL)
-
+    # Consent grants account access; metered tools enforce their own allowance.
     provider = _mcp_oauth_provider_or_raise()
     try:
         redirect_url = provider.approve_authorization_request(request_id, user_id=user_id)

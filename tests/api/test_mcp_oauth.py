@@ -4,6 +4,7 @@ import base64
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
+from unittest.mock import Mock
 from urllib.parse import parse_qs, urlparse
 
 import anyio
@@ -408,19 +409,35 @@ def test_public_dcr_client_can_complete_authorization_code_flow(
     assert token_response.json()["refresh_token"]
 
 
-def test_connector_approve_blocks_zero_api_balance(
+@pytest.mark.parametrize("has_credit_record", [False, True])
+def test_connector_approve_allows_zero_balance_without_billing_or_trial_mutation(
     mcp_oauth_store: InMemoryMcpOAuthStore,
     monkeypatch,
+    has_credit_record: bool,
 ) -> None:
     _authenticate("user_123")
-    monkeypatch.setattr("src.api.app.db_get_api_credits", lambda _uid: None)
+    credits = Mock(
+        return_value=ApiCreditRecord("user_123", 0) if has_credit_record else None,
+    )
+    trial = Mock(side_effect=AssertionError("Consent must not grant an allowance"))
+    monkeypatch.setattr("src.api.app.db_get_api_credits", credits)
+    monkeypatch.setattr("src.api.app.ensure_trial_state", trial)
 
     with TestClient(app) as client:
-        _response, request_id, _verifier = _start_authorization_request(client)
+        _response, request_id, verifier = _start_authorization_request(client)
         response = client.post(f"/oauth/mcp/requests/{request_id}/approve")
+        assert response.status_code == 200
+        code = parse_qs(urlparse(response.json()["redirect_url"]).query)["code"][0]
+        token_response = _exchange_code(client, code=code, verifier=verifier)
 
-    assert response.status_code == 402
-    assert response.json()["detail"]["code"] == "insufficient_api_units"
+    assert token_response.status_code == 200
+    assert mcp_oauth_store.requests[request_id].status == "approved"
+    tokens = list(mcp_oauth_store.access_tokens.values())
+    assert len(tokens) == 1
+    assert tokens[0].user_id == "user_123"
+    assert tokens[0].approved_tools_version == MCP_APPROVED_TOOLS_VERSION
+    credits.assert_not_called()
+    trial.assert_not_called()
 
 
 def test_connector_deny_returns_access_denied(

@@ -98,6 +98,12 @@ resource, empty owned library, zero allowance and denied foreign-video access.
 Those checks used short-lived synthetic OAuth fixtures; cleanup was verified.
 They do not establish real account consent or ChatGPT rendering.
 
+The first real staging consent attempt exposed the legacy positive-balance gate
+in both the frontend and approval endpoint. Consent now works at zero balance
+without billing lookup or trial enrollment; each metered operation continues to
+enforce its own allowance. Retry the user's approval against the matching staging
+deployment before marking real account consent verified.
+
 A separate USER-private **VMF Staging** package was saved at 0.3.0 with six
 skills and the staging MCP URL. The web page exposes its portable MCP declaration
 but no account-connection control. A separate custom MCP connection form,
