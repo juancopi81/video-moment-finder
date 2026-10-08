@@ -195,6 +195,18 @@ verification; no processing job or GPU invocation was run. Normal Railway
 runtime usage applies. This establishes idle infrastructure readiness; actual
 ingestion and the resulting charges remain separate release checks.
 
+The publisher then approved one 600-unit private staging test allowance and one
+indexing attempt for the original 41.8-second vector lesson. The audited grant
+was applied once to the connected ChatGPT account; no trial was enrolled and
+other balances were unchanged. The worker was redeployed with
+`VIDEO_JOB_MAX_ATTEMPTS=1`, and its startup log confirmed the bound. ChatGPT's
+workspace showed 600 units. Automated file-chooser attempts in the in-app
+browser did not produce a chooser or select a file, so actual upload and
+processing have not started. The user must select the existing sample in the
+native file input before testing can continue. The ledger still has zero usage
+events, and the staging library and queue remain empty. This is an automation
+gap; manual picker behavior has not yet been tested.
+
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
 
@@ -208,9 +220,10 @@ checks in ChatGPT before requesting production rollout:
    combined setup workflow are verified. Test ready-video onboarding and the
    conversation-side entrypoint; check initial result reuse without a duplicate
    call. Nine tools and both entrypoint declarations passed protocol checks.
-2. Staging worker configuration and idle startup are verified. Separately
-   approve a bounded account-owned sample and test allowance; the current
-   staging library is empty and its balance is zero. Verify one completed
+2. Staging worker configuration and idle startup are verified. The bounded
+   original-sample test and 600-unit allowance are approved; the grant was
+   applied once, with zero usage so far. Continue after manual native file
+   selection, keeping the one-attempt worker limit. Verify one completed
    indexing job and its ledger, then verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.

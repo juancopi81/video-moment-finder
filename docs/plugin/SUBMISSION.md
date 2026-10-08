@@ -32,6 +32,12 @@ vector write key. CI passed for `fb83158`; deployment and idle startup passed
 with the queue and video table empty before and after startup. Actual staging
 GPU execution and its ledger remain unverified. Both vector keys expire
 November 7, 2026.
+The approved private test allowance was granted once: 600 units, no trial
+enrollment and zero usage. The worker's one-attempt limit is active. Automated
+in-app-browser file selection did not open a chooser; the sample remains
+unselected and no upload or indexing job has started. Continue through the
+actual native file picker after user selection; manual picker behavior remains
+untested.
 Actual host file transfer/playback, conversation-side views and processing
 remain unverified. See [native workspace](NATIVE_WORKSPACE.md) for its
 build/browser evidence, expanded consent and required host checks. The
