@@ -19,7 +19,7 @@ class QdrantConfig:
     use_in_memory: bool = False
 
     @classmethod
-    def from_env(cls, collection_name: str = "video_frames") -> QdrantConfig:
+    def from_env(cls, collection_name: str | None = None) -> QdrantConfig:
         """Create config from environment variables."""
         url = os.environ.get("QDRANT_URL")
         raw_api_key = os.environ.get("QDRANT_API_KEY")
@@ -28,7 +28,15 @@ class QdrantConfig:
         if not url:
             raise StorageConfigError("QDRANT_URL environment variable is required")
 
-        return cls(url=url, api_key=api_key, collection_name=collection_name)
+        resolved_collection = (
+            collection_name
+            if collection_name is not None
+            else os.environ.get("QDRANT_COLLECTION_NAME", "video_frames")
+        ).strip()
+        if not resolved_collection:
+            raise StorageConfigError("QDRANT_COLLECTION_NAME must not be blank")
+
+        return cls(url=url, api_key=api_key, collection_name=resolved_collection)
 
     @classmethod
     def in_memory(cls, collection_name: str = "video_frames") -> QdrantConfig:

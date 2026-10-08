@@ -24,6 +24,7 @@ Use those files as the canonical variable list and defaults. This document expla
 | --- | --- | --- | --- | --- |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_DB_URL` | Required | Required | - | Database and Supabase API access. |
 | `QDRANT_URL`, `QDRANT_API_KEY` | Required | Required | - | Query path uses API; indexing path uses worker. |
+| `QDRANT_COLLECTION_NAME` | Optional | Optional | - | Defaults to `video_frames`. Set the same distinct collection on both staging services; a blank value fails configuration. An explicit Python collection argument takes precedence. |
 | `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` | Required | Required | - | API handles upload/presign; worker handles processing outputs. |
 | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Required | Required | - | Required for Modal calls from both services. |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Optional | Optional | - | Runtime monitoring for API and worker. |
@@ -48,6 +49,17 @@ Use those files as the canonical variable list and defaults. This document expla
 - Railway worker service: worker-required groups + shared API/worker groups.
 - Vercel frontend: `NEXT_PUBLIC_*` variables only.
 - Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the service image must also include `ffmpeg` plus a JavaScript runtime for best-effort `yt-dlp` YouTube import. The Modal image installs the additional `modal` dependency group. After merging dependency-group changes or renaming Modal objects, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
+
+For staging on a shared Qdrant cluster, provision a separate collection with an
+unnamed 2048-dimensional cosine vector and keyword indexes on `video_id` and
+`source`. Set `QDRANT_COLLECTION_NAME` explicitly on both staging services and
+restrict their credentials to that collection. A worker's collection read/write
+key can maintain payload indexes and points but cannot create a collection, so
+provision it before starting the worker. The plugin's API retrieval flows can use
+a collection read-only key; an API deployment that also removes vector data needs
+collection write access. Collection isolation restricts data access, while CPU,
+RAM and capacity remain shared. Keep production's collection and credentials
+unchanged.
 
 ## Worker Database Recovery
 

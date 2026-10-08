@@ -146,6 +146,17 @@ configured. The scoped storage credential is saved privately for the future
 worker, but has not been installed on a worker service. Actual ChatGPT file
 transfer and playback remain gates; backend HTTP checks do not establish them.
 No indexing, API units, migration or trial grant occurred during these checks.
+
+The Qdrant dashboard was inspected after user sign-in. The existing free cluster
+supports collection-scoped credentials and has one production collection. A
+separate staging collection is prepared but not created; scoped keys have not
+been issued. `QDRANT_COLLECTION_NAME` now selects the same explicit collection for
+search and processing, preserves `video_frames` when unset, and rejects blank
+configuration. Nineteen focused storage tests and full validation passed: 722
+backend tests, 17 PostgreSQL cases skipped locally, 14 archive cases, four core
+browser cases, 14 SDK browser scenarios, seven frontend checks, lint and build.
+Collection creation, short-lived credentials and staging variable installation
+await the publisher's scoped approval; no production vector data was changed.
 Production deployment remains separately gated; the portable 0.3.0 ZIP still
 references the production endpoint.
 
