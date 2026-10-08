@@ -141,19 +141,20 @@ checks passed, including the exact account S3 origin in the component CSP and
 workspace configuration, unchanged UI bundle, access restrictions and trial-off
 behavior; disposable authentication fixtures were removed and cleanup verified.
 
-The staging processing worker has not been created. The bucket-scoped storage,
-collection-scoped vector write and approved inference credentials are saved
-privately for that worker. Actual ChatGPT file transfer and playback remain
-gates; backend HTTP checks do not establish them. No indexing, API units,
-migration or trial grant occurred during these checks.
+The staging processing worker is configured with the isolated staging database,
+bucket-scoped storage, collection-scoped vector write and approved inference
+credentials. Actual ChatGPT file transfer and playback remain gates; backend
+HTTP checks and idle worker startup do not establish them. No indexing, API
+units, migration or trial grant occurred during these checks.
 
 On October 8, after the publisher's scoped approval, `video_frames_staging` was
 created on the existing free Qdrant cluster with a default 2048-dimensional
 cosine vector and keyword indexes on `video_id` and `source`. Two collection-only
 keys expire November 7: read-only for the staging API and read/write for the
-future staging worker. The API's three vector variables are deployed with commit
-`ccdca31`; the worker key remains private pending worker setup. Eighteen hosted
-checks passed: exact scope and expiry, filtered collection listing, default
+staging worker. The API's three vector variables were deployed with commit
+`ccdca31`; the write key was subsequently installed on the approved worker.
+Eighteen hosted checks passed: exact scope and expiry, filtered collection
+listing, default
 vector configuration, indexes, repository storage initialization, a synthetic
 upsert and filtered queries, denial of API writes, and denial of production
 collection access for both keys. One clearly labeled synthetic point remains;
@@ -182,6 +183,18 @@ passed after that deployment, including verified disposable-auth cleanup. The
 staging queue and video table were empty at the worker preflight. This verifies
 access, not execution of the processing pipeline.
 
+After separate approval, `Worker-staging` was created in Railway's existing
+staging environment. It uses `Dockerfile.worker` from
+`codex/native-vmf-workspace`, one replica and no public endpoint. Thirteen
+variables bind it to the isolated staging database, private bucket and vector
+collection, and the existing VMF inference app in Modal's `main` environment.
+Wait for CI is enabled. CI passed for `fb83158`; that deployment became active,
+and its startup log showed the worker loop with the documented queue defaults.
+The queue and video table were empty immediately before startup and after idle
+verification; no processing job or GPU invocation was run. Normal Railway
+runtime usage applies. This establishes idle infrastructure readiness; actual
+ingestion and the resulting charges remain separate release checks.
+
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
 
@@ -195,12 +208,10 @@ checks in ChatGPT before requesting production rollout:
    combined setup workflow are verified. Test ready-video onboarding and the
    conversation-side entrypoint; check initial result reuse without a duplicate
    call. Nine tools and both entrypoint declarations passed protocol checks.
-2. Configure an isolated staging worker with its staging database, saved
-   bucket-scoped storage, collection-scoped write and approved Modal credentials.
-   Set its explicit staging collection and `MODAL_ENVIRONMENT=main` for the
-   reused inference app. Recheck the empty queue before starting it and prepare
-   an approved account-owned sample; the current staging library is empty.
-   Verify source playback,
+2. Staging worker configuration and idle startup are verified. Separately
+   approve a bounded account-owned sample and test allowance; the current
+   staging library is empty and its balance is zero. Verify one completed
+   indexing job and its ledger, then verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.
 3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks. Preserve

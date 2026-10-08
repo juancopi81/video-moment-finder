@@ -20,18 +20,22 @@ private bucket-scoped storage and exact-origin CORS were configured; nine storag
 checks and seventeen free deployed protocol checks passed. The staging API now
 uses an isolated Qdrant collection and a read-only, collection-scoped key;
 eighteen hosted vector checks passed, including production-access and API-write
-denials. The worker credentials are saved privately. The staging API also has
-an approved, dedicated Modal token expiring November 7, 2026, for the existing
-VMF inference app; five metadata lookups passed with no inference invocation.
+denials. The staging API also has an approved, dedicated Modal token expiring
+November 7, 2026, for the existing VMF inference app; five metadata lookups passed
+with no inference invocation.
 Seventeen free protocol checks passed after that deployment, and temporary
-authentication cleanup was verified.
-The token is workspace-wide on Starter, and the model app is shared with
-production. The processing worker still needs configuration; actual staging
-GPU execution remains unverified. Both vector keys expire November 7, 2026.
+authentication cleanup was verified. The token is workspace-wide on Starter,
+and the model app is shared with
+production. The separately approved private Railway worker now uses
+`Dockerfile.worker`, one replica and the isolated staging database, bucket and
+vector write key. CI passed for `fb83158`; deployment and idle startup passed
+with the queue and video table empty before and after startup. Actual staging
+GPU execution and its ledger remain unverified. Both vector keys expire
+November 7, 2026.
 Actual host file transfer/playback, conversation-side views and processing
 remain unverified. See [native workspace](NATIVE_WORKSPACE.md) for its
-build/browser evidence, expanded
-consent and required host checks. The deployed/installed 0.2.0 evidence below is
+build/browser evidence, expanded consent and required host checks. The
+deployed/installed 0.2.0 evidence below is
 historical proof of that release, not validation of the new UI. Record the
 candidate only after its actual host checks pass.
 
