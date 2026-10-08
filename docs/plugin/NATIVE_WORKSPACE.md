@@ -123,12 +123,29 @@ the actual 500-unit indexing tariff and instructions for downloading one's own
 YouTube upload. No file was selected or transferred. The observed component
 origin is `https://api-staging-staging-72b8-up-railway-app.web-sandbox.oaiusercontent.com`.
 This establishes the global empty-workspace flow, not conversation-side rendering,
-onboarding behavior, media playback or indexing. A setup prompt mentioning the
-combined staging package is prepared for the user to send in the workspace chat.
+media playback or indexing. On October 8 the user sent the combined staging
+package's setup prompt and checked its response. The workflow used the staging
+integration, explained the empty library, zero units, disabled trial and actual
+tariffs, and offered one text-grounded next step without a purchase promotion.
+Ready-video onboarding and exact opener call count remain unverified.
 
-Staging has no configured media storage or processing worker, so its component
-CSP has no external media origins. Playback and real upload tests remain gates.
-No indexing, API units, migration or trial grant occurred during this checkpoint.
+On October 8, the publisher approved a 30-day Object Read & Write credential
+restricted to a new private staging bucket, exact sandbox-origin CORS for
+GET/HEAD/PUT and Content-Type, and staging service configuration. The four R2
+variables were installed on Railway's staging API and the deployment became
+active. Nine storage checks passed: bucket listing, exact-origin PUT preflight,
+the permitted header, denial of another origin, presigned upload, object size,
+signed GET/HEAD and denial of anonymous retrieval. One named 56-byte non-video
+fixture remains in the private staging bucket. Seventeen free deployed protocol
+checks passed, including the exact account S3 origin in the component CSP and
+workspace configuration, unchanged UI bundle, access restrictions and trial-off
+behavior; disposable authentication fixtures were removed and cleanup verified.
+
+The staging processing worker, vector storage and inference credentials are not
+configured. The scoped storage credential is saved privately for the future
+worker, but has not been installed on a worker service. Actual ChatGPT file
+transfer and playback remain gates; backend HTTP checks do not establish them.
+No indexing, API units, migration or trial grant occurred during these checks.
 Production deployment remains separately gated; the portable 0.3.0 ZIP still
 references the production endpoint.
 
@@ -141,16 +158,17 @@ Review the local fixture experience using `mcp-ui/README.md`. Staging transport
 and private-package saving passed on October 7. Continue with the following
 checks in ChatGPT before requesting production rollout:
 
-1. Real staging consent and the global empty-workspace entrypoint are verified.
-   Test the combined setup skill and conversation-side entrypoint; check initial
-   result reuse without a duplicate call. Nine tools and both entrypoint
-   declarations passed the separate protocol checks.
-2. Configure isolated staging media/processing and an approved account-owned
+1. Real staging consent, the global empty-workspace entrypoint and initial
+   combined setup workflow are verified. Test ready-video onboarding and the
+   conversation-side entrypoint; check initial result reuse without a duplicate
+   call. Nine tools and both entrypoint declarations passed protocol checks.
+2. Complete isolated staging vector/inference/worker configuration, install its
+   saved bucket-scoped storage credential, and prepare an approved account-owned
    sample; the current staging library is empty. Verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.
-3. Identify the actual component origin and allow only it in the private R2
-   bucket's CORS for GET/HEAD/PUT and Content-Type. Recheck exact-origin CSP.
+3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks. Preserve
+   those restrictions and verify browser transfer/playback in the actual host.
 4. With a separately approved indexing allowance, select an original small MP4,
    transfer bytes, complete the same UUID, wait for ready and inspect the ledger.
    Check cancellation/recovery without creating a second job.
