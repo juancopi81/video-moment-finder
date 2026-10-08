@@ -201,11 +201,20 @@ was applied once to the connected ChatGPT account; no trial was enrolled and
 other balances were unchanged. The worker was redeployed with
 `VIDEO_JOB_MAX_ATTEMPTS=1`, and its startup log confirmed the bound. ChatGPT's
 workspace showed 600 units. Automated file-chooser attempts in the in-app
-browser did not produce a chooser or select a file, so actual upload and
-processing have not started. The user must select the existing sample in the
-native file input before testing can continue. The ledger still has zero usage
-events, and the staging library and queue remain empty. This is an automation
-gap; manual picker behavior has not yet been tested.
+browser did not produce a chooser or select a file. The user then successfully
+selected the original sample manually, and the native Upload and process action
+reached transfer but reported a network failure. A read-only ledger check
+confirmed the full 600-unit balance, zero usage events, zero videos and zero jobs;
+no indexing attempt was spent. The exact sandbox-origin video PUT preflight
+still passed. Browser transfer, rather than file selection, is now the blocker.
+
+The component was first loaded before staging storage was configured. Resource
+URIs are host cache keys, so a cached pre-storage policy is a possible cause;
+it is not confirmed by browser diagnostics. The component now uses
+`ui://vmf/workspace/0.3.1.html`, and both `resources/list` and `resources/read`
+declare the same exact storage policy. This preserves the scoped origin without
+wildcards. Retry only after staging deployment and host metadata refresh, then
+check the ledger before treating ingestion as verified.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
@@ -222,16 +231,17 @@ checks in ChatGPT before requesting production rollout:
    call. Nine tools and both entrypoint declarations passed protocol checks.
 2. Staging worker configuration and idle startup are verified. The bounded
    original-sample test and 600-unit allowance are approved; the grant was
-   applied once, with zero usage so far. Continue after manual native file
-   selection, keeping the one-attempt worker limit. Verify one completed
+   applied once, with zero usage after the failed native transfer. Manual file
+   selection is verified. Resolve host transfer while keeping the one-attempt
+   worker limit. Verify one completed
    indexing job and its ledger, then verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
    Verify exports and the unavailable-capability fallback in the actual host.
 3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks. Preserve
    those restrictions and verify browser transfer/playback in the actual host.
-4. With a separately approved indexing allowance, select an original small MP4,
-   transfer bytes, complete the same UUID, wait for ready and inspect the ledger.
-   Check cancellation/recovery without creating a second job.
+4. Reuse the approved original sample and allowance. Transfer bytes, complete
+   the same UUID, wait for ready and inspect the ledger. Check cancellation and
+   recovery without creating a second job or exceeding the approved attempt.
 5. Record five positive and three negative saved-release review cases. Only then
    request production rollout and update the existing private plugin identity
    with a matching production package. Recording follows the new real version.

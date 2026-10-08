@@ -162,14 +162,29 @@ def test_ui_resource_csp_and_entrypoint_metadata_survive_real_mcp_transport(monk
 
     async def callback(session: ClientSession):
         tools = await session.list_tools()
+        resources = await session.list_resources()
         resource = await session.read_resource(UI_URI)
-        return tools, resource
-    tools, resource = _run_mcp_session(_authorized_headers(token), callback)
+        return tools, resources, resource
+    tools, resources, resource = _run_mcp_session(_authorized_headers(token), callback)
     opener = next(t for t in tools.tools if t.name == "open_workspace")
     assert not opener.inputSchema.get("required")
     assert opener.meta["openai/ui"]["entrypoints"] == [{"type": "global"}, {"type": "thread"}]
     assert opener.meta["ui"]["resourceUri"] == UI_URI
     content = resource.contents[0]
+    descriptor = next(r for r in resources.resources if str(r.uri) == UI_URI)
+    assert descriptor.meta == content.meta
     assert content.mimeType == "text/html;profile=mcp-app"
     assert content.meta["ui"]["csp"] == {"connectDomains": ["https://account.r2.cloudflarestorage.com"], "resourceDomains": ["https://account.r2.cloudflarestorage.com"]}
     assert content.meta["openai/ui"]["availableDisplayModes"] == ["fullscreen"]
+
+
+@pytest.mark.parametrize("endpoint, expected", [
+    ("", []),
+    ("https://scoped.r2.cloudflarestorage.com/path", ["https://scoped.r2.cloudflarestorage.com"]),
+])
+def test_resource_policy_is_exact_and_import_safe(monkeypatch, endpoint, expected):
+    from src.api.mcp import _workspace_resource_metadata
+    monkeypatch.setenv("R2_ENDPOINT_URL", endpoint)
+    assert _workspace_resource_metadata()["ui"]["csp"] == {
+        "connectDomains": expected, "resourceDomains": expected,
+    }

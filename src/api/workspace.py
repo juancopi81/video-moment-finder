@@ -14,7 +14,9 @@ from uuid import UUID
 from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-UI_URI = "ui://vmf/workspace/0.3.0.html"
+# Resource URIs are host cache keys, including the resource security policy.
+# Refresh the revision when enabling the scoped storage-backed workspace.
+UI_URI = "ui://vmf/workspace/0.3.1.html"
 UI_MIME = "text/html;profile=mcp-app"
 UI_PATH = Path(__file__).with_name("assets") / "workspace.html"
 Seconds = Annotated[float, Field(ge=0, le=86400, allow_inf_nan=False)]

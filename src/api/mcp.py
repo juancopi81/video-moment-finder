@@ -385,6 +385,21 @@ def _workspace_config() -> dict:
     }
 
 
+def _workspace_resource_metadata() -> dict:
+    import os
+    # Resource descriptors are registered during import, before app tariffs exist.
+    endpoint = os.environ.get("R2_ENDPOINT_URL", "")
+    origins = [origin(endpoint)] if endpoint else []
+    return {
+        "ui": {
+            "domain": origin(mcp_oauth_resource_url()),
+            "prefersBorder": False,
+            "csp": {"connectDomains": origins, "resourceDomains": origins},
+        },
+        "openai/ui": {"availableDisplayModes": ["fullscreen"], "preferredDisplayMode": "fullscreen"},
+    }
+
+
 @vmf_mcp.resource(
     UI_URI, name="vmf-workspace", title="Video Workspace", mime_type=UI_MIME,
     meta={"openai/ui": {"availableDisplayModes": ["fullscreen"], "preferredDisplayMode": "fullscreen"}},
@@ -392,6 +407,15 @@ def _workspace_config() -> dict:
 def workspace_resource() -> str:
     """Return a bundled component, with an exact storage-origin CSP."""
     return UI_PATH.read_text(encoding="utf-8")
+
+
+@vmf_mcp._mcp_server.list_resources()
+async def _list_workspace_resources():
+    resources = await vmf_mcp.list_resources()
+    for resource in resources:
+        if str(resource.uri) == UI_URI:
+            resource.meta = _workspace_resource_metadata()
+    return resources
 
 
 # FastMCP resource descriptors carry metadata; ChatGPT also reads it on each
@@ -404,18 +428,9 @@ async def _read_workspace_resource(uri):
         # Preserve FastMCP's normal resource and template lookup.
         resource = await vmf_mcp._resource_manager.get_resource(str(uri))
         return [ReadResourceContents(content=await resource.read(), mime_type=resource.mime_type)]
-    config = _workspace_config()
-    origins = [config["media_origin"]] if config["media_origin"] else []
     return [ReadResourceContents(
         content=workspace_resource(), mime_type=UI_MIME,
-        meta={
-            "ui": {
-                "domain": origin(mcp_oauth_resource_url()),
-                "prefersBorder": False,
-                "csp": {"connectDomains": origins, "resourceDomains": origins},
-            },
-            "openai/ui": {"availableDisplayModes": ["fullscreen"], "preferredDisplayMode": "fullscreen"},
-        },
+        meta=_workspace_resource_metadata(),
     )]
 
 
