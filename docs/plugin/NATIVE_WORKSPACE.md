@@ -85,6 +85,11 @@ host tests are part of CI and `scripts/workflow/check_all.sh`.
 The fixture host exercises the real browser SDK and generated HTML with synthetic
 content, intercepted storage requests and a tiny original test video. It does
 not authenticate against VMF, debit units or establish ChatGPT host behavior.
+After preview approval, Railway exposed a failed push-triggered browser run even
+though the separate PR run passed. The fixture host could load its iframe before
+its module had registered the SDK listener. Deferring iframe startup until the
+listener exists fixes that test-host race; a controlled delayed-module case was
+added. All 14 browser scenarios passed three consecutive repetitions (42 cases).
 Private plugin saving and staging/production deployment remain separate gates;
 the portable 0.3.0 ZIP still references the production endpoint.
 

@@ -23,6 +23,26 @@ async function open(page, query = '') {
 }
 const calls = (page, name) => page.evaluate(name => window.fixtureHost.calls.filter(c => c.name === name), name);
 
+test('a delayed host module still receives the component initialization', async ({page}) => {
+  let releaseModule;
+  const moduleGate = new Promise(resolve => { releaseModule = resolve; });
+  let moduleRequested;
+  const requested = new Promise(resolve => { moduleRequested = resolve; });
+  await page.route('**/fixtures.js', async route => {
+    moduleRequested();
+    await moduleGate;
+    await route.continue();
+  });
+  await page.goto('/?no-media', {waitUntil: 'commit'});
+  await requested;
+  // Without the gate, the iframe boots before its parent can answer the SDK.
+  await expect(page.locator('#workspace')).not.toHaveAttribute('src', '/workspace.html');
+  releaseModule();
+  const ui = page.frameLocator('#workspace');
+  await expect(ui.locator('#balance')).toContainText('600 units available');
+  expect(await calls(page, 'open_workspace')).toHaveLength(0);
+});
+
 test('opening a generated view directly enriches its missing library exactly once', async ({page}) => {
   const {ui, errors} = await open(page, '?render-only');
   await expect(ui.locator('#videos button')).toHaveCount(2);

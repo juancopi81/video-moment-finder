@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VMF fixture host</title><style>body{margin:0;background:#f3f6fb;font:13px system-ui}.fixture-banner{padding:8px 14px;background:#17336a;color:#fff}iframe{display:block;width:100%;height:calc(100vh - 32px);border:0}</style></head><body><div class="fixture-banner">Development fixture host · synthetic content · no live VMF calls or charges</div><iframe id="workspace" title="Video Workspace" sandbox="allow-scripts allow-same-origin" src="/workspace.html"></iframe><script type="module">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VMF fixture host</title><style>body{margin:0;background:#f3f6fb;font:13px system-ui}.fixture-banner{padding:8px 14px;background:#17336a;color:#fff}iframe{display:block;width:100%;height:calc(100vh - 32px);border:0}</style></head><body><div class="fixture-banner">Development fixture host · synthetic content · no live VMF calls or charges</div><iframe id="workspace" title="Video Workspace" sandbox="allow-scripts allow-same-origin"></iframe><script type="module">
 import {video, secondVideo, uploadedVideo, segments, guide, cards, playground, presentation, mediaOrigin, toolResult} from './fixtures.js';
 const query = new URLSearchParams(location.search);
 const iframe = document.getElementById('workspace');
@@ -53,4 +53,7 @@ window.addEventListener('message', async event => {
     else respond({});
   } catch (error) { iframe.contentWindow.postMessage({jsonrpc: '2.0', id: message.id, error: {code: -32603, message: error.message}}, '*'); }
 });
+// Start the component only after the host listener is ready. A slow module
+// import must not lose the SDK's one-time initialize request.
+iframe.src = '/workspace.html';
 </script></body></html>
