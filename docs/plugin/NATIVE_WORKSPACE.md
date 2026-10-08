@@ -213,8 +213,14 @@ URIs are host cache keys, so a cached pre-storage policy is a possible cause;
 it is not confirmed by browser diagnostics. The component now uses
 `ui://vmf/workspace/0.3.1.html`, and both `resources/list` and `resources/read`
 declare the same exact storage policy. This preserves the scoped origin without
-wildcards. Retry only after staging deployment and host metadata refresh, then
-check the ledger before treating ingestion as verified.
+wildcards. Full local validation passed: 724 backend cases (17 PostgreSQL
+cases skipped locally), archive and browser checks, frontend lint and build.
+Both CI runs passed, and Railway deployed `2c9cebf` to staging. Eighteen free
+protocol checks passed, including descriptor/content policy equality and the
+new URI; disposable authentication cleanup was verified. The connector metadata
+was refreshed and the actual workspace reloaded. This cleared its local file
+selection, so select the sample again and retry transfer within the existing
+approval. Check the ledger before treating ingestion as verified.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.

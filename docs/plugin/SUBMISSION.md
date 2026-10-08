@@ -39,7 +39,10 @@ selected the sample manually. Native transfer then failed before processing.
 The ledger confirmed 600 units, zero usage, zero videos and zero jobs. The
 exact-origin video PUT preflight passed. A fresh component resource URI and
 matching descriptor/content security metadata address a possible cached
-pre-storage policy; staging deployment and actual-host retry remain required.
+pre-storage policy. Full local checks and both CI runs passed; `2c9cebf` is
+active in staging and eighteen free protocol checks passed with verified
+disposable-auth cleanup. Connector metadata refresh and workspace reload
+completed. Local file selection was cleared; actual-host retry remains required.
 Actual host file transfer/playback, conversation-side views and processing
 remain unverified. See [native workspace](NATIVE_WORKSPACE.md) for its
 build/browser evidence, expanded consent and required host checks. The
