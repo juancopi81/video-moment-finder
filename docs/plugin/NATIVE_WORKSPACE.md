@@ -64,8 +64,8 @@ to YouTube are separate. No cookies or yt-dlp instructions are requested.
 
 ## Current verification and gate
 
-October 7: **717 backend cases** passed; **17 PostgreSQL cases** skipped locally.
-Four browser-core Node cases, 13 strict-CSP SDK browser cases and 14 archive cases
+October 7: **718 backend cases** passed; **17 PostgreSQL cases** skipped locally.
+Four browser-core Node cases, 14 strict-CSP SDK browser cases and 14 archive cases
 passed, along with seven frontend checks, lint and an 18-page production build.
 The browser cases cover source seek/link refresh, inert source markup, exact
 context/image handoff, cached retrieval, cards/CSV, slides/notes, computed and
@@ -101,15 +101,30 @@ They do not establish real account consent or ChatGPT rendering.
 The first real staging consent attempt exposed the legacy positive-balance gate
 in both the frontend and approval endpoint. Consent now works at zero balance
 without billing lookup or trial enrollment; each metered operation continues to
-enforce its own allowance. Retry the user's approval against the matching staging
-deployment before marking real account consent verified.
+enforce its own allowance. Both CI runs passed at `9ec44e5`, including isolated
+PostgreSQL checks, and Railway deployed that fix successfully. The user completed
+real staging OAuth consent at zero balance; the custom plugin shows the connected
+account.
 
 A separate USER-private **VMF Staging** package was saved at 0.3.0 with six
 skills and the staging MCP URL. The web page exposes its portable MCP declaration
-but no account-connection control. A separate custom MCP connection form,
-**VMF Staging Tools**, is prepared for the supported ChatGPT test flow; creation
-and human OAuth consent are pending. Bind only its verified staging app identity
-to the private staging package after creation, never the production app identity.
+but no account-connection control. The separate **VMF Staging Tools** custom MCP
+connection completed the supported ChatGPT test flow. Its actual app identity,
+verified from the plugin and live workspace URLs, is now bound to a private
+0.3.1 update of the same staging package. Read-back preserved all six skills,
+starter prompts, assets and staging server configuration; the package page shows
+the app as Connected. This personal app binding is absent from the portable
+public candidate.
+
+The actual ChatGPT global entrypoint opened the native workspace in its sandbox.
+The empty owned library and zero allowance rendered, free library refresh
+returned without an error, and the upload dialog displayed ownership confirmation,
+the actual 500-unit indexing tariff and instructions for downloading one's own
+YouTube upload. No file was selected or transferred. The observed component
+origin is `https://api-staging-staging-72b8-up-railway-app.web-sandbox.oaiusercontent.com`.
+This establishes the global empty-workspace flow, not conversation-side rendering,
+onboarding behavior, media playback or indexing. A setup prompt mentioning the
+combined staging package is prepared for the user to send in the workspace chat.
 
 Staging has no configured media storage or processing worker, so its component
 CSP has no external media origins. Playback and real upload tests remain gates.
@@ -126,8 +141,10 @@ Review the local fixture experience using `mcp-ui/README.md`. Staging transport
 and private-package saving passed on October 7. Continue with the following
 checks in ChatGPT before requesting production rollout:
 
-1. Reconnect with consent version 3. Confirm nine tools, the sidebar/thread
-   entrypoints and the initial library/allowance result without a duplicate call.
+1. Real staging consent and the global empty-workspace entrypoint are verified.
+   Test the combined setup skill and conversation-side entrypoint; check initial
+   result reuse without a duplicate call. Nine tools and both entrypoint
+   declarations passed the separate protocol checks.
 2. Configure isolated staging media/processing and an approved account-owned
    sample; the current staging library is empty. Verify source playback,
    timestamp selection, native guide/cards/slides/Playground and chat handoff.
