@@ -98,6 +98,47 @@ test('invalid or oversized image selection never runs a query', async ({page}) =
   expect(await calls(page, 'search_video_image')).toHaveLength(0);
 });
 
+for (const mode of ['text', 'image']) {
+  test(`${mode} search survives a cold response beyond the SDK default timeout`, async ({page}) => {
+    await page.clock.install();
+    const {ui, errors} = await open(page, '?no-media');
+    const tool = mode === 'image' ? 'search_video_image' : 'search_video';
+    await page.evaluate(tool => { window.fixtureHost.delays[tool] = 120000; }, tool);
+    if (mode === 'image') {
+      await ui.locator('#search-image-mode').click();
+      await ui.locator('#search-image-file').setInputFiles({name: 'reference.png', mimeType: 'image/png', buffer: referenceImage});
+      await expect(ui.locator('#search-state')).toContainText('Nothing has been sent');
+    } else await ui.locator('#moment-query').fill('the zero-vector example');
+    await ui.locator('#run-search').click();
+    await expect.poll(() => calls(page, tool)).toHaveLength(1);
+    await page.clock.fastForward(61000);
+    await expect(ui.locator('#run-search')).toBeDisabled();
+    await expect(ui.locator('#search-state')).toContainText('Finding candidate moments');
+    await page.clock.fastForward(60000);
+    await expect(ui.locator('#search-results .search-match')).toHaveCount(mode === 'image' ? 1 : 2);
+    await expect(ui.locator('#balance')).toContainText('599 units');
+    expect(await calls(page, tool)).toHaveLength(1);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('search wait stays bounded and does not retry a response of unknown outcome', async ({page}) => {
+  await page.clock.install();
+  const {ui, errors} = await open(page, '?no-media');
+  await page.evaluate(() => { window.fixtureHost.delays.search_video = 240000; });
+  await ui.locator('#moment-query').fill('a slow query');
+  await ui.locator('#run-search').click();
+  await expect.poll(() => calls(page, 'search_video')).toHaveLength(1);
+  await page.clock.fastForward(180001);
+  await expect(ui.locator('#search-state')).toContainText('may still finish and use units');
+  await expect(ui.locator('#run-search')).toBeEnabled();
+  expect(await calls(page, 'search_video')).toHaveLength(1);
+  await page.clock.fastForward(60000);
+  await expect(ui.locator('#search-results-panel')).toBeHidden();
+  expect(await calls(page, 'search_video')).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
 test('empty results and failures are explicit; no automatic paid retry occurs', async ({page}) => {
   const {ui} = await open(page);
   await page.evaluate(() => { window.fixtureHost.noMatches = true; });

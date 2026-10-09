@@ -4,7 +4,7 @@ This file is the concise operations reference that was intentionally removed fro
 
 ## Source of Truth for Environment Variables
 
-The 0.4.1 native-search candidate requires
+The 0.4.2 native-search candidate requires
 `supabase/migrations/20261009120000_image_search_api_usage.sql` before API rollout.
 It adds `image_query` to the existing ledger constraint without balance/grant
 changes. `API_UNIT_COST_IMAGE_QUERY` defaults to 1; text uses the existing
@@ -13,7 +13,10 @@ displayed before submission. Image inference uses existing Modal/Qdrant access;
 no new media origin, storage upload, model deployment or production dependency is
 needed. Connections with consent below version 4 require reconnect. The 0.4.1
 canvas-preview patch does not expand consent or CSP; refresh tool metadata to
-load `ui://vmf/workspace/0.4.1.html` instead of the host's older cached component.
+load `ui://vmf/workspace/0.4.2.html` instead of the host's older cached component.
+The 0.4.2 patch bounds text/image bridge waits at three minutes so cold inference
+can return after the SDK default one-minute deadline. Compute scaling, tariffs
+and backend billing are unchanged; a timeout does not establish a refund.
 Native search is not live in an environment until its approved migration,
 deployment and actual-host verification complete.
 

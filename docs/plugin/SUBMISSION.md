@@ -11,12 +11,12 @@ validation and developer declarations remain gates.
 
 ## Current release
 
-**0.4.1 is the new source/package candidate**, adding native text and reference-image
+**0.4.2 is the new source/package candidate**, adding native text and reference-image
 moment search. Production/private 0.3.0 is the verified baseline below. Candidate
 image selection is local until explicit search; current API tariffs apply,
 similarity is a candidate, and clicked timestamps feed owned playback and chat.
 The app-only image tool expands consent to version 4 and requires the new
-`image_query` ledger migration before rollout. Do not record or submit 0.4.1 as
+`image_query` ledger migration before rollout. Do not record or submit 0.4.2 as
 live until migration/deployment/reconnect and real text/image host checks pass.
 P2 now covers both searches within the existing five-positive/three-negative
 case set. Fresh ingestion remains reserved for P1 of the saved portal release.
@@ -26,8 +26,12 @@ Approved staging migration, deployment, consent and actual text/image search
 passed on 0.4.0 using the existing original lesson. Each search returned the
 36-second zero-vector slide and repeats reused the cache. Actual ChatGPT image
 selection revealed a broken blob-URL preview; 0.4.1 uses local canvas previews
-under the existing exact-origin policy. The corrected preview's intended-host
-check remains required before production or recording. Production/private
+under the existing exact-origin policy. The corrected reference and source-frame previews passed in actual ChatGPT.
+A final handoff query completed in the backend at about 60 seconds but missed
+the SDK's one-minute response deadline. The 0.4.2 patch gives searches a bounded
+three-minute wait and states that a timeout may still consume units, with no
+automatic retry. Local virtual-clock tests reproduce the former failure and
+verify slow completion and the bound. Its deployed-host handoff remains a gate. Production/private
 plugin 0.3.0, public trial, submission and publication remain unchanged.
 
 **0.3.0 is now deployed to production and saved over the same private plugin.**

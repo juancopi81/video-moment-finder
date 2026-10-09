@@ -1,4 +1,4 @@
-# Native workspace: 0.4.1 candidate
+# Native workspace: 0.4.2 candidate
 
 ## Moment search update (2026-10-09)
 
@@ -24,16 +24,20 @@ canvas. They do not require blob/data image URLs or additional CSP origins.
 The 0.4.1 patch fixes the broken reference preview observed in actual ChatGPT;
 the browser fixture now blocks both URL schemes and verifies rendered pixels.
 
-Resource cache revision is `ui://vmf/workspace/0.4.1.html`. Consent version 4 adds
+Resource cache revision is `ui://vmf/workspace/0.4.2.html`. Consent version 4 adds
 the tenth tool and requires one reconnect. Apply
 `20261009120000_image_search_api_usage.sql` before deploying this API: the older
 ledger constraint rejects the new event type. This migration preserves existing
 events and changes no balance, grant or retention setting. The approved staging
 migration, renewed consent and actual text/image inference passed on 0.4.0;
 both retrieved the original lesson's 36-second zero-vector slide, with cached
-repeats. The broken local preview prompted this patch. Actual 0.4.1 preview
-verification and the new production rollout remain gates. The verified 0.3.0
-production checkpoint below is the baseline, not a 0.4.1 deployment claim.
+repeats. The broken local preview prompted the canvas patch. The publisher and
+agent verified the actual 0.4.1 reference preview and source frame. A later query returned successfully in the backend at the SDK's 60-second
+response deadline but timed out in the component. Search-only bridge calls now
+allow at most three minutes; no compute scaling or tariff changes are involved.
+Timeouts disclose uncertain billing and do not retry automatically. Actual
+0.4.2 handoff verification and the new production rollout remain gates. The
+verified 0.3.0 production checkpoint below is the baseline, not a 0.4.2 deployment claim.
 
 ## Production checkpoint (2026-10-09)
 
@@ -124,6 +128,16 @@ to YouTube are separate. No cookies or yt-dlp instructions are requested.
 
 ## Current verification and gate
 
+October 9, 0.4.2 cold-response patch: virtual-clock SDK browser checks reproduced
+the old timeout for both search modes, then verified delivery at 120 seconds
+and a bounded 180-second failure without automatic retry or late result display.
+The actual reference preview passed on 0.4.1. Full local checks passed: 736
+backend cases, 18 isolated PostgreSQL skipped locally, 14 archive, four core,
+25 SDK browser and seven frontend cases, lint and an 18-page production build.
+The portable archive has 46 files and six skills; SHA256
+`40cd438ca4cbfca15ee0c8e77de90296d4d68cf746cb14ca778660bbd2add91a`.
+Refreshed staging host verification and production approval remain required.
+
 October 9, 0.4.1 preview patch: full local validation passed with **736 backend
 cases**, **18 isolated PostgreSQL cases skipped locally**, **14 archive**, **four
 core**, **22 SDK browser** and **seven frontend** cases, lint and an 18-page
@@ -133,7 +147,8 @@ URLs. The portable archive has 46 files and six skills; SHA256
 `7206c8fe7ed8f899c4105bc1651bb1d859a5219dacf9258d100502bf6ca9f31e`.
 The API resource revision changes to bypass the host's old component cache;
 OAuth remains version 4, with no additional consent, tariff or storage change.
-Updated staging deployment and actual patched preview remain required.
+Its CI/staging deployment and actual source/reference canvas previews passed.
+The subsequent cold-response failure is recorded in the 0.4.2 entry above.
 
 Before the patch, the actual ChatGPT 0.4.0 text query returned five visual and
 two spoken candidates; the image query returned five visual candidates. Both

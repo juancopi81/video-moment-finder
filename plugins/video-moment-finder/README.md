@@ -1,6 +1,6 @@
 # Video Moment Finder learning plugin
 
-## Native workspace (0.4.1)
+## Native workspace (0.4.2)
 
 Find a moment searches the selected owned video using a text description of a
 scene or spoken idea, or a reference image to find similar frames. Results show
@@ -141,3 +141,7 @@ connection. Public submission is a separate developer-portal action; the source
 package intentionally contains no personal app binding or verified-publisher
 claim. The code and original bundled materials use the repository's AGPL-3.0-only
 license; the icon is reused from the existing VMF site.
+
+Searches allow a bounded three-minute wait for cold inference instead of the SDK's
+default one minute. A timeout has an uncertain billing outcome, so the workspace
+refreshes allowance and never repeats the query automatically.

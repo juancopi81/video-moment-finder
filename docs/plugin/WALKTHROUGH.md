@@ -5,13 +5,13 @@ Use the final private development installation in the intended host; do not
 upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
-## Current 0.4.1 recording plan
+## Current 0.4.2 recording plan
 
 The new text/image search candidate must pass approved migration, rollout,
 consent/reconnect and actual ChatGPT host tests before recording. The previous
 0.3.0 conversation's outputs remain reusable; this is not a new ingestion.
 
-1. Show installed VMF **0.4.1** and the ready original reviewer lesson. Explain
+1. Show installed VMF **0.4.2** and the ready original reviewer lesson. Explain
    that the learning outputs were generated earlier from that indexed sample.
 2. In **Find a moment → Text**, search “the zero-vector example.” Show the actual
    displayed cost, Visual/Spoken candidates, and a returned timestamp seeking
@@ -51,7 +51,7 @@ five timestamped note pages. Opening it in PowerPoint/Keynote and an independent
 visual render remain separate checks. The ledger records six new units, a
 2,074-unit balance and no new indexing job. Reuse these outputs for recording.
 
-Historical 0.3.0 sequence (use the 0.4.1 plan above for the next recording):
+Historical 0.3.0 sequence (use the 0.4.2 plan above for the next recording):
 
 1. Show the installed VMF 0.3.0 version and the prepared production conversation.
    Say that the outputs were generated earlier from the original indexed sample.

@@ -18,14 +18,18 @@ const button = (text, handler, cls = 'quiet') => {
 const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
 const search = {mode: 'text', image: null, imageSequence: 0, preparing: false, pending: false, request: 0, cache: new Map(), result: null, match: null};
-const app = new App({name: 'Video Moment Finder', version: '0.4.1'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
+const app = new App({name: 'Video Moment Finder', version: '0.4.2'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
 let currentExperiment = null;
 
 function notice(text = '') { $('notice').textContent = text; }
 function showError(error) { notice(messageForError(error)); }
 async function call(name, args = {}) {
-  const result = await app.callServerTool({name, arguments: args});
+  // Cold query embedding can exceed the SDK's default 60-second deadline.
+  // Give searches a bounded wait without changing other calls or retrying them.
+  const options = name === 'search_video' || name === 'search_video_image'
+    ? {timeout: 180000, maxTotalTimeout: 180000} : undefined;
+  const result = await app.callServerTool({name, arguments: args}, options);
   if (result.isError) throw new Error(result.content?.find(c => c.type === 'text')?.text ?? 'Tool failed');
   return result;
 }
@@ -208,7 +212,7 @@ async function runMomentSearch() {
   const cost = searchCost(), request = ++search.request;
   const args = mode === 'image' ? {video_id: id, image_base64: search.image.data, limit: 5} : {video_id: id, query_text: $('moment-query').value.trim(), limit: 5};
   search.pending = true; search.result = null; search.match = null; renderSearchResults(); updateSearch();
-  $('search-state').textContent = 'Finding candidate moments…';
+  $('search-state').textContent = 'Finding candidate moments… The first search can take a minute while the search service starts.';
   try {
     // Refresh the free tariff/balance before submitting a metered query.
     await refreshLibrary();
@@ -226,7 +230,12 @@ async function runMomentSearch() {
     search.result = result; renderSearchResults();
     $('search-state').textContent = `Search complete. Select a match to seek the source, then Explain this moment or Quiz me.`;
   } catch (error) {
-    if (request === search.request && state.selected?.id === id) $('search-state').textContent = `${messageForError(error)} No automatic retry was started.`;
+    if (request === search.request && state.selected?.id === id) {
+      const timedOut = error.code === -32001 || /timed out|maximum total timeout/i.test(error.message ?? '');
+      $('search-state').textContent = timedOut
+        ? 'The search did not return in time. It may still finish and use units. Check your allowance before trying again. No automatic retry was started.'
+        : `${messageForError(error)} No automatic retry was started.`;
+    }
   } finally {
     search.pending = false;
     // Retrieve actual allowance after success or failure; never infer a debit.
