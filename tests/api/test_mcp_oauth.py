@@ -305,6 +305,7 @@ def test_authorize_creates_request_and_redirects_to_frontend(
         "get_video_status",
         "list_videos",
         "search_video",
+        "search_video_image",
         "get_transcript",
         "get_frames",
     }

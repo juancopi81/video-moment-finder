@@ -496,6 +496,7 @@ def _consume_and_admit_video_processing(user_id: str, video_id: str | None = Non
 
 API_UNIT_COST_INDEX_VIDEO = get_env_int("API_UNIT_COST_INDEX_VIDEO", 500)
 API_UNIT_COST_TEXT_QUERY = get_env_int("API_UNIT_COST_TEXT_QUERY", 1)
+API_UNIT_COST_IMAGE_QUERY = get_env_int("API_UNIT_COST_IMAGE_QUERY", 1)
 API_UNIT_COST_TRANSCRIPT_FETCH = get_env_int("API_UNIT_COST_TRANSCRIPT_FETCH", 1)
 API_UNIT_COST_FRAMES_THUMB = get_env_int("API_UNIT_COST_FRAMES_THUMB", 1)
 API_UNIT_COST_FRAMES_HIGH = get_env_int("API_UNIT_COST_FRAMES_HIGH", 5)
@@ -2519,6 +2520,32 @@ def v1_search_video_by_image(
         limit=limit,
         user_id=user_id,
     )
+
+
+def mcp_search_video_by_image(
+    video_id: str, image_bytes: bytes, limit: int, identity: AuthIdentity,
+) -> VideoSearchResponse:
+    """Meter a validated workspace image query without changing website billing."""
+    _enforce_search_rate_limit(identity.user_id)
+    record = _get_ready_video_for_search(video_id, identity.user_id)
+
+    def search() -> VideoSearchResponse:
+        results = search_video_by_image_service(
+            video_id=video_id, query_image_bytes=image_bytes, limit=limit,
+        )
+        return _build_video_search_response(record, results)
+
+    track("search_run", user_id=identity.user_id, metadata={"video_id": video_id, "mode": "image"})
+    try:
+        response = _bill_metered_call(
+            user_id=identity.user_id, api_key_id=_api_usage_key_id(identity),
+            event_type="image_query", units=API_UNIT_COST_IMAGE_QUERY,
+            video_id=video_id, work=search,
+        )
+    except (QdrantStorageError, StorageConfigError, RuntimeError) as exc:
+        _raise_search_backend_unavailable(video_id, exc)
+    track("search_success", user_id=identity.user_id, metadata={"video_id": video_id, "mode": "image", "result_count": len(response.results)})
+    return response
 
 
 def _require_owned_video_or_404(video_id: str, user_id: str) -> VideoRecord:

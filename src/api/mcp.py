@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import base64
+import binascii
+import io
 from typing import Annotated, Any, Literal
 
 from fastapi import HTTPException
@@ -41,6 +43,8 @@ logger = get_logger(__name__)
 
 _IDENTITY_STATE_KEY = "vmf_mcp_identity"
 _mcp_session_manager_cm: Any | None = None
+MAX_SEARCH_IMAGE_BYTES = 512 * 1024
+MAX_SEARCH_IMAGE_BASE64 = 4 * ((MAX_SEARCH_IMAGE_BYTES + 2) // 3)
 
 
 class McpVideoRecord(BaseModel):
@@ -300,6 +304,7 @@ def mcp_tool_approval_items() -> list[dict[str, str]]:
         API_UNIT_COST_FRAMES_HIGH,
         API_UNIT_COST_FRAMES_THUMB,
         API_UNIT_COST_INDEX_VIDEO,
+        API_UNIT_COST_IMAGE_QUERY,
         API_UNIT_COST_TEXT_QUERY,
         API_UNIT_COST_TRANSCRIPT_FETCH,
     )
@@ -345,6 +350,12 @@ def mcp_tool_approval_items() -> list[dict[str, str]]:
             "cost": f"{_unit_cost_label(API_UNIT_COST_TEXT_QUERY)} per search query",
         },
         {
+            "name": "search_video_image",
+            "title": "Find Similar Frames",
+            "description": "Search an owned ready video's visual frames using a locally resized reference image. The workspace sends the chosen image for inference only when you press Search; it is not saved in your VMF library.",
+            "cost": f"{_unit_cost_label(API_UNIT_COST_IMAGE_QUERY)} per image search",
+        },
+        {
             "name": "get_transcript",
             "title": "Get Transcript",
             "description": "Fetch the full spoken transcript with per-segment timestamps for a ready video.",
@@ -374,6 +385,7 @@ def _workspace_config() -> dict:
     from src.api.app import (
         API_UNIT_COST_FRAMES_HIGH, API_UNIT_COST_FRAMES_THUMB,
         API_UNIT_COST_TRANSCRIPT_FETCH, VIDEO_MAX_UPLOAD_BYTES,
+        API_UNIT_COST_TEXT_QUERY, API_UNIT_COST_IMAGE_QUERY,
     )
     endpoint = os.environ.get("R2_ENDPOINT_URL", "")
     return {
@@ -382,6 +394,9 @@ def _workspace_config() -> dict:
         "transcript_units": API_UNIT_COST_TRANSCRIPT_FETCH,
         "frame_thumb_units": API_UNIT_COST_FRAMES_THUMB,
         "frame_high_units": API_UNIT_COST_FRAMES_HIGH,
+        "text_search_units": API_UNIT_COST_TEXT_QUERY,
+        "image_search_units": API_UNIT_COST_IMAGE_QUERY,
+        "max_search_image_bytes": MAX_SEARCH_IMAGE_BYTES,
     }
 
 
@@ -663,6 +678,48 @@ def search_video(
         identity=identity,
     )
     return _search_result_from_response(response)
+
+
+@vmf_mcp.tool(
+    title="Find Similar Frames",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+    meta={"ui": {"visibility": ["app"]}},
+)
+def search_video_image(
+    video_id: Annotated[str, Field(min_length=1)],
+    image_base64: Annotated[str, Field(min_length=4, max_length=MAX_SEARCH_IMAGE_BASE64,
+        description="Base64 JPEG, PNG or WebP from the workspace file picker; at most 512 KiB and 2048 pixels per side. No URL or data-URI prefix.")],
+    limit: Annotated[int, Field(ge=1, le=20)] = 5,
+    ctx: Context | None = None,
+):
+    """Find visually similar moments in the selected owned video.
+
+    Only the workspace calls this tool. Images are used for inference, not
+    library ingestion or person identification. Similarity is not proof of an
+    exact match. Signed thumbnail capabilities are returned in UI-only metadata.
+    """
+    if ctx is None:
+        raise RuntimeError("MCP context is required")
+    from PIL import Image as PILImage, UnidentifiedImageError
+    from src.api.app import mcp_search_video_by_image
+
+    try:
+        image_bytes = base64.b64decode(image_base64, validate=True)
+        if not image_bytes or len(image_bytes) > MAX_SEARCH_IMAGE_BYTES:
+            raise ValueError("Choose an image within the 512 KiB search limit")
+        with PILImage.open(io.BytesIO(image_bytes)) as image:
+            if image.format not in {"JPEG", "PNG", "WEBP"} or max(image.size) > 2048:
+                raise ValueError("Choose a JPEG, PNG or WebP of at most 2048 pixels per side")
+            image.verify()
+    except (binascii.Error, UnidentifiedImageError, OSError, SyntaxError, PILImage.DecompressionBombError) as exc:
+        raise ValueError("Choose a valid JPEG, PNG or WebP image") from exc
+    response = mcp_search_video_by_image(video_id, image_bytes, limit, _request_identity(ctx))
+    matches = [r.model_dump(exclude={"thumbnail_url"}) for r in response.results]
+    return workspace_result(
+        {"video_id": response.video_id, "status": response.status, "results": matches},
+        search_thumbnails=[r.thumbnail_url for r in response.results],
+        config=_workspace_config(),
+    )
 
 
 @vmf_mcp.tool(

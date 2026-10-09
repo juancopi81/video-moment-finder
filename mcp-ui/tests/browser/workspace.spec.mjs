@@ -2,12 +2,13 @@ import {test, expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import {guide, reviewedCases, toolResult, video} from '../fixtures.js';
 
-let media;
-test.beforeAll(async () => { media = await readFile(new URL('../lesson.webm', import.meta.url)); });
+let media, referenceImage;
+test.beforeAll(async () => { media = await readFile(new URL('../lesson.webm', import.meta.url)); referenceImage = await readFile(new URL('../reference-frame.png', import.meta.url)); });
 async function open(page, query = '') {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.route('https://storage.example.test/**', async route => {
     const headers = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'PUT, GET, HEAD, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Accept-Ranges': 'bytes'};
+    if (route.request().url().includes('/reference-frame.png')) { await route.fulfill({status: 200, headers, contentType: 'image/png', body: referenceImage}); return; }
     const range = route.request().headers().range?.match(/^bytes=(\d+)-(\d*)$/);
     const isMedia = route.request().method() === 'GET';
     const start = isMedia && range ? Number(range[1]) : 0;
@@ -22,6 +23,119 @@ async function open(page, query = '') {
   return {ui, errors};
 }
 const calls = (page, name) => page.evaluate(name => window.fixtureHost.calls.filter(c => c.name === name), name);
+
+test('text search finds spoken and visual candidates, seeks and hands off clean context; repeats are cached', async ({page}) => {
+  const {ui, errors} = await open(page, '?injection');
+  await ui.getByLabel('Describe what you want to find', {exact: true}).fill('the zero-vector example');
+  await ui.locator('#moment-query').press('Enter');
+  await expect(ui.locator('#search-results .search-match')).toHaveCount(2);
+  expect(await calls(page, 'search_video')).toHaveLength(1);
+  expect((await calls(page, 'search_video'))[0].args).toEqual({video_id: video.id, query_text: 'the zero-vector example', limit: 5});
+  await expect(ui.locator('#balance')).toContainText('599 units');
+  await expect(ui.locator('#search-results')).toContainText('<img src=x');
+  expect(await ui.locator('body').evaluate(() => window.badSearch)).toBeUndefined();
+  await ui.getByRole('button', {name: 'Go to 0:06 spoken match 1'}).click();
+  await expect.poll(() => ui.locator('#player').evaluate(p => p.currentTime)).toBe(6);
+  await ui.getByRole('button', {name: 'Explain this moment', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.contexts.length)).toBe(1);
+  const context = await page.evaluate(() => window.fixtureHost.contexts[0].content[0].text);
+  expect(context).toContain('"candidate_requires_source_verification":true');
+  expect(context).toContain('Quoted spoken text.');
+  expect(context).not.toContain('fixture=temporary');
+  await ui.locator('#player').evaluate(p => { p.currentTime = 10; });
+  await expect(ui.getByRole('button', {name: 'Go to 0:06 spoken match 1'})).toHaveAttribute('aria-pressed', 'false');
+  await ui.getByRole('button', {name: 'Explain this moment', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.contexts.length)).toBe(2);
+  expect(await page.evaluate(() => window.fixtureHost.contexts[1].content[0].text)).not.toContain('search_candidate');
+  await ui.locator('#search-filter').selectOption('visual');
+  await expect(ui.locator('#search-results .search-match')).toHaveCount(1);
+  await expect(ui.locator('#search-results img')).toBeVisible();
+  await ui.locator('#run-search').click();
+  await expect(ui.locator('#search-state')).toContainText('No new search units');
+  expect(await calls(page, 'search_video')).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
+test('image selection is local; explicit search sends a bounded JPEG and finds source frames', async ({page}) => {
+  const {ui, errors} = await open(page);
+  await ui.getByRole('button', {name: 'Image', exact: true}).click();
+  await ui.locator('#search-image-file').setInputFiles({name: 'my-reference.png', mimeType: 'image/png', buffer: referenceImage});
+  await expect(ui.locator('#search-state')).toContainText('Nothing has been sent');
+  await expect(ui.locator('#search-image')).toBeVisible();
+  expect(await calls(page, 'search_video_image')).toHaveLength(0);
+  await expect(ui.locator('#run-search')).toContainText('1 unit');
+  await ui.locator('#run-search').click();
+  await expect(ui.locator('#search-results .search-match')).toHaveCount(1);
+  const [request] = await calls(page, 'search_video_image');
+  expect(request.args.video_id).toBe(video.id);
+  const bytes = Buffer.from(request.args.image_base64, 'base64');
+  expect(bytes.length).toBeLessThanOrEqual(524288);
+  expect(bytes.subarray(0, 2).toString('hex')).toBe('ffd8');
+  expect(request.args).not.toHaveProperty('image_url');
+  await ui.getByRole('button', {name: 'Go to 0:06 visual match 1'}).click();
+  await expect.poll(() => ui.locator('#player').evaluate(p => p.currentTime)).toBe(6);
+  await ui.getByRole('button', {name: 'Quiz me', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.messages.length)).toBe(1);
+  expect(await page.evaluate(() => window.fixtureHost.messages[0].content[0].text)).not.toContain('fixture=temporary');
+  await ui.locator('#run-search').click();
+  expect(await calls(page, 'search_video_image')).toHaveLength(1);
+  await ui.getByRole('button', {name: 'Remove image'}).click();
+  await expect(ui.locator('#run-search')).toBeDisabled();
+  await expect(ui.locator('#search-image-preview')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('invalid or oversized image selection never runs a query', async ({page}) => {
+  const {ui} = await open(page);
+  await ui.getByRole('button', {name: 'Image', exact: true}).click();
+  await ui.locator('#search-image-file').setInputFiles({name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('invalid')});
+  await expect(ui.locator('#search-state')).toContainText('could not be opened');
+  await expect(ui.locator('#run-search')).toBeDisabled();
+  await ui.locator('#search-image-file').setInputFiles({name: 'large.png', mimeType: 'image/png', buffer: Buffer.alloc(10 * 1024 * 1024 + 1)});
+  await expect(ui.locator('#search-state')).toContainText('at most 10 MB');
+  expect(await calls(page, 'search_video_image')).toHaveLength(0);
+});
+
+test('empty results and failures are explicit; no automatic paid retry occurs', async ({page}) => {
+  const {ui} = await open(page);
+  await page.evaluate(() => { window.fixtureHost.noMatches = true; });
+  await ui.locator('#moment-query').fill('a cat');
+  await ui.locator('#run-search').click();
+  await expect(ui.locator('#search-results')).toContainText('No matches returned');
+  await page.evaluate(() => { window.fixtureHost.failures.search = 1; });
+  await ui.locator('#moment-query').fill('a different scene');
+  await ui.locator('#run-search').click();
+  await expect(ui.locator('#search-state')).toContainText('No automatic retry');
+  expect(await calls(page, 'search_video')).toHaveLength(2);
+});
+
+test('a changed tariff requires another click; zero allowance prevents a new query', async ({page}) => {
+  const {ui} = await open(page);
+  await page.evaluate(() => { window.fixtureHost.searchCost = 3; });
+  await ui.locator('#moment-query').fill('zero-vector example');
+  await ui.locator('#run-search').click();
+  await expect(ui.locator('#search-state')).toContainText('cost changed');
+  await expect(ui.locator('#run-search')).toContainText('3 units');
+  expect(await calls(page, 'search_video')).toHaveLength(0);
+  await page.evaluate(() => { window.fixtureHost.balance = 0; });
+  await ui.locator('#run-search').click();
+  await expect(ui.locator('#search-state')).toContainText('insufficient');
+  expect(await calls(page, 'search_video')).toHaveLength(0);
+});
+
+test('a late query result never appears under a different selected video', async ({page}) => {
+  const {ui} = await open(page);
+  await page.evaluate(() => { window.fixtureHost.delays.search_video = 500; });
+  await ui.locator('#moment-query').fill('zero-vector example');
+  await ui.locator('#run-search').click();
+  await expect.poll(() => calls(page, 'search_video')).toHaveLength(1);
+  await ui.getByRole('button', {name: /Second lesson.mp4/}).click();
+  await expect(ui.locator('#video-title')).toHaveText('Second lesson.mp4');
+  await expect(ui.locator('#search-results-panel')).toBeHidden();
+  await expect.poll(() => ui.locator('#run-search').textContent()).not.toContain('Finding moments');
+  await expect(ui.locator('#search-results-panel')).toBeHidden();
+  await expect(ui.locator('#moment-query')).toHaveValue('');
+});
 
 test('first learning request opens a full chat with its own source context; prepared views continue in place', async ({page}) => {
   const {ui, errors} = await open(page, '?library&new-chat');

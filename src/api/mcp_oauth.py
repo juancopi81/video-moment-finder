@@ -61,7 +61,8 @@ DEFAULT_MCP_OAUTH_SCOPE = "vmf:mcp"
 #       list_videos, search_video)
 #   2 = six-tool approval (adds get_transcript and get_frames)
 #   3 = native workspace (adds library/allowance, playback and learning views)
-MCP_APPROVED_TOOLS_VERSION = 3
+#   4 = native image search (reference-image inference and its metered tool)
+MCP_APPROVED_TOOLS_VERSION = 4
 MCP_TOOLS_REAPPROVAL_DESCRIPTION = (
     "This connection was approved for an older tool list. "
     "Reconnect Video Moment Finder in your MCP client to approve the updated tool list."

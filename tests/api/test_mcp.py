@@ -283,6 +283,7 @@ def test_mcp_lists_only_expected_tools(
         "get_video_status",
         "list_videos",
         "search_video",
+        "search_video_image",
         "get_transcript",
         "get_frames",
         "open_workspace",
@@ -571,6 +572,7 @@ def test_mcp_tool_approval_items_includes_native_workspace() -> None:
         "get_video_status",
         "list_videos",
         "search_video",
+        "search_video_image",
         "get_transcript",
         "get_frames",
     ]
@@ -587,6 +589,7 @@ def test_mcp_tool_approval_items_list_exact_unit_costs() -> None:
         "get_video_status": "No units",
         "list_videos": "No units",
         "search_video": "1 unit per search query",
+        "search_video_image": "1 unit per image search",
         "get_transcript": "1 unit per call",
         "get_frames": "1 unit per thumbnail call, 5 units per high-res call",
     }

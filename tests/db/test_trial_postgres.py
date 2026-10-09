@@ -94,6 +94,18 @@ def test_all_migrations_apply_and_trial_is_empty_by_default(sql):
         sql((ROOT / "supabase/migrations" / filename).read_text())
 
 
+def test_image_search_migration_debit_refund_and_existing_events(sql, account):
+    migration = ROOT / "supabase/migrations/20261009120000_image_search_api_usage.sql"
+    sql(migration.read_text())  # The production migration may be safely reapplied.
+    sql(grant_sql(account))
+    request = "image_" + uuid4().hex
+    assert sql(f"select allowed from public.consume_api_units('{account}', null, 'image_query', 1, null, '{request}');") == "t"
+    assert sql(balance_sql(account)) == "599"
+    sql(f"select public.compensate_api_units('{account}', 1, null, '{request}');")
+    assert sql(balance_sql(account)) == "600"
+    assert sql(consume_sql(account, 1, "text_" + uuid4().hex)) == "t"
+
+
 def test_new_verified_account_grant_is_stable_across_retries(sql, account):
     assert sql(grant_sql(account)) == "600"
     assert sql(grant_sql(account, units=900)) == "600"

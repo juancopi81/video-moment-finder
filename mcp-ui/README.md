@@ -40,6 +40,14 @@ CORS or end-to-end indexing. See `docs/plugin/NATIVE_WORKSPACE.md` for the stage
 host gate. Do not use fixture screenshots or fixtures as the public review demo.
 
 `tests/lesson.webm` is an original, silent 12-second grid/shape fixture generated
+with an extracted `reference-frame.png` for local image-search tests. Text/image
+searches in the fixture host return synthetic candidates and never invoke VMF.
+The native UI resizes JPEG/PNG/WebP selections locally and sends a bounded JPEG
+only on explicit submission. Test caching, changed tariffs, invalid inputs,
+owner/video switching and clean candidate handoff under the same strict CSP.
+Actual host image selection and live inference remain separate gates.
+
+The video was generated
 with FFmpeg. No third-party transcript, lecture image or account data is included.
 The browser tests use the real SDK and the same shared vector arithmetic as the
 offline plugin tools. The optional `VMF_BROWSER_EXECUTABLE` test setting selects

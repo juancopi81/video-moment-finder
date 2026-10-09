@@ -1,6 +1,16 @@
 # Video Moment Finder learning plugin
 
-## Native workspace (0.3.0)
+## Native workspace (0.4.0)
+
+Find a moment searches the selected owned video using a text description of a
+scene or spoken idea, or a reference image to find similar frames. Results show
+visual/spoken labels and timestamps that seek the source player. Explain this
+moment and Quiz me carry the selected candidate into chat for source verification.
+Image selection is local; a resized JPEG is sent for inference only when you
+press Find moments. The image is not added to your library. Current costs appear
+before search, and cached queries use no new units. Similarity does not guarantee
+an exact match. Image input accepts JPEG, PNG or WebP up to 10 MB; the workspace
+normalizes it to at most 1024 pixels per side and a 512 KiB search payload.
 
 Where supported, open Video Workspace from the sidebar or conversation panel.
 Choose a ready video or upload a file you own, select a source moment and ask

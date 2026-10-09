@@ -4,14 +4,33 @@ This file is the concise operations reference that was intentionally removed fro
 
 ## Source of Truth for Environment Variables
 
-The native workspace candidate is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
-Before staging, configure private R2 CORS for the actual sandbox origin using
+The 0.4.0 native-search candidate requires
+`supabase/migrations/20261009120000_image_search_api_usage.sql` before API rollout.
+It adds `image_query` to the existing ledger constraint without balance/grant
+changes. `API_UNIT_COST_IMAGE_QUERY` defaults to 1; text uses the existing
+`API_UNIT_COST_TEXT_QUERY`. Current costs are returned to the workspace and
+displayed before submission. Image inference uses existing Modal/Qdrant access;
+no new media origin, storage upload, model deployment or production dependency is
+needed. Consent version 4 requires reconnect. Native search is not live until
+the approved migration, deployment and actual-host verification complete.
+
+The native workspace is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
+For each environment, configure private R2 CORS for the actual sandbox origin using
 `GET`, `HEAD`, `PUT` and `Content-Type`. Preserve website origins and keep the
 bucket private. The component's CSP permits only the exact `R2_ENDPOINT_URL`
 origin for media/transfer and uses the MCP resource origin as its widget domain.
 Inspect the effective host origin rather than adding a wildcard. API calls go
 through MCP's host bridge and need no new public API CORS origin. Verify actual
 transfer/playback in the intended host before recording or submission.
+
+Production API and worker have Railway's **Wait for CI** enabled as of October 9,
+2026. The production media bucket retains its website upload rule and adds the
+observed ChatGPT origin
+`https://api-videomomentfinder-com.web-sandbox.oaiusercontent.com` for
+`GET`, `HEAD`, `PUT` and `content-type`, with a 3600-second CORS cache. No wildcard
+origin or public bucket access is needed. Production source retention remains
+30 days, with a separate 90-day reviewer-sample rule; multipart cleanup remains
+unchanged. Inspect a new host's actual origin before extending this policy.
 
 - Backend and infrastructure variables: `.env.example`
 - Frontend variables: `frontend/.env.example`
