@@ -22,17 +22,26 @@ visual candidates. Cached reuse, source seeking to 37/40 seconds and inspected
 zero-vector thumbnails passed. A constrained image-only handoff reported
 missing image evidence; source-text fallback at 0:28 produced one grounded
 tutor question and waited without further metered retrieval. Image-only
-handoff grounding remains unverified; use the transcript fallback for recording.
-The ledger confirms five of ten approved existing units used and a 2,069 balance,
+handoff grounding remains unverified. The normal Explain this moment action
+subsequently retrieved one permitted thumbnail at 0:40 and correctly read its
+heading/footer before explaining the zero-vector exception. Record that actual
+retrieval and cost, or use the verified transcript fallback; do not claim that
+cached workspace images alone reached the model.
+The four original learning views were reopened together in the current 0.4.2
+workspace with free `render_learning_view`; actual exported view data match
+the originals exactly. Guide citation seeking, card reveal/advance, computed
+Playground pin/change/zero-vector controls and slide navigation/notes passed
+again. One tutor question waits at 0:36; learner feedback remains to record.
+The ledger confirms six of ten approved existing units used and a 2,068 balance,
 with no new indexing, grants or trial enrollment. Public submission has not occurred.
 
 Image selection is local until explicit search; current API tariffs apply,
 similarity is a candidate, and clicked timestamps feed owned playback and chat.
 The app-only image tool expands consent to version 4 and requires the new
 `image_query` ledger migration before rollout. Migration/deployment and reviewer
-renewal, actual image search/source checks and the text-grounded chat fallback
-are verified. Recording must show the supported fallback rather than claim
-verified image-only chat grounding.
+renewal, actual image search/source checks, the text-grounded chat fallback and
+visual explanation after one model-side thumbnail retrieval are verified.
+Recording must distinguish that retrieval from unverified image-only grounding.
 P2 now covers both searches within the existing five-positive/three-negative
 case set. Fresh ingestion remains reserved for P1 of the saved portal release.
 See [Native Workspace](NATIVE_WORKSPACE.md) and [Walkthrough](WALKTHROUGH.md).

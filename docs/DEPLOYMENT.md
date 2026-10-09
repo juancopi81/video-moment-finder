@@ -26,9 +26,12 @@ grants, jobs, billing functions and RLS were unchanged. Main CI and production
 API/worker/frontend deployments passed. The same private plugin is now 0.4.2.
 Reviewer OAuth renewal, the refreshed native workspace, actual text/image
 search, cached reuse, source seeking and retrieved thumbnails passed. A
-source-text tutor handoff passed; the image-only handoff reported missing
-image evidence in this host, so recording must use the verified transcript
-fallback. See `docs/plugin/NATIVE_WORKSPACE.md`. The public trial remains disabled.
+source-text tutor handoff passed. A normal visual explanation also passed after
+one model-side thumbnail retrieval. Cached-image-only chat grounding remains
+unverified in this host; record the actual retrieval or transcript fallback.
+The four prepared learning views were reopened and verified in the current
+workspace without new evidence retrieval. See `docs/plugin/NATIVE_WORKSPACE.md`.
+The public trial remains disabled.
 
 The native workspace is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
 For each environment, configure private R2 CORS for the actual sandbox origin using

@@ -91,11 +91,29 @@ image. The supported source-text fallback passed: loading the transcript once,
 selecting its 0:28 zero-vector passage and pressing Quiz me produced exactly
 one grounded question and waited. The chat made no additional metered retrieval.
 
-The ledger records exactly five of ten approved existing reviewer units used:
-one text query, one image query, two thumbnails and one transcript. Balance is
-2,069; videos, indexing jobs, grants and trial enrollment are unchanged. Five
+An additional no-retrieval probe still reported missing image content. The
+normal Explain this moment action then passed with one explicitly permitted
+thumbnail retrieval at 0:40. ChatGPT correctly read the heading “CHECK THE
+BOUNDARY CASE” and footer “Scene 3 of 3 · Original test material” before
+explaining the zero-vector exception. This verifies a grounded visual
+explanation after model-side retrieval, not transfer of the cached workspace
+image without retrieval. The latter remains unverified; its root cause is unknown.
+
+The original four learning views were reopened together with the free
+`render_learning_view` tool in the current 0.4.2 workspace. Actual view-data
+exports match all four saved originals exactly. Guide seeking to 36 seconds,
+card reveal/advance, a pinned comparison from dot product 6 to −6, the zero
+vector's undefined angle, and slide navigation/speaker notes passed again.
+The conversation has one zero-vector tutor question waiting at 0:36. This is
+recording preparation, not a completed learner-feedback or saved-review case.
+
+The ledger records exactly six of ten approved existing reviewer units used:
+one text query, one image query, three thumbnails and one transcript. Balance is
+2,068; videos, indexing jobs, grants and trial enrollment are unchanged. Four
 units remain under this smoke-test cap; further paid calls are unnecessary for
-this checkpoint. Recording instructions use the verified transcript fallback.
+preparation. Recording can show the completed visual explanation and its actual
+one-unit retrieval, or the verified transcript fallback. Both search queries
+remain cached for retakes, and the reference image remains selected.
 This rollout does not establish saved public-review cases, trial activation,
 recording, submission or publication.
 
