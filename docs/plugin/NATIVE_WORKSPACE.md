@@ -35,8 +35,13 @@ repeats. The broken local preview prompted the canvas patch. The publisher and
 agent verified the actual 0.4.1 reference preview and source frame. A later query returned successfully in the backend at the SDK's 60-second
 response deadline but timed out in the component. Search-only bridge calls now
 allow at most three minutes; no compute scaling or tariff changes are involved.
-Timeouts disclose uncertain billing and do not retry automatically. Actual
-0.4.2 handoff verification and the new production rollout remain gates. The
+Timeouts disclose uncertain billing and do not retry automatically. Both CI runs
+passed at `1c7a89c`, and Railway staging deployed that head. Twenty free protocol
+checks passed for the exact 0.4.2 bundle, resource URI, unchanged CSP/tariffs and
+version-4 consent, with disposable authentication cleanup. ChatGPT tool metadata
+was refreshed and the new workspace loaded with the existing lesson and balance.
+Reloading clears the local reference file; manual reselection is needed before
+the final image-search/tutor handoff. That handoff and the new production rollout remain gates. The
 verified 0.3.0 production checkpoint below is the baseline, not a 0.4.2 deployment claim.
 
 ## Production checkpoint (2026-10-09)
@@ -136,7 +141,11 @@ backend cases, 18 isolated PostgreSQL skipped locally, 14 archive, four core,
 25 SDK browser and seven frontend cases, lint and an 18-page production build.
 The portable archive has 46 files and six skills; SHA256
 `40cd438ca4cbfca15ee0c8e77de90296d4d68cf746cb14ca778660bbd2add91a`.
-Refreshed staging host verification and production approval remain required.
+The corrected clock fixture isolates the delayed response from cross-frame timer
+jumps; 24 repeated focused cases, the full browser suite and final error-notice
+assertions passed. Both CI runs and 20 deployed staging protocol checks passed
+at `1c7a89c`. Final live image-search/tutor handoff and production approval remain
+required; the refreshed ChatGPT workspace is waiting for local file reselection.
 
 October 9, 0.4.1 preview patch: full local validation passed with **736 backend
 cases**, **18 isolated PostgreSQL cases skipped locally**, **14 archive**, **four

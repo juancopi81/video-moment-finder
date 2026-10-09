@@ -31,7 +31,12 @@ A final handoff query completed in the backend at about 60 seconds but missed
 the SDK's one-minute response deadline. The 0.4.2 patch gives searches a bounded
 three-minute wait and states that a timeout may still consume units, with no
 automatic retry. Local virtual-clock tests reproduce the former failure and
-verify slow completion and the bound. Its deployed-host handoff remains a gate. Production/private
+verify slow completion and the bound. Both CI runs passed at `1c7a89c`; staging
+deployed the exact 0.4.2 bundle and all 20 free protocol checks passed. ChatGPT
+metadata was refreshed, but reloading cleared its local image selection; the
+final live image-search/tutor handoff is waiting for manual reselection.
+Four of ten approved additional staging units have been used, with no new
+indexing or grants. Its deployed-host handoff remains a gate. Production/private
 plugin 0.3.0, public trial, submission and publication remain unchanged.
 
 **0.3.0 is now deployed to production and saved over the same private plugin.**
