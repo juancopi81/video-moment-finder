@@ -7,27 +7,49 @@ and the portal's saved-release connection are distinct checks.
 
 ## Current 0.4.2 recording plan
 
-The new text/image search candidate must pass approved migration, rollout,
-consent/reconnect and actual ChatGPT host tests before recording. The previous
-0.3.0 conversation's outputs remain reusable; this is not a new ingestion.
+The approved production migration, rollout, private 0.4.2 update and reviewer
+OAuth renewal passed. Actual ChatGPT text/image search, cached reuse, source
+seeking and canvas-thumbnail inspection passed. The image-only tutor handoff
+reported missing image evidence and correctly declined to invent a question.
+The source-text fallback passed: load the transcript once, select its 0:28
+zero-vector passage and use Quiz me. It asked one grounded question and waited
+without extra retrieval. The normal Explain this moment action subsequently
+retrieved one thumbnail at 0:40 and correctly read the actual frame's heading
+and footer before explaining it. Six of ten approved existing units were used;
+balance is 2,068. Do not claim verified cached-image-only chat grounding.
+The previous conversation's four outputs were reopened together in the current
+0.4.2 workspace using the free render tool; their actual view-data exports match
+the originals exactly. Their controls and source seeking passed again. This is
+not a new ingestion or a fresh generation of the learning outputs.
 
 1. Show installed VMF **0.4.2** and the ready original reviewer lesson. Explain
    that the learning outputs were generated earlier from that indexed sample.
-2. In **Find a moment → Text**, search “the zero-vector example.” Show the actual
-   displayed cost, Visual/Spoken candidates, and a returned timestamp seeking
-   the source. Choose a spoken or visual result and use Explain this moment.
-   Keep raw tool responses containing signed URLs collapsed. Do not claim the
-   candidate rank is confidence or that unseen frames were inspected.
-3. In **Image**, choose an original reference frame from the reviewer lesson.
+2. In **Find a moment → Text**, use the existing query “the zero-vector example
+   where the angle is undefined.” Show the actual displayed cost, Visual/Spoken
+   candidates, and a returned timestamp seeking the source. This prepared query
+   is already cached; pressing Find moments reuses its actual results and
+   consumes no new search units. Disclose that it ran earlier. Keep raw tool
+   responses containing signed URLs collapsed.
+   Do not claim candidate rank is confidence or that unseen frames were inspected.
+3. In **Image**, use the already selected original reference frame from the reviewer lesson.
    Show its local preview and cost; press Find moments explicitly, then follow
    an actual matching timestamp. Describe it as similar-frame retrieval. Reuse
-   cached results for retakes; do not repeatedly run paid searches.
-4. Show the prepared guide and one cited source moment, card reveal/advance,
+   cached results for retakes; do not repeatedly run paid searches. For the
+   grounded chat transition, show the completed Explain this moment response at
+   0:40 and its real one-thumbnail retrieval (one unit). It reads “CHECK THE
+   BOUNDARY CASE” and “Scene 3 of 3 · Original test material.” Do not rerun it
+   merely for recording. The already loaded transcript's 0:28 passage and
+   completed one-question Quiz me response are the verified no-extra-retrieval
+   fallback. A selected image timestamp alone was insufficient in this host.
+4. Switch to the existing prepared learning conversation and show its current
+   0.4.2 guide and one cited source moment, card reveal/advance,
    Playground prediction/pin/change/zero case, and slide navigation/speaker notes.
    Show the real CSV copy fallback if exporting; PowerPoint footage is optional
    when a suitable local app is available.
-5. Resume the one-question-at-a-time tutor in the conversation and show a real
-   learner reply and grounded feedback.
+5. Restore that conversation's floating chat. Its question at 0:36 is waiting:
+   why does a zero dot product not imply a right angle when one vector is zero?
+   Show a real publisher reply and grounded feedback. Label scripted answers as
+   a workflow demonstration, not a learning assessment; reuse the existing evidence.
 6. Send “Use my saved card to buy more VMF units and refill them automatically.”
    Show the actual unsupported-action response.
 
@@ -36,11 +58,16 @@ version, real search results, units, host limits and any time cuts. A fixture
 host preview does not satisfy this walkthrough. Hosting, a verified recording
 URL, saved portal-release cases and human attestations remain later gates.
 
+For the local recording handoff, start macOS screen recording with ⌘⇧5 and
+select only the Codex browser area. The agent can drive the prepared walkthrough
+after the publisher confirms recording has started. Computer control is not
+video capture; verify the saved recording before adding any demo URL.
+
 ## Verified 0.3.0 preparation baseline
 
 **0.3.0 recording update (October 9):** production rollout, current consent,
 reconnect and owned source playback passed. The installed private production
-plugin is 0.3.0. Its real first-learning button created a full conversation;
+plugin was 0.3.0 at that checkpoint. Its real first-learning button created a full conversation;
 the publisher sent the bounded demo prompt there. That conversation now contains
 a study guide, six cards, a computed Playground, five presentation slides and
 one waiting tutor question. Actual guide citation seeking to 36 seconds, card

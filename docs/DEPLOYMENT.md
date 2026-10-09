@@ -4,7 +4,7 @@ This file is the concise operations reference that was intentionally removed fro
 
 ## Source of Truth for Environment Variables
 
-The 0.4.2 native-search candidate requires
+The 0.4.2 native-search release requires
 `supabase/migrations/20261009120000_image_search_api_usage.sql` before API rollout.
 It adds `image_query` to the existing ledger constraint without balance/grant
 changes. `API_UNIT_COST_IMAGE_QUERY` defaults to 1; text uses the existing
@@ -19,6 +19,19 @@ can return after the SDK default one-minute deadline. Compute scaling, tariffs
 and backend billing are unchanged; a timeout does not establish a refund.
 Native search is not live in an environment until its approved migration,
 deployment and actual-host verification complete.
+
+Production checkpoint, October 9: the image-query constraint migration was
+applied and verified before PR #97 merged at `7737afd`. Protected balances,
+grants, jobs, billing functions and RLS were unchanged. Main CI and production
+API/worker/frontend deployments passed. The same private plugin is now 0.4.2.
+Reviewer OAuth renewal, the refreshed native workspace, actual text/image
+search, cached reuse, source seeking and retrieved thumbnails passed. A
+source-text tutor handoff passed. A normal visual explanation also passed after
+one model-side thumbnail retrieval. Cached-image-only chat grounding remains
+unverified in this host; record the actual retrieval or transcript fallback.
+The four prepared learning views were reopened and verified in the current
+workspace without new evidence retrieval. See `docs/plugin/NATIVE_WORKSPACE.md`.
+The public trial remains disabled.
 
 The native workspace is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
 For each environment, configure private R2 CORS for the actual sandbox origin using

@@ -1,8 +1,8 @@
-# Native workspace: 0.4.2 candidate
+# Native workspace: 0.4.2
 
 ## Moment search update (2026-10-09)
 
-The candidate adds Find a moment for the selected owned ready video. Text uses
+The release adds Find a moment for the selected owned ready video. Text uses
 the existing semantic search across visual and transcript vectors; results
 label Visual or Spoken and seek the source player. Image accepts JPEG, PNG or
 WebP up to 10 MB, normalizes locally to a JPEG at most 1024 pixels per side and
@@ -47,10 +47,77 @@ to the constrained test conversation, which asked one correct zero-vector/angle
 question and waited without more metered retrieval. The final ledger records six
 of ten approved additional units used, a balance of 75, one unchanged original
 job/attempt/private grant and no trial. The documentation head `f4dd2b3` also
-passed both CI runs and deployed the identical bundle. The new production rollout remains a gate. The
-verified 0.3.0 production checkpoint below is the baseline, not a 0.4.2 deployment claim.
+passed both CI runs and deployed the identical bundle. The subsequent production
+rollout is recorded below; production image search remains a separate host check.
 
-## Production checkpoint (2026-10-09)
+## Production search checkpoint (2026-10-09)
+
+The publisher explicitly approved the search rollout. The single
+`image_query` constraint migration was applied to production before PR #97
+merged at `7737afd4bb19fcf6fcee4ab9c99a9a17989bab83`. Transaction snapshots
+verified unchanged data, balances, grants, jobs, billing functions and RLS.
+Main backend/workspace/frontend CI passed, followed by the production Railway
+API and worker and Vercel frontend deployments. Ten free public HTTP checks
+passed against the active release.
+
+The same USER-private plugin was updated to 0.4.2 with its existing release
+guard. Read-back verified all 48 files, six skills, matching portable/legacy
+manifests, onboarding, starter prompts, publisher and MCP configuration.
+Unchanged binary assets were preserved. The portable submission archive remains
+46 files; private compatibility files are not its public packaging contract.
+
+The connection requested and accepted OAuth renewal. Its free library result
+matched the dedicated reviewer's existing original video; the database records
+current consent version 4. Refreshed ChatGPT tool metadata loaded the new native
+search controls and owned 1280×720 playback. One semantic text query returned
+five visual and two spoken candidates. The spoken passage states that the zero
+vector's angle is undefined. Selecting the fourth visual candidate sought the
+actual player to 37 seconds, and a retrieved thumbnail rendered the same
+zero-vector slide on canvas. Repeating the text query reused its cache.
+
+The original reference image rendered locally as a 1024×576 search copy;
+selection used no units. One image query returned five visual candidates at
+27, 41, 40, 33 and 30 seconds. Selecting the third candidate sought the actual
+1280×720 source to 40 seconds with no playback error. Its retrieved canvas
+thumbnail visibly states that the zero vector has no defined angle. A repeated
+image search displayed “Reused these matches. No new search units.” Candidate
+rank is similarity, not certainty or an accuracy benchmark.
+
+The constrained image-only Quiz me handoff identified 0:40, but ChatGPT reported
+that no source image or transcript was available and declined to invent a
+question. Image-only grounding therefore remains unverified in this host;
+the model's report does not identify which layer failed to deliver or use the
+image. The supported source-text fallback passed: loading the transcript once,
+selecting its 0:28 zero-vector passage and pressing Quiz me produced exactly
+one grounded question and waited. The chat made no additional metered retrieval.
+
+An additional no-retrieval probe still reported missing image content. The
+normal Explain this moment action then passed with one explicitly permitted
+thumbnail retrieval at 0:40. ChatGPT correctly read the heading “CHECK THE
+BOUNDARY CASE” and footer “Scene 3 of 3 · Original test material” before
+explaining the zero-vector exception. This verifies a grounded visual
+explanation after model-side retrieval, not transfer of the cached workspace
+image without retrieval. The latter remains unverified; its root cause is unknown.
+
+The original four learning views were reopened together with the free
+`render_learning_view` tool in the current 0.4.2 workspace. Actual view-data
+exports match all four saved originals exactly. Guide seeking to 36 seconds,
+card reveal/advance, a pinned comparison from dot product 6 to −6, the zero
+vector's undefined angle, and slide navigation/speaker notes passed again.
+The conversation has one zero-vector tutor question waiting at 0:36. This is
+recording preparation, not a completed learner-feedback or saved-review case.
+
+The ledger records exactly six of ten approved existing reviewer units used:
+one text query, one image query, three thumbnails and one transcript. Balance is
+2,068; videos, indexing jobs, grants and trial enrollment are unchanged. Four
+units remain under this smoke-test cap; further paid calls are unnecessary for
+preparation. Recording can show the completed visual explanation and its actual
+one-unit retrieval, or the verified transcript fallback. Both search queries
+remain cached for retakes, and the reference image remains selected.
+This rollout does not establish saved public-review cases, trial activation,
+recording, submission or publication.
+
+## Historical 0.3.0 production checkpoint (2026-10-09)
 
 The publisher reviewed the four native views and authorized production rollout.
 PR #95 was squash merged at `f1d04aac469d5ca97aab54504044d7d422a10575`;
@@ -186,8 +253,9 @@ cases run in CI, including the new event debit/refund test.
 
 The reproducible portable 0.4.0 archive has 46 files and six skills; SHA256
 `dda05089a514baf3b8c4f6251be8baab32054837578fdadaaa95bb95c6000226`.
-The currently installed private production plugin remains 0.3.0. This archive
-validation does not establish portal validation, installation or submission.
+At that pre-rollout checkpoint the installed private production plugin was
+0.3.0. This archive validation did not establish portal validation, installation
+or submission; the current production checkpoint is above.
 
 Earlier native workspace verification:
 
@@ -437,7 +505,8 @@ October 9; preserve these results and complete the remaining submission checks:
    verified real version; portal upload, public submission and publication remain
    separate gates.
 
-No new database migration is required. A synthetic fixture does not satisfy any
+The 0.3.0 baseline required no new migration; the search release's ledger
+migration is now applied as recorded above. A synthetic fixture does not satisfy any
 live account, storage-transfer, charge or saved-release review requirement.
 
 After building, check the local UI harness and intended ChatGPT host: placement,
@@ -448,9 +517,10 @@ slides/notes, vector limits and finite-case completeness. A harness does not
 replace a host test. Refresh the five positive and three negative cases and
 record the actual new version only after those checks.
 
-The 0.3.0 baseline uses consent version 3; the reviewer completed that transition
-during rollout. The new 0.4.0 image-search candidate uses version 4 and needs the
-ledger-event migration described above. The trial stays disabled. The approved production test allowance is
-bounded to one new job and 600 new units; the already-indexed reviewer sample
-supports free library/playback checks. Trial activation, recording, portal upload
-and human attestations remain separate release gates.
+The 0.3.0 baseline used consent version 3; current native search requires version
+4. Its production migration and reviewer OAuth renewal passed. The trial stays
+disabled. The current search smoke test is limited to ten existing units and
+zero new indexing jobs or grants. The separate earlier allowance of one fresh
+job and at most 600 units remains reserved for the saved public-review release;
+it is not used by this search rollout. Trial activation, recording, portal
+upload and human attestations remain separate release gates.
