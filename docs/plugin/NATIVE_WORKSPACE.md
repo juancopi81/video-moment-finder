@@ -1,7 +1,81 @@
-# Native workspace candidate: 0.3.0
+# Native workspace: 0.4.2 candidate
 
-This is a staging candidate. Production and the existing private plugin remain
-on 0.2.0. Preserve that plugin identity and the original reviewer video.
+## Moment search update (2026-10-09)
+
+The candidate adds Find a moment for the selected owned ready video. Text uses
+the existing semantic search across visual and transcript vectors; results
+label Visual or Spoken and seek the source player. Image accepts JPEG, PNG or
+WebP up to 10 MB, normalizes locally to a JPEG at most 1024 pixels per side and
+512 KiB, previews it without a network call, then submits only on Find moments.
+The app-only `search_video_image` tool reuses the existing Modal image embedder
+and owned Qdrant visual retrieval. It validates bytes/format/dimensions before
+billing, uses `image_query` with the atomic debit/refund path, and keeps signed
+thumbnail URLs in UI-only metadata. No query image is added to the video library.
+
+Both controls show the effective tariff and refresh allowance/cost freely before
+submission. A changed tariff needs a second click. Repeated queries reuse a
+bounded in-memory cache without charging. Failed searches never retry
+automatically. Late results cannot appear under another selected video.
+Explain/Quiz me receives the selected candidate without a signed URL; a candidate
+requires source verification. Similarity rank is not certainty or person identity.
+
+Local reference and retrieved-frame previews draw their decoded pixels on a
+canvas. They do not require blob/data image URLs or additional CSP origins.
+The 0.4.1 patch fixes the broken reference preview observed in actual ChatGPT;
+the browser fixture now blocks both URL schemes and verifies rendered pixels.
+
+Resource cache revision is `ui://vmf/workspace/0.4.2.html`. Consent version 4 adds
+the tenth tool and requires one reconnect. Apply
+`20261009120000_image_search_api_usage.sql` before deploying this API: the older
+ledger constraint rejects the new event type. This migration preserves existing
+events and changes no balance, grant or retention setting. The approved staging
+migration, renewed consent and actual text/image inference passed on 0.4.0;
+both retrieved the original lesson's 36-second zero-vector slide, with cached
+repeats. The broken local preview prompted the canvas patch. The publisher and
+agent verified the actual 0.4.1 reference preview and source frame. A later query returned successfully in the backend at the SDK's 60-second
+response deadline but timed out in the component. Search-only bridge calls now
+allow at most three minutes; no compute scaling or tariff changes are involved.
+Timeouts disclose uncertain billing and do not retry automatically. Both CI runs
+passed at `1c7a89c`, and Railway staging deployed that head. Twenty free protocol
+checks passed for the exact 0.4.2 bundle, resource URI, unchanged CSP/tariffs and
+version-4 consent, with disposable authentication cleanup. ChatGPT tool metadata
+was refreshed and the new workspace loaded with the existing lesson and balance.
+After manual reference reselection, actual 0.4.2 image search returned five
+candidates; selecting the 36-second zero-vector slide sought the source player
+correctly. An inspected thumbnail rendered on canvas. Quiz me sent that moment
+to the constrained test conversation, which asked one correct zero-vector/angle
+question and waited without more metered retrieval. The final ledger records six
+of ten approved additional units used, a balance of 75, one unchanged original
+job/attempt/private grant and no trial. The documentation head `f4dd2b3` also
+passed both CI runs and deployed the identical bundle. The new production rollout remains a gate. The
+verified 0.3.0 production checkpoint below is the baseline, not a 0.4.2 deployment claim.
+
+## Production checkpoint (2026-10-09)
+
+The publisher reviewed the four native views and authorized production rollout.
+PR #95 was squash merged at `f1d04aac469d5ca97aab54504044d7d422a10575`;
+main CI and the API, worker and frontend deployments passed. Railway API and
+worker now wait for CI. The same USER-private production plugin was updated to
+0.3.0, preserving its identity, starter prompts and connection configuration.
+Read-back verified all six skills, including setup.
+
+Current nine-tool consent, same-account reconnect, free owned-library retrieval
+and the actual production workspace passed. The existing original reviewer
+video loaded at 1280×720 with no media error. The exact observed ChatGPT origin
+was added to private R2 CORS without changing website uploads or retention;
+eight read-only storage checks passed, including signed source range/HEAD,
+GET/HEAD/PUT preflights and unrelated-origin/anonymous-read denial.
+
+A once-only 600-unit test allowance increased the reviewer's balance from 1,480
+to 2,080. This checkpoint used zero new API units and created no indexing job.
+Reserve the approved single new job and at most 600 new units for the saved
+review-release ingestion and remaining checks. Public trial activation, public
+portal upload, complete saved-release cases, recording, human attestations,
+submission and publication are not established by this rollout.
+
+Preserve the production plugin identity and the original reviewer video. The
+dated staging sections below describe the development checks that preceded
+production rollout; they do not establish public-review acceptance.
 
 ## Experience and source ownership
 
@@ -21,7 +95,7 @@ and the vector plot carry the emphasis. Local browser checks include narrow
 screens, keyboard controls and host-driven themes. Actual ChatGPT host checks
 are still required before calling the integrated experience verified.
 
-- `src/api/mcp.py`: three additive tools, entrypoints and HTML resource.
+- `src/api/mcp.py`: workspace tools, app-only image search, entrypoints and HTML resource.
 - `src/api/workspace.py`: strict cited-view schema and media-origin validation.
 - `mcp-ui/src/`: browser source and shared vector arithmetic.
 - `src/api/assets/workspace.html`: generated, self-contained component with
@@ -29,7 +103,8 @@ are still required before calling the integrated experience verified.
 - `plugins/video-moment-finder/skills/setup/SKILL.md`: first useful result.
 - `plugins/video-moment-finder/references/native-views.md`: model delivery contract.
 
-The six evidence tools and indexing pipeline remain the acquisition layer.
+The existing evidence tools and indexing pipeline remain the acquisition layer;
+app-only reference-image search adds one metered retrieval primitive.
 `open_workspace` returns an owned library and actual allowance/tariffs;
 `get_workspace_video` refreshes owned playback; `render_learning_view` validates
 prepared content and companion views from the same owned ready video. All three
@@ -63,6 +138,58 @@ Studio's download function, then upload. Content ownership and automated access
 to YouTube are separate. No cookies or yt-dlp instructions are requested.
 
 ## Current verification and gate
+
+October 9, 0.4.2 cold-response patch: virtual-clock SDK browser checks reproduced
+the old timeout for both search modes, then verified delivery at 120 seconds
+and a bounded 180-second failure without automatic retry or late result display.
+The actual reference preview passed on 0.4.1. Full local checks passed: 736
+backend cases, 18 isolated PostgreSQL skipped locally, 14 archive, four core,
+25 SDK browser and seven frontend cases, lint and an 18-page production build.
+The portable archive has 46 files and six skills; SHA256
+`40cd438ca4cbfca15ee0c8e77de90296d4d68cf746cb14ca778660bbd2add91a`.
+The corrected clock fixture isolates the delayed response from cross-frame timer
+jumps; 24 repeated focused cases, the full browser suite and final error-notice
+assertions passed. Both CI runs and 20 deployed staging protocol checks passed
+at `1c7a89c`. The actual 0.4.2 image-search/source/tutor handoff subsequently
+passed after manual reference reselection, using two more staging units for one
+query and one thumbnail. Production approval remains required.
+
+October 9, 0.4.1 preview patch: full local validation passed with **736 backend
+cases**, **18 isolated PostgreSQL cases skipped locally**, **14 archive**, **four
+core**, **22 SDK browser** and **seven frontend** cases, lint and an 18-page
+production build. Browser checks now verify actual canvas pixels for references
+and retrieved frames under an image policy that permits neither blob nor data
+URLs. The portable archive has 46 files and six skills; SHA256
+`7206c8fe7ed8f899c4105bc1651bb1d859a5219dacf9258d100502bf6ca9f31e`.
+The API resource revision changes to bypass the host's old component cache;
+OAuth remains version 4, with no additional consent, tariff or storage change.
+Its CI/staging deployment and actual source/reference canvas previews passed.
+The subsequent cold-response failure is recorded in the 0.4.2 entry above.
+
+Before the patch, the actual ChatGPT 0.4.0 text query returned five visual and
+two spoken candidates; the image query returned five visual candidates. Both
+included the inspected zero-vector slide at 36 seconds. Same-query repeats used
+the cache. The staging ledger records exactly two new units, balance 79, one
+original job/attempt, one private grant and no trial. This single original
+sample verifies the workflow, not general search quality or exact-match rank.
+
+Historical October 9, pre-rollout 0.4.0 candidate: full local validation passed with **736 backend
+cases** and **18 isolated PostgreSQL cases skipped locally**, **14 archive**,
+**four core**, **22 SDK browser** and **seven frontend** cases, lint and an
+18-page production build. Search scenarios cover both modes, byte validation,
+ownership, atomic debit/refund, local image preview, explicit submission,
+changed tariffs, cached repeats, empty results, failures, stale video responses
+and candidate context clearing as playback moves. These were development checks;
+actual ChatGPT image selection, inference, source seeking and reconnect had not
+yet been verified at that checkpoint. The isolated database
+cases run in CI, including the new event debit/refund test.
+
+The reproducible portable 0.4.0 archive has 46 files and six skills; SHA256
+`dda05089a514baf3b8c4f6251be8baab32054837578fdadaaa95bb95c6000226`.
+The currently installed private production plugin remains 0.3.0. This archive
+validation does not establish portal validation, installation or submission.
+
+Earlier native workspace verification:
 
 October 7: **718 backend cases** passed; **17 PostgreSQL cases** skipped locally.
 Four browser-core Node cases, 14 strict-CSP SDK browser cases and 14 archive cases
@@ -280,14 +407,14 @@ Portable candidate: 46 files and six skills; archive SHA256
 ## Release validation
 
 Review the local fixture experience using `mcp-ui/README.md`. Staging transport
-and private-package saving passed on October 7. Continue with the following
-checks in ChatGPT before requesting production rollout:
+and private-package saving passed on October 7. Production rollout passed on
+October 9; preserve these results and complete the remaining submission checks:
 
 1. Real staging consent, global empty workspace, initial combined setup,
    full-conversation learning views, first-request new-chat routing, generated
    ready-video guide, same-account reconnect and the final native tutor handoff
-   passed. The publisher should review the actual new conversation and four
-   generated learning views before production rollout.
+   passed. The publisher reviewed the actual new conversation and four
+   generated learning views before approving production rollout.
 2. One original-video job, its first-attempt completion and ledger passed.
    Playback, seeking, guide/cards/slides/Playground and context handoff passed.
    Native CSV/JSON copy fallback passed. Editable PowerPoint delivery passed in
@@ -303,11 +430,12 @@ checks in ChatGPT before requesting production rollout:
    The staging UUID has no production website page; native playback is verified,
    while the production-domain “Open source on VMF” link is not a staging playback
    proof. Production reviewer links must be checked after the native rollout.
-5. After staging user review, request separate production rollout authorization
-   and update the existing private plugin identity with a matching production
-   package. Run five positive and three negative review cases against that saved
-   release and the dedicated reviewer account. Recording follows the verified
-   real version; public submission and publication remain separate gates.
+5. Production rollout and the update of the same private plugin identity passed.
+   Run five positive and three negative review cases against the saved public
+   portal release and dedicated reviewer account. Reserve the separately funded
+   production test's one fresh job for that release. Recording follows the
+   verified real version; portal upload, public submission and publication remain
+   separate gates.
 
 No new database migration is required. A synthetic fixture does not satisfy any
 live account, storage-transfer, charge or saved-release review requirement.
@@ -320,9 +448,9 @@ slides/notes, vector limits and finite-case completeness. A harness does not
 replace a host test. Refresh the five positive and three negative cases and
 record the actual new version only after those checks.
 
-The tool consent version is 3, so older connections need one reconnect. Plan
-that transition before rollout. No database migration is needed and the trial
-stays disabled. A new metered upload test needs a separate bounded allowance;
-use the already-indexed reviewer sample for free checks first. Production,
-trial activation, recording, portal upload and human attestations are separate
-release gates.
+The 0.3.0 baseline uses consent version 3; the reviewer completed that transition
+during rollout. The new 0.4.0 image-search candidate uses version 4 and needs the
+ledger-event migration described above. The trial stays disabled. The approved production test allowance is
+bounded to one new job and 600 new units; the already-indexed reviewer sample
+supports free library/playback checks. Trial activation, recording, portal upload
+and human attestations remain separate release gates.

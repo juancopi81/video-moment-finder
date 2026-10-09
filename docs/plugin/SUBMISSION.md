@@ -11,6 +11,55 @@ validation and developer declarations remain gates.
 
 ## Current release
 
+**0.4.2 is the new source/package candidate**, adding native text and reference-image
+moment search. Production/private 0.3.0 is the verified baseline below. Candidate
+image selection is local until explicit search; current API tariffs apply,
+similarity is a candidate, and clicked timestamps feed owned playback and chat.
+The app-only image tool expands consent to version 4 and requires the new
+`image_query` ledger migration before rollout. Do not record or submit 0.4.2 as
+live until migration/deployment/reconnect and real text/image host checks pass.
+P2 now covers both searches within the existing five-positive/three-negative
+case set. Fresh ingestion remains reserved for P1 of the saved portal release.
+See [Native Workspace](NATIVE_WORKSPACE.md) and [Walkthrough](WALKTHROUGH.md).
+
+Approved staging migration, deployment, consent and actual text/image search
+passed on 0.4.0 using the existing original lesson. Each search returned the
+36-second zero-vector slide and repeats reused the cache. Actual ChatGPT image
+selection revealed a broken blob-URL preview; 0.4.1 uses local canvas previews
+under the existing exact-origin policy. The corrected reference and source-frame previews passed in actual ChatGPT.
+A final handoff query completed in the backend at about 60 seconds but missed
+the SDK's one-minute response deadline. The 0.4.2 patch gives searches a bounded
+three-minute wait and states that a timeout may still consume units, with no
+automatic retry. Local virtual-clock tests reproduce the former failure and
+verify slow completion and the bound. Both CI runs passed at `1c7a89c`; staging
+deployed the exact 0.4.2 bundle and all 20 free protocol checks passed. ChatGPT
+metadata was refreshed and the local reference manually reselected. Actual
+0.4.2 image search returned five candidates, source seeking and the inspected
+36-second frame passed, and Quiz me produced one correct zero-vector question
+then waited. Its constrained test conversation made no extra metered retrieval.
+Six of ten approved additional staging units have been used; balance is 75,
+with no new indexing, grants or trial. The subsequent documentation head
+`f4dd2b3` also passed both CI runs and deployed the identical bundle. Production/private
+plugin 0.3.0, public trial, submission and publication remain unchanged.
+
+**0.3.0 is now deployed to production and saved over the same private plugin.**
+After publisher review and explicit rollout approval on October 9, PR #95 was
+squash merged at `f1d04aa`; main CI and API/worker/frontend deployments passed.
+Ten free HTTP checks, current nine-tool consent, reconnect, free owned-library
+retrieval, the actual native workspace and original-source playback passed.
+Private R2 CORS now allows only the observed production ChatGPT origin in
+addition to the preserved website upload rule. Eight read-only storage checks
+passed; public access and retention were unchanged.
+
+The reviewer received the authorized once-only 600-unit test allowance and has
+2,080 units. No new units or indexing jobs were consumed during this rollout.
+The approved single fresh job is reserved for ingestion against the saved
+review release. The portable archive has 46 files and six skills; the same
+private service record has 48 files including compatibility files. Public portal
+upload, complete saved-release cases, recording, developer verification,
+attestations, submission and publication remain gates. Public trials remain
+disabled. The following staging and 0.2.0 records describe earlier checkpoints.
+
 An authorized **0.3.0 native workspace candidate** is deployed to isolated
 staging. Zero-balance consent and vector isolation were introduced at `ccdca31`;
 the verified native resource revision is deployed at `c2b735a`.
@@ -72,10 +121,12 @@ the native Tutor button successfully sent the selected 36-second moment and
 received the correct zero-vector question. No security bypass was performed.
 The latest read-only ledger recorded 513 units used, 87 remaining, one completed
 first-attempt job, one allowance event and no trial; it includes one additional
-transcript retrieval. Final publisher review of the four generated views remains
-before separate native production rollout authorization.
+transcript retrieval. The publisher subsequently completed review of the four
+views and authorized the October 9 production rollout recorded above.
 
-Version **0.2.0** has **44 portable files and five workflows**. It was saved
+## Earlier 0.2.0 package
+
+Version **0.2.0** had **44 portable files and five workflows**. It was saved
 over the same USER-scoped PRIVATE plugin. Read-back confirmed both root and
 compatibility manifests at 0.2.0, all five skill files, unchanged starter prompts,
 icons, publisher, worldwide targeting and OAuth MCP endpoint. The service stores
@@ -88,14 +139,16 @@ and retains the finite case-table mode. Presentation is the new fifth skill.
 Editable PPTX export requires the host's presentation runtime; HTML generation
 uses Python's standard library. That 0.2.0 package added no production dependencies.
 
+For the current portable package:
+
 ```sh
 uv run python -m unittest discover -s scripts/plugin -p 'test_*.py'
 uv run python scripts/plugin/build_package.py
-uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.2.0.zip
+uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.3.0.zip
 ```
 
-ZIP SHA-256:
-`4e05430e8b8a626b53d87dc4fd650d822e63960c8858b6255143ee5c16ece3a4`.
+Current 0.3.0 ZIP SHA-256:
+`4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`.
 
 The private review collection is `docs/private/vmf-learning/review-0.2.0/index.html`.
 Its companion ZIP is `dist/vmf-private-review-0.2.0.zip`. They include the real

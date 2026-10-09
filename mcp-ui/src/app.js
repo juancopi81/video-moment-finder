@@ -1,6 +1,7 @@
 import {App} from '@modelcontextprotocol/ext-apps';
 import {clock, safeMediaUrl, selectedContext, cardsCsv, vectorMetrics, messageForError} from './core.js';
 import './style.css';
+import {prepareSearchImage, drawLocalPreview} from './search-image.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, text, cls) => {
@@ -14,16 +15,21 @@ const button = (text, handler, cls = 'quiet') => {
   node.addEventListener('click', () => Promise.resolve().then(handler).catch(showError));
   return node;
 };
-const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, frameUrl: null, selection: 0};
+const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
-const app = new App({name: 'Video Moment Finder', version: '0.3.0'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
+const search = {mode: 'text', image: null, imageSequence: 0, preparing: false, pending: false, request: 0, cache: new Map(), result: null, match: null};
+const app = new App({name: 'Video Moment Finder', version: '0.4.2'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
 let currentExperiment = null;
 
 function notice(text = '') { $('notice').textContent = text; }
 function showError(error) { notice(messageForError(error)); }
 async function call(name, args = {}) {
-  const result = await app.callServerTool({name, arguments: args});
+  // Cold query embedding can exceed the SDK's default 60-second deadline.
+  // Give searches a bounded wait without changing other calls or retrying them.
+  const options = name === 'search_video' || name === 'search_video_image'
+    ? {timeout: 180000, maxTotalTimeout: 180000} : undefined;
+  const result = await app.callServerTool({name, arguments: args}, options);
   if (result.isError) throw new Error(result.content?.find(c => c.type === 'text')?.text ?? 'Tool failed');
   return result;
 }
@@ -37,10 +43,10 @@ function receive(result) {
   if (privateData.config) state.config = privateData.config;
   if (data.videos) { state.videos = data.videos; libraryLoaded = true; }
   if (data.allowance) state.allowance = data.allowance;
-  renderLibrary(); updateUpload();
+  renderLibrary(); updateUpload(); updateSearch();
   if (data.video) {
     const changed = state.selected?.id !== data.video.id;
-    if (changed) { clearTimeout(state.poll); state.segment = null; state.time = 0; clearFrame(); $('player').removeAttribute('src'); }
+    if (changed) { clearTimeout(state.poll); state.segment = null; state.time = 0; clearFrame(); resetSearch(); $('player').removeAttribute('src'); }
     state.selected = data.video;
     if (!state.videos.some(v => v.id === data.video.id)) state.videos.push(data.video);
     if (data.view) {
@@ -82,8 +88,7 @@ async function selectVideo(video) {
   if (['queued', 'processing'].includes(state.selected.status)) pollVideo(video.id);
 }
 function clearFrame() {
-  if (state.frameUrl) URL.revokeObjectURL(state.frameUrl);
-  state.frameUrl = null; $('frame-preview').hidden = true; $('frame').removeAttribute('src');
+  $('frame-preview').hidden = true; $('frame').width = 0; $('frame').height = 0;
 }
 function renderVideo(sourceUrl) {
   $('welcome').hidden = true; $('video-workbench').hidden = false;
@@ -105,10 +110,11 @@ function renderVideo(sourceUrl) {
   $('load-transcript').disabled = !ready || state.pendingTranscripts.has(state.selected.id);
   $('transcript-cost').textContent = `Load once: ${state.config.transcript_units ?? '?'} unit(s). Reused here for this conversation.`;
   updateFrameButton();
-  renderTranscript(); renderLibrary(); renderLearning();
+  renderTranscript(); renderLibrary(); renderLearning(); updateSearch(); renderSearchResults();
 }
 function seek(time, segment = null) {
   if (!Number.isFinite(time) || time < 0 || time > 86400) return;
+  if (search.match && Math.abs(search.match.timestamp_s - time) > .001) { search.match = null; renderSearchResults(); }
   state.time = time; state.segment = segment;
   if (state.resumeTime !== null) state.resumeTime = time;
   $('moment-time').value = Math.round(time);
@@ -140,11 +146,109 @@ async function loadTranscript() {
     if (state.selected.id === id) renderTranscript();
   } finally { state.pendingTranscripts.delete(id); $('load-transcript').disabled = state.selected.status !== 'ready' || state.pendingTranscripts.has(state.selected.id); }
 }
+function searchCost() { return state.config[search.mode === 'image' ? 'image_search_units' : 'text_search_units']; }
+function searchKey() { return `${state.selected?.id}:${search.mode}:${search.mode === 'image' ? search.image?.data ?? '' : $('moment-query').value.trim()}`; }
+function clearSearchImage({clearPicker = true} = {}) {
+  search.imageSequence++; search.preparing = false; search.image = null;
+  $('search-image').width = 0; $('search-image').height = 0;
+  $('search-image-preview').hidden = true; if (clearPicker) $('search-image-file').value = ''; $('search-image-details').textContent = '';
+}
+function resetSearch() {
+  search.request++; search.result = null; search.match = null;
+  $('moment-query').value = ''; $('search-filter').value = 'all'; clearSearchImage();
+  $('search-state').textContent = ''; renderSearchResults(); updateSearch();
+}
+function updateSearch() {
+  const cost = searchCost(), cached = search.cache.has(searchKey());
+  const ready = state.selected?.status === 'ready';
+  const hasQuery = search.mode === 'image' ? Boolean(search.image) : Boolean($('moment-query').value.trim());
+  const priced = Number.isInteger(cost) && cost > 0;
+  const enough = (state.allowance?.api_units_balance ?? 0) >= cost;
+  $('run-search').disabled = !ready || !hasQuery || search.pending || search.preparing || !priced || (!cached && !enough);
+  $('run-search').textContent = search.pending ? 'Finding moments…' : `Find moments${cached ? ' · cached' : priced ? ` · ${cost} ${cost === 1 ? 'unit' : 'units'}` : ''}`;
+  $('search-cost').textContent = search.mode === 'image'
+    ? `Similar frames, not exact-match proof. Resized locally; sent to VMF for inference only when you search. Not added to your library. ${priced ? `${cost} ${cost === 1 ? 'unit' : 'units'} per search.` : 'Refresh the library for the current cost.'}`
+    : `Search visual scenes and spoken ideas. ${priced ? `${cost} ${cost === 1 ? 'unit' : 'units'} per search.` : 'Refresh the library for the current cost.'}`;
+  if (priced && !enough && !cached) $('search-cost').textContent += ' Your available allowance is insufficient.';
+  for (const id of ['search-text-mode', 'search-image-mode', 'moment-query', 'search-image-file', 'remove-search-image']) $(id).disabled = search.pending;
+  $('text-query').hidden = search.mode !== 'text'; $('image-query').hidden = search.mode !== 'image';
+  $('search-text-mode').setAttribute('aria-pressed', String(search.mode === 'text'));
+  $('search-image-mode').setAttribute('aria-pressed', String(search.mode === 'image'));
+}
+function renderSearchResults() {
+  const root = $('search-results'); root.replaceChildren();
+  const result = search.result;
+  $('search-results-panel').hidden = !result || result.video_id !== state.selected?.id;
+  if (!result || result.video_id !== state.selected?.id) return;
+  $('search-filter-label').hidden = result.mode === 'image';
+  $('search-results-note').textContent = `${result.results.length} candidate ${result.results.length === 1 ? 'match' : 'matches'} in this video. Check the source to confirm; rank is similarity, not certainty.`;
+  const filtered = result.results.filter(match => $('search-filter').value === 'all' || match.source === $('search-filter').value || result.mode === 'image');
+  if (!filtered.length) root.append(el('p', result.results.length ? 'No matches in this category.' : 'No matches returned. Try a different description or reference image.', 'model-note'));
+  filtered.forEach(match => {
+    const row = button('', () => {
+      seek(match.timestamp_s);
+      search.match = {timestamp_s: match.timestamp_s, source: match.source, rank: match.rank,
+        ...(match.transcript_text ? {excerpt: match.transcript_text.slice(0, 2000)} : {}),
+        candidate_requires_source_verification: true};
+      if (match.transcript_text) state.segment = null;
+      renderSearchResults();
+      $('player').scrollIntoView({block: 'nearest'});
+    }, 'search-match');
+    row.setAttribute('aria-label', `Go to ${clock(match.timestamp_s)} ${match.source === 'transcript' ? 'spoken' : 'visual'} match ${match.rank}`);
+    row.setAttribute('aria-pressed', String(search.match?.rank === match.rank && search.match?.source === match.source));
+    const media = safeMediaUrl(match.thumbnail_url, state.config.media_origin);
+    if (media) { const img = el('img'); img.src = media; img.alt = `Candidate frame at ${clock(match.timestamp_s)}`; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer'; img.addEventListener('error', () => img.remove()); row.append(img); }
+    const text = el('span', undefined, 'search-match-text');
+    text.append(el('strong', `▶ ${clock(match.timestamp_s)}`), el('small', match.source === 'transcript' ? 'Spoken match' : 'Visual match'));
+    if (match.transcript_text) text.append(el('span', match.transcript_text.slice(0, 220), 'search-snippet'));
+    row.append(text); root.append(row);
+  });
+}
+async function runMomentSearch() {
+  if ($('run-search').disabled) return;
+  const id = state.selected.id, key = searchKey(), mode = search.mode;
+  const cached = search.cache.get(key);
+  if (cached) { search.result = cached; search.match = null; renderSearchResults(); $('search-state').textContent = 'Reused these matches. No new search units.'; return; }
+  const cost = searchCost(), request = ++search.request;
+  const args = mode === 'image' ? {video_id: id, image_base64: search.image.data, limit: 5} : {video_id: id, query_text: $('moment-query').value.trim(), limit: 5};
+  search.pending = true; search.result = null; search.match = null; renderSearchResults(); updateSearch();
+  $('search-state').textContent = 'Finding candidate moments… The first search can take a minute while the search service starts.';
+  try {
+    // Refresh the free tariff/balance before submitting a metered query.
+    await refreshLibrary();
+    if (request !== search.request || state.selected?.id !== id) return;
+    if (searchCost() !== cost) { $('search-state').textContent = 'The search cost changed. Review it, then press Find moments again.'; return; }
+    if ((state.allowance?.api_units_balance ?? 0) < cost) { $('search-state').textContent = 'Your available VMF allowance is insufficient. Existing evidence remains usable.'; return; }
+    const response = await call(mode === 'image' ? 'search_video_image' : 'search_video', args);
+    const data = response.structuredContent;
+    if (!data || data.video_id !== id || !Array.isArray(data.results)) throw new Error('Search response was unavailable');
+    const thumbnails = response._meta?.vmf?.search_thumbnails ?? [];
+    const result = {video_id: id, mode, results: data.results.map((m, i) => ({...m, thumbnail_url: m.thumbnail_url ?? thumbnails[i]})).filter(m => Number.isFinite(m.timestamp_s) && m.timestamp_s >= 0 && m.timestamp_s <= 86400 && ['visual', 'transcript'].includes(m.source)).slice(0, 10).map((m, i) => ({...m, rank: i + 1}))};
+    if (search.cache.size >= 5) search.cache.delete(search.cache.keys().next().value);
+    search.cache.set(key, result);
+    if (request !== search.request || state.selected?.id !== id) return;
+    search.result = result; renderSearchResults();
+    $('search-state').textContent = `Search complete. Select a match to seek the source, then Explain this moment or Quiz me.`;
+  } catch (error) {
+    if (request === search.request && state.selected?.id === id) {
+      const timedOut = error.code === -32001 || /timed out|maximum total timeout/i.test(error.message ?? '');
+      $('search-state').textContent = timedOut
+        ? 'The search did not return in time. It may still finish and use units. Check your allowance before trying again. No automatic retry was started.'
+        : `${messageForError(error)} No automatic retry was started.`;
+    }
+  } finally {
+    search.pending = false;
+    // Retrieve actual allowance after success or failure; never infer a debit.
+    try { await refreshLibrary(); } catch { /* leave the last reported balance */ }
+    updateSearch();
+  }
+}
 function canStartLearningChat() { return Boolean(app.getHostCapabilities()?.message?.text && app.getHostCapabilities()?.experimental?.['openai/message']); }
 async function sendPrompt(prompt, {newChat = false} = {}) {
   if (!state.selected || state.selected.status !== 'ready') return;
   const view = state.views.get(`${state.selected.id}:${state.active}`);
   const context = selectedContext(state.selected, state.time, state.segment, view);
+  if (search.match) context.search_candidate = search.match;
   if (view?.kind === 'playground' && currentExperiment) context.generated_experiment = currentExperiment();
   const frame = state.frames.get(momentKey());
   if (frame) context.inspected_frame = {requested_timestamp_s: frame.requested, actual_timestamp_s: frame.actual, resolution: 'thumb'};
@@ -422,13 +526,34 @@ async function inspectFrame() {
     }
     if (state.selected.id !== id) return;
     clearFrame(); const bytes = Uint8Array.from(atob(frame.image.data), c => c.charCodeAt(0));
-    state.frameUrl = URL.createObjectURL(new Blob([bytes], {type: frame.image.mimeType})); $('frame').src = state.frameUrl;
+    if (!await drawLocalPreview($('frame'), new Blob([bytes], {type: frame.image.mimeType}), () => state.selected?.id === id)) return;
     $('frame-caption').textContent = `Source thumbnail${frame.actual === undefined ? ` requested near ${clock(time)}` : ` at ${clock(frame.actual)}`}. ${cached ? 'Reused from this view.' : `Frame retrieval uses ${state.config.frame_thumb_units} unit(s).`}`;
     $('frame-preview').hidden = false;
   } finally { state.pendingFrames.delete(id); updateFrameButton(); }
 }
 function on(id, handler, event = 'click') { $(id).addEventListener(event, () => Promise.resolve().then(handler).catch(showError)); }
 on('refresh', refreshLibrary); on('filter', renderLibrary, 'input');
+for (const mode of ['text', 'image']) on(`search-${mode}-mode`, () => { search.mode = mode; search.result = null; search.match = null; $('search-state').textContent = ''; updateSearch(); renderSearchResults(); });
+on('moment-query', updateSearch, 'input'); on('search-filter', renderSearchResults, 'change');
+on('run-search', runMomentSearch);
+$('moment-query').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); runMomentSearch().catch(showError); } });
+on('remove-search-image', () => { clearSearchImage(); updateSearch(); });
+on('search-image-file', async () => {
+  const file = $('search-image-file').files[0];
+  clearSearchImage({clearPicker: false}); const sequence = search.imageSequence;
+  if (!file) { updateSearch(); return; }
+  search.preparing = true; $('search-state').textContent = 'Preparing the image locally…'; updateSearch();
+  try {
+    const image = await prepareSearchImage(file, state.config.max_search_image_bytes);
+    if (sequence !== search.imageSequence) return;
+    if (!await drawLocalPreview($('search-image'), image.blob, () => sequence === search.imageSequence)) return;
+    search.image = image; $('search-image-preview').hidden = false;
+    $('search-image-details').textContent = `${file.name} · search copy ${image.width} × ${image.height}.`;
+    $('search-state').textContent = 'Image ready. Nothing has been sent. Press Find moments to search.';
+  } catch (error) {
+    if (sequence === search.imageSequence) $('search-state').textContent = error.message.startsWith('Choose ') || error.message.startsWith('This image ') ? error.message : 'This image could not be opened. Choose a JPEG, PNG or WebP.';
+  } finally { if (sequence === search.imageSequence) search.preparing = false; updateSearch(); }
+}, 'change');
 for (const id of ['add', 'welcome-upload']) on(id, () => { $('upload').hidden = false; $('upload').scrollIntoView({block: 'start'}); $('file').focus(); });
 on('close-upload', () => { if (!state.busy) $('upload').hidden = true; });
 on('file', () => {
@@ -447,10 +572,10 @@ on('quiz', () => sendPrompt('Ask me one question about the selected moment and w
 on('visual', () => sendPrompt('Make the selected idea visual. Choose a source-grounded study guide or Playground, and show it beside the video.'));
 on('inspect-frame', inspectFrame);
 $('player').addEventListener('loadedmetadata', () => { const time = state.resumeTime ?? state.time; state.resumeTime = null; seek(time, state.segment); });
-$('player').addEventListener('timeupdate', () => { if (state.resumeTime !== null) return; state.time = $('player').currentTime; if (state.segment && (state.time < state.segment.start_s || state.time > state.segment.end_s)) { state.segment = null; renderTranscript(); } if (document.activeElement !== $('moment-time')) $('moment-time').value = Math.floor(state.time); updateFrameButton(); });
+$('player').addEventListener('timeupdate', () => { if (state.resumeTime !== null) return; state.time = $('player').currentTime; if (search.match && Math.abs(search.match.timestamp_s - state.time) > 2) { search.match = null; renderSearchResults(); } if (state.segment && (state.time < state.segment.start_s || state.time > state.segment.end_s)) { state.segment = null; renderTranscript(); } if (document.activeElement !== $('moment-time')) $('moment-time').value = Math.floor(state.time); updateFrameButton(); });
 $('player').addEventListener('error', () => { $('media-state').textContent = 'Playback failed or its link expired. Refresh the playback link; evidence already retrieved remains usable.'; $('refresh-media').hidden = false; });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ['queued', 'processing'].includes(state.selected?.status)) pollVideo(state.selected.id); });
-window.addEventListener('pagehide', () => { clearTimeout(state.poll); state.xhr?.abort(); clearFrame(); });
+window.addEventListener('pagehide', () => { clearTimeout(state.poll); state.xhr?.abort(); clearFrame(); clearSearchImage(); });
 app.ontoolresult = receive;
 app.onhostcontextchanged = theme;
 app.onerror = showError;

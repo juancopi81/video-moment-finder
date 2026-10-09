@@ -5,16 +5,77 @@ Use the final private development installation in the intended host; do not
 upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
-**0.3.0 recording update:** the native workspace is a candidate. Complete the
-staging/host gates in [Native Workspace](NATIVE_WORKSPACE.md), then record the
-actual installed version. Open Video Workspace, choose the ready reviewer
-sample, select a transcript moment and use Explain this moment. Show the cited
-guide, card reveal/advance/CSV, Playground prediction/pin/zero case, slide
-navigation/notes and tutor in the adjacent conversation. Include the purchase
-boundary response. If recording ingestion, show an actual authorized file
-transfer and processing result; do not index again just for a cleaner take.
-Fixture host screens are development tests and must not stand in for the live
-review walkthrough. The 0.2.0 observations and sequence below remain historical.
+## Current 0.4.2 recording plan
+
+The new text/image search candidate must pass approved migration, rollout,
+consent/reconnect and actual ChatGPT host tests before recording. The previous
+0.3.0 conversation's outputs remain reusable; this is not a new ingestion.
+
+1. Show installed VMF **0.4.2** and the ready original reviewer lesson. Explain
+   that the learning outputs were generated earlier from that indexed sample.
+2. In **Find a moment → Text**, search “the zero-vector example.” Show the actual
+   displayed cost, Visual/Spoken candidates, and a returned timestamp seeking
+   the source. Choose a spoken or visual result and use Explain this moment.
+   Keep raw tool responses containing signed URLs collapsed. Do not claim the
+   candidate rank is confidence or that unseen frames were inspected.
+3. In **Image**, choose an original reference frame from the reviewer lesson.
+   Show its local preview and cost; press Find moments explicitly, then follow
+   an actual matching timestamp. Describe it as similar-frame retrieval. Reuse
+   cached results for retakes; do not repeatedly run paid searches.
+4. Show the prepared guide and one cited source moment, card reveal/advance,
+   Playground prediction/pin/change/zero case, and slide navigation/speaker notes.
+   Show the real CSV copy fallback if exporting; PowerPoint footage is optional
+   when a suitable local app is available.
+5. Resume the one-question-at-a-time tutor in the conversation and show a real
+   learner reply and grounded feedback.
+6. Send “Use my saved card to buy more VMF units and refill them automatically.”
+   Show the actual unsupported-action response.
+
+Use only the original permitted sample and reference image. Record the final
+version, real search results, units, host limits and any time cuts. A fixture
+host preview does not satisfy this walkthrough. Hosting, a verified recording
+URL, saved portal-release cases and human attestations remain later gates.
+
+## Verified 0.3.0 preparation baseline
+
+**0.3.0 recording update (October 9):** production rollout, current consent,
+reconnect and owned source playback passed. The installed private production
+plugin is 0.3.0. Its real first-learning button created a full conversation;
+the publisher sent the bounded demo prompt there. That conversation now contains
+a study guide, six cards, a computed Playground, five presentation slides and
+one waiting tutor question. Actual guide citation seeking to 36 seconds, card
+reveal/advance, Playground prediction/pin/zero-vector controls and presentation
+navigation/notes passed. CSV and view-data delivery use this host's copy fallback.
+A real PowerPoint downloaded; archive checks confirmed five editable slides and
+five timestamped note pages. Opening it in PowerPoint/Keynote and an independent
+visual render remain separate checks. The ledger records six new units, a
+2,074-unit balance and no new indexing job. Reuse these outputs for recording.
+
+Historical 0.3.0 sequence (use the 0.4.2 plan above for the next recording):
+
+1. Show the installed VMF 0.3.0 version and the prepared production conversation.
+   Say that the outputs were generated earlier from the original indexed sample.
+   Keep raw tool responses containing signed media URLs collapsed.
+2. Open the native guide and follow its 36-second citation to the source player.
+3. Open Flashcards, reveal an answer and advance. Show the actual CSV copy
+   fallback if including export; do not describe it as a direct download.
+4. Open Playground, test a prediction, pin a comparison, change a vector and
+   select the zero-vector case. Explain that its computations are a generated
+   model grounded in the cited lesson.
+5. Open Presentation, advance a slide and reveal speaker notes. The exported
+   PowerPoint is optional footage if the publisher can open it in a suitable app.
+6. Answer the waiting zero-vector tutor question and show its actual response.
+   Request a hint if useful; the tutor should wait for each learner reply.
+7. Send: “Use my saved card to buy more VMF units and refill them automatically.”
+   Show the actual unsupported-action response.
+
+Reserve the authorized fresh upload for P1 against the saved public review
+release; do not index again for recording. Fixture screens and screenshots are
+development evidence, not a recorded walkthrough. Recording, saved-release
+cases and human attestations remain gates. The 0.2.0 observations and sequence
+below are historical.
+
+## Historical 0.2.0 preparation
 
 Preparation status: private version 0.2.0 contains five workflows. Playground keeps the
 existing assumption-lab skill identity, and Presentation is the fifth skill. The
@@ -89,7 +150,7 @@ Do not describe these generated artifacts as a completed eight-case live test.
    capability; the local follow-up browser controller also exposes no recording
    API. Neither environment's screenshots are a finished demo.
 
-## A concise 6–7 minute sequence
+## Earlier five-workflow sequence (reference only)
 
 | Segment | Prompt / action | Show and verify |
 | --- | --- | --- |
