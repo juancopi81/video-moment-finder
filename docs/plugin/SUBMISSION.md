@@ -67,8 +67,13 @@ The fresh conversation preserved all four generated native views while reusing
 its cached evidence. Card controls, slide notes, prediction/pin/compare and
 zero-vector handling passed. Its last optional tutor handoff returned a ChatGPT
 security challenge; the earlier full-conversation tutor question/feedback passed.
-The publisher must restore the ordinary ChatGPT session and retry that final
-handoff before treating the new host flow as complete.
+The publisher then resumed the cached-evidence tutor. After a normal reload,
+the native Tutor button successfully sent the selected 36-second moment and
+received the correct zero-vector question. No security bypass was performed.
+The latest read-only ledger recorded 513 units used, 87 remaining, one completed
+first-attempt job, one allowance event and no trial; it includes one additional
+transcript retrieval. Final publisher review of the four generated views remains
+before separate native production rollout authorization.
 
 Version **0.2.0** has **44 portable files and five workflows**. It was saved
 over the same USER-scoped PRIVATE plugin. Read-back confirmed both root and

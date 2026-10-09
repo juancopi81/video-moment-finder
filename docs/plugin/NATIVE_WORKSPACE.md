@@ -264,11 +264,15 @@ The fresh conversation subsequently generated six cards and the computed
 Playground from its cached evidence, preserving the guide and five-slide deck as
 companion views. Live controls passed: card reveal/advance, slide notes, prediction,
 pinning the baseline dot product 6, changing the result to 8, and undefined
-zero-vector angle/projection. Its final optional tutor handoff encountered a
-ChatGPT `cloudflare_challenge` response. The earlier full-conversation tutor
-question and feedback passed; retrying that final host handoff after the
-publisher restores the normal ChatGPT session is still required. Do not bypass
-the host security check or treat it as a VMF indexing failure.
+zero-vector angle/projection. Its final optional tutor handoff initially
+encountered a ChatGPT `cloudflare_challenge` response. The publisher resumed the
+cached-evidence tutor successfully; after a normal reload, the native Tutor
+button also sent the selected 36-second moment and received the correct
+zero-vector question. No security bypass was needed. The earlier full-conversation
+tutor feedback remains verified. A subsequent read-only ledger check recorded
+513 units used, 87 remaining, one completed first-attempt job, one allowance and
+no trial; the extra recorded unit was a transcript retrieval. Publisher review
+of the four generated views remains the next checkpoint.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
@@ -281,9 +285,9 @@ checks in ChatGPT before requesting production rollout:
 
 1. Real staging consent, global empty workspace, initial combined setup,
    full-conversation learning views, first-request new-chat routing, generated
-   ready-video guide and same-account reconnect passed. The publisher should
-   restore the ChatGPT session for the final tutor handoff, then review the actual
-   new conversation and learning view before production rollout.
+   ready-video guide, same-account reconnect and the final native tutor handoff
+   passed. The publisher should review the actual new conversation and four
+   generated learning views before production rollout.
 2. One original-video job, its first-attempt completion and ledger passed.
    Playback, seeking, guide/cards/slides/Playground and context handoff passed.
    Native CSV/JSON copy fallback passed. Editable PowerPoint delivery passed in
@@ -293,8 +297,8 @@ checks in ChatGPT before requesting production rollout:
 4. Reuse the indexed sample within the remaining approved allowance. Do not
    create another job or grant. Cancellation and transfer-recovery regressions
    passed in the harness; live retry of a failed byte transfer did not create
-   a duplicate job. The ledger after reconnect and fresh guide confirmed 512
-   units, one job and one allowance event; any remaining checks must stay within
+   a duplicate job. The latest ledger confirmed 513 units, one first-attempt job
+   and one allowance event; any remaining checks must stay within
    the approved 600-unit cap.
    The staging UUID has no production website page; native playback is verified,
    while the production-domain “Open source on VMF” link is not a staging playback
