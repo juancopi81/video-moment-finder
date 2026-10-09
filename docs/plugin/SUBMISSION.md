@@ -16,18 +16,23 @@ native text and reference-image moment search. The production constraint
 migration preceded PR #97's merge at `7737afd`; main CI and API/worker/frontend
 deployments passed. Private read-back verified all 48 files and six skills,
 with identity, icons, starter prompts, publisher and MCP configuration preserved.
-Reviewer OAuth renewal, free library access and real native text search passed.
-Five visual/two spoken candidates, cached reuse, source seeking to 37 seconds
-and an inspected zero-vector thumbnail used two of ten approved existing units.
-Balance is 2,072, with no new indexing, grants or trial enrollment. Production
-reference-image selection/search and chat handoff remain to verify before
-recording. Public submission has not occurred.
+Reviewer OAuth renewal, free library access and actual native text/image search
+passed. Text returned five visual/two spoken candidates; image returned five
+visual candidates. Cached reuse, source seeking to 37/40 seconds and inspected
+zero-vector thumbnails passed. A constrained image-only handoff reported
+missing image evidence; source-text fallback at 0:28 produced one grounded
+tutor question and waited without further metered retrieval. Image-only
+handoff grounding remains unverified; use the transcript fallback for recording.
+The ledger confirms five of ten approved existing units used and a 2,069 balance,
+with no new indexing, grants or trial enrollment. Public submission has not occurred.
 
 Image selection is local until explicit search; current API tariffs apply,
 similarity is a candidate, and clicked timestamps feed owned playback and chat.
 The app-only image tool expands consent to version 4 and requires the new
 `image_query` ledger migration before rollout. Migration/deployment and reviewer
-renewal are verified; finish the real image host check before recording 0.4.2.
+renewal, actual image search/source checks and the text-grounded chat fallback
+are verified. Recording must show the supported fallback rather than claim
+verified image-only chat grounding.
 P2 now covers both searches within the existing five-positive/three-negative
 case set. Fresh ingestion remains reserved for P1 of the saved portal release.
 See [Native Workspace](NATIVE_WORKSPACE.md) and [Walkthrough](WALKTHROUGH.md).

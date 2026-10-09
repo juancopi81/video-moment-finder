@@ -75,12 +75,29 @@ vector's angle is undefined. Selecting the fourth visual candidate sought the
 actual player to 37 seconds, and a retrieved thumbnail rendered the same
 zero-vector slide on canvas. Repeating the text query reused its cache.
 
-The ledger records exactly two of ten approved existing reviewer units used:
-one text query and one thumbnail. Balance is 2,072; videos, indexing jobs,
-grants and trial enrollment are unchanged. Eight units remain for this smoke
-test. Production reference-image selection/inference, cache reuse and the
-moment-specific chat handoff remain to check. This rollout does not establish
-saved public-review cases, trial activation, recording, submission or publication.
+The original reference image rendered locally as a 1024×576 search copy;
+selection used no units. One image query returned five visual candidates at
+27, 41, 40, 33 and 30 seconds. Selecting the third candidate sought the actual
+1280×720 source to 40 seconds with no playback error. Its retrieved canvas
+thumbnail visibly states that the zero vector has no defined angle. A repeated
+image search displayed “Reused these matches. No new search units.” Candidate
+rank is similarity, not certainty or an accuracy benchmark.
+
+The constrained image-only Quiz me handoff identified 0:40, but ChatGPT reported
+that no source image or transcript was available and declined to invent a
+question. Image-only grounding therefore remains unverified in this host;
+the model's report does not identify which layer failed to deliver or use the
+image. The supported source-text fallback passed: loading the transcript once,
+selecting its 0:28 zero-vector passage and pressing Quiz me produced exactly
+one grounded question and waited. The chat made no additional metered retrieval.
+
+The ledger records exactly five of ten approved existing reviewer units used:
+one text query, one image query, two thumbnails and one transcript. Balance is
+2,069; videos, indexing jobs, grants and trial enrollment are unchanged. Five
+units remain under this smoke-test cap; further paid calls are unnecessary for
+this checkpoint. Recording instructions use the verified transcript fallback.
+This rollout does not establish saved public-review cases, trial activation,
+recording, submission or publication.
 
 ## Historical 0.3.0 production checkpoint (2026-10-09)
 

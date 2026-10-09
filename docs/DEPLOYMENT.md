@@ -24,10 +24,11 @@ Production checkpoint, October 9: the image-query constraint migration was
 applied and verified before PR #97 merged at `7737afd`. Protected balances,
 grants, jobs, billing functions and RLS were unchanged. Main CI and production
 API/worker/frontend deployments passed. The same private plugin is now 0.4.2.
-Reviewer OAuth renewal, the refreshed native workspace, real text search,
-cached reuse, source seeking and a retrieved thumbnail passed. Actual production
-reference-image selection/search remains a gate; see
-`docs/plugin/NATIVE_WORKSPACE.md`. The public trial remains disabled.
+Reviewer OAuth renewal, the refreshed native workspace, actual text/image
+search, cached reuse, source seeking and retrieved thumbnails passed. A
+source-text tutor handoff passed; the image-only handoff reported missing
+image evidence in this host, so recording must use the verified transcript
+fallback. See `docs/plugin/NATIVE_WORKSPACE.md`. The public trial remains disabled.
 
 The native workspace is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
 For each environment, configure private R2 CORS for the actual sandbox origin using

@@ -8,22 +8,28 @@ and the portal's saved-release connection are distinct checks.
 ## Current 0.4.2 recording plan
 
 The approved production migration, rollout, private 0.4.2 update and reviewer
-OAuth renewal passed. Actual ChatGPT text search, cached reuse, seeking and
-source-thumbnail inspection passed using two existing units. Finish the
-production image search and moment-specific chat handoff before recording.
+OAuth renewal passed. Actual ChatGPT text/image search, cached reuse, source
+seeking and canvas-thumbnail inspection passed. The image-only tutor handoff
+reported missing image evidence and correctly declined to invent a question.
+The source-text fallback passed: load the transcript once, select its 0:28
+zero-vector passage and use Quiz me. It asked one grounded question and waited
+without extra retrieval. Five of ten approved existing units were used; balance
+is 2,069. Do not claim verified image-only chat grounding in this host.
 The previous 0.3.0 conversation's outputs remain reusable; this is not a new ingestion.
 
 1. Show installed VMF **0.4.2** and the ready original reviewer lesson. Explain
    that the learning outputs were generated earlier from that indexed sample.
 2. In **Find a moment → Text**, search “the zero-vector example.” Show the actual
    displayed cost, Visual/Spoken candidates, and a returned timestamp seeking
-   the source. Choose a spoken or visual result and use Explain this moment.
-   Keep raw tool responses containing signed URLs collapsed. Do not claim the
-   candidate rank is confidence or that unseen frames were inspected.
+   the source. Use the cached query/results for retakes; they consume no new
+   search units. Keep raw tool responses containing signed URLs collapsed.
+   Do not claim candidate rank is confidence or that unseen frames were inspected.
 3. In **Image**, choose an original reference frame from the reviewer lesson.
    Show its local preview and cost; press Find moments explicitly, then follow
    an actual matching timestamp. Describe it as similar-frame retrieval. Reuse
-   cached results for retakes; do not repeatedly run paid searches.
+   cached results for retakes; do not repeatedly run paid searches. For the
+   grounded chat transition, use the already loaded transcript's 0:28 passage,
+   then Quiz me; a selected image timestamp alone was insufficient in this host.
 4. Show the prepared guide and one cited source moment, card reveal/advance,
    Playground prediction/pin/change/zero case, and slide navigation/speaker notes.
    Show the real CSV copy fallback if exporting; PowerPoint footage is optional
