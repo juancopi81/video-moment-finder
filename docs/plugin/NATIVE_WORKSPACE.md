@@ -130,7 +130,7 @@ core**, **22 SDK browser** and **seven frontend** cases, lint and an 18-page
 production build. Browser checks now verify actual canvas pixels for references
 and retrieved frames under an image policy that permits neither blob nor data
 URLs. The portable archive has 46 files and six skills; SHA256
-`d2ef24e9435cdb7dd094acfcaf32119c00df2dacef7f356847ca0a22fc881665`.
+`7206c8fe7ed8f899c4105bc1651bb1d859a5219dacf9258d100502bf6ca9f31e`.
 The API resource revision changes to bypass the host's old component cache;
 OAuth remains version 4, with no additional consent, tariff or storage change.
 Updated staging deployment and actual patched preview remain required.
