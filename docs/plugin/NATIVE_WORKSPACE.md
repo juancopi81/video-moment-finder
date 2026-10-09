@@ -1,7 +1,31 @@
-# Native workspace candidate: 0.3.0
+# Native workspace: 0.3.0
 
-This is a staging candidate. Production and the existing private plugin remain
-on 0.2.0. Preserve that plugin identity and the original reviewer video.
+## Production checkpoint (2026-10-09)
+
+The publisher reviewed the four native views and authorized production rollout.
+PR #95 was squash merged at `f1d04aac469d5ca97aab54504044d7d422a10575`;
+main CI and the API, worker and frontend deployments passed. Railway API and
+worker now wait for CI. The same USER-private production plugin was updated to
+0.3.0, preserving its identity, starter prompts and connection configuration.
+Read-back verified all six skills, including setup.
+
+Current nine-tool consent, same-account reconnect, free owned-library retrieval
+and the actual production workspace passed. The existing original reviewer
+video loaded at 1280×720 with no media error. The exact observed ChatGPT origin
+was added to private R2 CORS without changing website uploads or retention;
+eight read-only storage checks passed, including signed source range/HEAD,
+GET/HEAD/PUT preflights and unrelated-origin/anonymous-read denial.
+
+A once-only 600-unit test allowance increased the reviewer's balance from 1,480
+to 2,080. This checkpoint used zero new API units and created no indexing job.
+Reserve the approved single new job and at most 600 new units for the saved
+review-release ingestion and remaining checks. Public trial activation, public
+portal upload, complete saved-release cases, recording, human attestations,
+submission and publication are not established by this rollout.
+
+Preserve the production plugin identity and the original reviewer video. The
+dated staging sections below describe the development checks that preceded
+production rollout; they do not establish public-review acceptance.
 
 ## Experience and source ownership
 
@@ -280,14 +304,14 @@ Portable candidate: 46 files and six skills; archive SHA256
 ## Release validation
 
 Review the local fixture experience using `mcp-ui/README.md`. Staging transport
-and private-package saving passed on October 7. Continue with the following
-checks in ChatGPT before requesting production rollout:
+and private-package saving passed on October 7. Production rollout passed on
+October 9; preserve these results and complete the remaining submission checks:
 
 1. Real staging consent, global empty workspace, initial combined setup,
    full-conversation learning views, first-request new-chat routing, generated
    ready-video guide, same-account reconnect and the final native tutor handoff
-   passed. The publisher should review the actual new conversation and four
-   generated learning views before production rollout.
+   passed. The publisher reviewed the actual new conversation and four
+   generated learning views before approving production rollout.
 2. One original-video job, its first-attempt completion and ledger passed.
    Playback, seeking, guide/cards/slides/Playground and context handoff passed.
    Native CSV/JSON copy fallback passed. Editable PowerPoint delivery passed in
@@ -303,11 +327,12 @@ checks in ChatGPT before requesting production rollout:
    The staging UUID has no production website page; native playback is verified,
    while the production-domain “Open source on VMF” link is not a staging playback
    proof. Production reviewer links must be checked after the native rollout.
-5. After staging user review, request separate production rollout authorization
-   and update the existing private plugin identity with a matching production
-   package. Run five positive and three negative review cases against that saved
-   release and the dedicated reviewer account. Recording follows the verified
-   real version; public submission and publication remain separate gates.
+5. Production rollout and the update of the same private plugin identity passed.
+   Run five positive and three negative review cases against the saved public
+   portal release and dedicated reviewer account. Reserve the separately funded
+   production test's one fresh job for that release. Recording follows the
+   verified real version; portal upload, public submission and publication remain
+   separate gates.
 
 No new database migration is required. A synthetic fixture does not satisfy any
 live account, storage-transfer, charge or saved-release review requirement.
@@ -320,9 +345,9 @@ slides/notes, vector limits and finite-case completeness. A harness does not
 replace a host test. Refresh the five positive and three negative cases and
 record the actual new version only after those checks.
 
-The tool consent version is 3, so older connections need one reconnect. Plan
-that transition before rollout. No database migration is needed and the trial
-stays disabled. A new metered upload test needs a separate bounded allowance;
-use the already-indexed reviewer sample for free checks first. Production,
-trial activation, recording, portal upload and human attestations are separate
-release gates.
+The tool consent version is 3, so older connections need one reconnect. The
+reviewer completed that transition during rollout. No database migration is
+needed and the trial stays disabled. The approved production test allowance is
+bounded to one new job and 600 new units; the already-indexed reviewer sample
+supports free library/playback checks. Trial activation, recording, portal upload
+and human attestations remain separate release gates.
