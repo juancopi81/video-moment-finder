@@ -232,8 +232,13 @@ beside a full conversation. Cards revealed and advanced, slide notes opened,
 and the Playground preserved a pinned comparison, computed a negative dot
 product and kept zero-vector angles undefined. Its experiment handoff and tutor
 question used the selected context. Direct CSV/JSON downloads were unavailable
-in this web host; the selectable-text exports worked. Editable PowerPoint
-delivery remains unverified because the test chat's output folder was read-only.
+in this web host; the selectable-text exports worked. The initial PowerPoint
+attempt could not write in that test chat's output folder. The fresh learning
+conversation subsequently delivered a real editable PowerPoint: five slides
+and five timestamped source notes, native text shapes and no signed URLs. Its
+download, package structure and all five rendered slides were inspected. The
+three development boundary requests also passed without metered retrieval,
+publishing, buying/refilling units or identifying a private audience member.
 
 The global workspace's floating conversation accepted a render request without
 showing the result. The first learning button now explicitly opens a new chat
@@ -241,10 +246,29 @@ when the host advertises `openai/message`; its source context travels in the
 message, rather than being attached only to the previous conversation. Prepared
 views keep follow-ups in place, and unsupported hosts retain their fallback.
 The resource cache revision is `ui://vmf/workspace/0.3.2.html`; the portable
-candidate version remains 0.3.0. Sixteen SDK browser cases passed, including
-new-chat context, active-chat fallback and clearing the completed-upload notice.
-Deployment, actual new-chat routing and reconnect verification of this revision
-remain pending.
+candidate version remains 0.3.0. Full local checks and both CI runs passed at
+`c2b735a`, including sixteen SDK browser cases for new-chat context, active-chat
+fallback and clearing the completed-upload notice. Staging deployed this
+revision, eighteen free protocol checks matched its exact reviewed bundle and
+security metadata, and disposable-auth cleanup passed. Actual new-chat creation
+and same-account OAuth reconnect passed. The new chat requested authority before
+metered retrieval because a widget message alone does not carry the publisher's
+separate release-test approval. After that existing bounded approval was supplied,
+the agent retrieved one transcript and one thumbnail batch, inspected frames,
+and rendered a fresh native guide. Its 36-second citation sought to the correct
+source slide. Final accounting at this checkpoint was 512 units used and 88
+remaining; reconnect added no grant or trial. These are private staging
+development checks, not public portal-release review results.
+
+The fresh conversation subsequently generated six cards and the computed
+Playground from its cached evidence, preserving the guide and five-slide deck as
+companion views. Live controls passed: card reveal/advance, slide notes, prediction,
+pinning the baseline dot product 6, changing the result to 8, and undefined
+zero-vector angle/projection. Its final optional tutor handoff encountered a
+ChatGPT `cloudflare_challenge` response. The earlier full-conversation tutor
+question and feedback passed; retrying that final host handoff after the
+publisher restores the normal ChatGPT session is still required. Do not bypass
+the host security check or treat it as a VMF indexing failure.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
@@ -255,22 +279,31 @@ Review the local fixture experience using `mcp-ui/README.md`. Staging transport
 and private-package saving passed on October 7. Continue with the following
 checks in ChatGPT before requesting production rollout:
 
-1. Real staging consent, global empty workspace, initial combined setup and
-   full-conversation learning views passed. Deploy and verify the first-request
-   new-chat routing, ready-video onboarding and reconnect on the same account.
+1. Real staging consent, global empty workspace, initial combined setup,
+   full-conversation learning views, first-request new-chat routing, generated
+   ready-video guide and same-account reconnect passed. The publisher should
+   restore the ChatGPT session for the final tutor handoff, then review the actual
+   new conversation and learning view before production rollout.
 2. One original-video job, its first-attempt completion and ledger passed.
    Playback, seeking, guide/cards/slides/Playground and context handoff passed.
-   Native CSV/JSON copy fallback passed; editable PowerPoint delivery remains
-   host-dependent and must not be claimed as verified.
+   Native CSV/JSON copy fallback passed. Editable PowerPoint delivery passed in
+   the fresh learning conversation; it remains dependent on host capabilities.
 3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks;
    actual browser transfer and playback now passed with those restrictions.
 4. Reuse the indexed sample within the remaining approved allowance. Do not
    create another job or grant. Cancellation and transfer-recovery regressions
    passed in the harness; live retry of a failed byte transfer did not create
-   a duplicate job. Confirm the final ledger after reconnect and new-chat checks.
-5. Record five positive and three negative saved-release review cases. Only then
-   request production rollout and update the existing private plugin identity
-   with a matching production package. Recording follows the new real version.
+   a duplicate job. The ledger after reconnect and fresh guide confirmed 512
+   units, one job and one allowance event; any remaining checks must stay within
+   the approved 600-unit cap.
+   The staging UUID has no production website page; native playback is verified,
+   while the production-domain “Open source on VMF” link is not a staging playback
+   proof. Production reviewer links must be checked after the native rollout.
+5. After staging user review, request separate production rollout authorization
+   and update the existing private plugin identity with a matching production
+   package. Run five positive and three negative review cases against that saved
+   release and the dedicated reviewer account. Recording follows the verified
+   real version; public submission and publication remain separate gates.
 
 No new database migration is required. A synthetic fixture does not satisfy any
 live account, storage-transfer, charge or saved-release review requirement.
