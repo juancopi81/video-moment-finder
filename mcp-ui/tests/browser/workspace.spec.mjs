@@ -62,6 +62,8 @@ test('image selection is local; explicit search sends a bounded JPEG and finds s
   await ui.locator('#search-image-file').setInputFiles({name: 'my-reference.png', mimeType: 'image/png', buffer: referenceImage});
   await expect(ui.locator('#search-state')).toContainText('Nothing has been sent');
   await expect(ui.locator('#search-image')).toBeVisible();
+  // The host can deny blob/data img-src while local canvas pixels still render.
+  expect(await ui.locator('#search-image').evaluate(c => c.width > 0 && c.height > 0 && c.getContext('2d').getImageData(0, 0, 1, 1).data[3] === 255)).toBe(true);
   expect(await calls(page, 'search_video_image')).toHaveLength(0);
   await expect(ui.locator('#run-search')).toContainText('1 unit');
   await ui.locator('#run-search').click();
@@ -143,6 +145,8 @@ test('first learning request opens a full chat with its own source context; prep
   await ui.getByRole('button', {name: 'Load transcript', exact: true}).click();
   await ui.locator('#transcript button').nth(1).click();
   await ui.getByRole('button', {name: /Show this frame/}).click();
+  await expect(ui.locator('#frame-preview')).toBeVisible();
+  expect(await ui.locator('#frame').evaluate(c => c.width > 0 && c.height > 0 && c.getContext('2d').getImageData(0, 0, 1, 1).data[3] === 255)).toBe(true);
   await ui.getByRole('button', {name: 'Create study guide in a new chat', exact: true}).click();
   await expect.poll(() => page.evaluate(() => window.fixtureHost.messages.length)).toBe(1);
   const first = await page.evaluate(() => window.fixtureHost.messages[0]);

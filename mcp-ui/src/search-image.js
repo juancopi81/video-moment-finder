@@ -1,4 +1,15 @@
 // Reference images stay local until the user explicitly runs a search.
+// Canvas previews do not depend on img-src allowing local blob/data URLs.
+export async function drawLocalPreview(canvas, blob, isCurrent) {
+  const image = await createImageBitmap(blob);
+  try {
+    if (!isCurrent()) return false;
+    canvas.width = image.width; canvas.height = image.height;
+    canvas.getContext('2d').drawImage(image, 0, 0);
+    return true;
+  } finally { image.close(); }
+}
+
 export async function prepareSearchImage(file, maxBytes) {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.size || file.size > 10 * 1024 * 1024) {
     throw new Error('Choose a nonempty JPEG, PNG or WebP of at most 10 MB.');

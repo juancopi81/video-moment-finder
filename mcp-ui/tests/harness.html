@@ -33,7 +33,7 @@ async function tool(name, args) {
   }
   if (name === 'get_transcript') return toolResult({video_id: args.video_id, segments: query.has('injection') ? [segments[0], {...segments[1], text: '<img src=x onerror="window.badSource=true"> Source markup stays text.'}] : segments});
   if (name === 'get_video_status') return host.uploaded ? toolResult({...uploadedVideo, status: host.uploadStatus}) : {isError: true, content: [{type: 'text', text: '404 not found'}]};
-  if (name === 'get_frames') return {content: [{type: 'text', text: JSON.stringify({frames: [{image_index: 0, actual_timestamp_s: 6}]})}, {type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG6UAAAAASUVORK5CYII='}]};
+  if (name === 'get_frames') return {content: [{type: 'text', text: JSON.stringify({frames: [{image_index: 0, actual_timestamp_s: 6}]})}, {type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQc5j5HwADTgHvUn8BwwAAAABJRU5ErkJggg=='}]};
   if (name === 'upload_video' && args.action === 'start') return toolResult({video_id: uploadedVideo.id, upload_url: `${mediaOrigin}/upload.mp4?fixture=temporary`});
   if (name === 'upload_video' && args.action === 'complete') {
     if (!host.uploaded) { host.uploaded = true; host.empty = false; host.balance -= host.cost; }

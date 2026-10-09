@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "video-moment-finder",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Find moments by text or reference image in your own videos, then learn with source playback, cited guides, cards, tutoring, Playgrounds and presentations.",
   "license": "AGPL-3.0-only",
   "homepage": "https://www.videomomentfinder.com/developers",

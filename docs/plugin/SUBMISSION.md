@@ -11,16 +11,24 @@ validation and developer declarations remain gates.
 
 ## Current release
 
-**0.4.0 is the new source/package candidate**, adding native text and reference-image
+**0.4.1 is the new source/package candidate**, adding native text and reference-image
 moment search. Production/private 0.3.0 is the verified baseline below. Candidate
 image selection is local until explicit search; current API tariffs apply,
 similarity is a candidate, and clicked timestamps feed owned playback and chat.
 The app-only image tool expands consent to version 4 and requires the new
-`image_query` ledger migration before rollout. Do not record or submit 0.4.0 as
+`image_query` ledger migration before rollout. Do not record or submit 0.4.1 as
 live until migration/deployment/reconnect and real text/image host checks pass.
 P2 now covers both searches within the existing five-positive/three-negative
 case set. Fresh ingestion remains reserved for P1 of the saved portal release.
 See [Native Workspace](NATIVE_WORKSPACE.md) and [Walkthrough](WALKTHROUGH.md).
+
+Approved staging migration, deployment, consent and actual text/image search
+passed on 0.4.0 using the existing original lesson. Each search returned the
+36-second zero-vector slide and repeats reused the cache. Actual ChatGPT image
+selection revealed a broken blob-URL preview; 0.4.1 uses local canvas previews
+under the existing exact-origin policy. The corrected preview's intended-host
+check remains required before production or recording. Production/private
+plugin 0.3.0, public trial, submission and publication remain unchanged.
 
 **0.3.0 is now deployed to production and saved over the same private plugin.**
 After publisher review and explicit rollout approval on October 9, PR #95 was

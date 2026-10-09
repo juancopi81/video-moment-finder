@@ -31,7 +31,7 @@
               <div class="search-modes" role="group" aria-label="Search method"><button id="search-text-mode" aria-pressed="true">Text</button><button id="search-image-mode" aria-pressed="false">Image</button></div>
               <div id="moment-search-form" role="search">
                 <div id="text-query"><label class="search-label" for="moment-query">Describe what you want to find</label><input id="moment-query" type="search" maxlength="500" placeholder="e.g. the zero-vector example" autocomplete="off"></div>
-                <div id="image-query" hidden><label class="search-label" for="search-image-file">Choose a reference image</label><input id="search-image-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><div id="search-image-preview" hidden><img id="search-image" alt="Your reference image"><button id="remove-search-image" type="button" class="quiet">Remove image</button></div><p id="search-image-details"></p></div>
+                <div id="image-query" hidden><label class="search-label" for="search-image-file">Choose a reference image</label><input id="search-image-file" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"><div id="search-image-preview" hidden><canvas id="search-image" role="img" aria-label="Your reference image"></canvas><button id="remove-search-image" type="button" class="quiet">Remove image</button></div><p id="search-image-details"></p></div>
                 <p id="search-cost"></p><button id="run-search" type="button" class="primary" disabled>Find moments</button>
               </div>
               <p id="search-state" role="status" aria-live="polite"></p>
@@ -40,7 +40,7 @@
             <div class="moment"><label for="moment-time">Moment in seconds</label><input id="moment-time" type="number" min="0" step="1" value="0"><button id="seek" class="quiet">Go</button></div>
             <div class="ask-row"><button id="explain" class="primary">Explain this moment</button><button id="quiz" class="quiet">Quiz me</button><button id="visual" class="quiet">Make it visual</button></div>
             <section id="search-results-panel" hidden aria-labelledby="search-results-heading"><div class="section-heading search-results-heading"><h2 id="search-results-heading">Matching moments</h2><label id="search-filter-label">Show <select id="search-filter"><option value="all">All matches</option><option value="visual">Visual</option><option value="transcript">Spoken</option></select></label></div><p id="search-results-note"></p><div id="search-results" class="search-results"></div></section>
-            <button id="inspect-frame" class="quiet">Show this frame</button><figure id="frame-preview" hidden><img id="frame" alt="Retrieved source frame"><figcaption id="frame-caption"></figcaption></figure>
+            <button id="inspect-frame" class="quiet">Show this frame</button><figure id="frame-preview" hidden><canvas id="frame" role="img" aria-label="Retrieved source frame"></canvas><figcaption id="frame-caption"></figcaption></figure>
             <div class="section-heading transcript-heading"><h2>Transcript</h2><button id="load-transcript" class="quiet">Load transcript</button></div><p id="transcript-cost"></p><div id="transcript" class="transcript"></div>
           </section>
           <section class="learning-pane" aria-label="Learning workspace"><nav id="workflows" aria-label="Learning workflows"></nav><div id="learning"></div></section>

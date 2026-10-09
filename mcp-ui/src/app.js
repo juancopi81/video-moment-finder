@@ -1,7 +1,7 @@
 import {App} from '@modelcontextprotocol/ext-apps';
 import {clock, safeMediaUrl, selectedContext, cardsCsv, vectorMetrics, messageForError} from './core.js';
 import './style.css';
-import {prepareSearchImage} from './search-image.js';
+import {prepareSearchImage, drawLocalPreview} from './search-image.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, text, cls) => {
@@ -15,10 +15,10 @@ const button = (text, handler, cls = 'quiet') => {
   node.addEventListener('click', () => Promise.resolve().then(handler).catch(showError));
   return node;
 };
-const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, frameUrl: null, selection: 0};
+const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
-const search = {mode: 'text', image: null, imageUrl: null, imageSequence: 0, preparing: false, pending: false, request: 0, cache: new Map(), result: null, match: null};
-const app = new App({name: 'Video Moment Finder', version: '0.4.0'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
+const search = {mode: 'text', image: null, imageSequence: 0, preparing: false, pending: false, request: 0, cache: new Map(), result: null, match: null};
+const app = new App({name: 'Video Moment Finder', version: '0.4.1'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
 let currentExperiment = null;
 
@@ -84,8 +84,7 @@ async function selectVideo(video) {
   if (['queued', 'processing'].includes(state.selected.status)) pollVideo(video.id);
 }
 function clearFrame() {
-  if (state.frameUrl) URL.revokeObjectURL(state.frameUrl);
-  state.frameUrl = null; $('frame-preview').hidden = true; $('frame').removeAttribute('src');
+  $('frame-preview').hidden = true; $('frame').width = 0; $('frame').height = 0;
 }
 function renderVideo(sourceUrl) {
   $('welcome').hidden = true; $('video-workbench').hidden = false;
@@ -147,8 +146,7 @@ function searchCost() { return state.config[search.mode === 'image' ? 'image_sea
 function searchKey() { return `${state.selected?.id}:${search.mode}:${search.mode === 'image' ? search.image?.data ?? '' : $('moment-query').value.trim()}`; }
 function clearSearchImage({clearPicker = true} = {}) {
   search.imageSequence++; search.preparing = false; search.image = null;
-  if (search.imageUrl) URL.revokeObjectURL(search.imageUrl);
-  search.imageUrl = null; $('search-image').removeAttribute('src');
+  $('search-image').width = 0; $('search-image').height = 0;
   $('search-image-preview').hidden = true; if (clearPicker) $('search-image-file').value = ''; $('search-image-details').textContent = '';
 }
 function resetSearch() {
@@ -519,7 +517,7 @@ async function inspectFrame() {
     }
     if (state.selected.id !== id) return;
     clearFrame(); const bytes = Uint8Array.from(atob(frame.image.data), c => c.charCodeAt(0));
-    state.frameUrl = URL.createObjectURL(new Blob([bytes], {type: frame.image.mimeType})); $('frame').src = state.frameUrl;
+    if (!await drawLocalPreview($('frame'), new Blob([bytes], {type: frame.image.mimeType}), () => state.selected?.id === id)) return;
     $('frame-caption').textContent = `Source thumbnail${frame.actual === undefined ? ` requested near ${clock(time)}` : ` at ${clock(frame.actual)}`}. ${cached ? 'Reused from this view.' : `Frame retrieval uses ${state.config.frame_thumb_units} unit(s).`}`;
     $('frame-preview').hidden = false;
   } finally { state.pendingFrames.delete(id); updateFrameButton(); }
@@ -539,8 +537,8 @@ on('search-image-file', async () => {
   try {
     const image = await prepareSearchImage(file, state.config.max_search_image_bytes);
     if (sequence !== search.imageSequence) return;
-    search.image = image; search.imageUrl = URL.createObjectURL(image.blob);
-    $('search-image').src = search.imageUrl; $('search-image-preview').hidden = false;
+    if (!await drawLocalPreview($('search-image'), image.blob, () => sequence === search.imageSequence)) return;
+    search.image = image; $('search-image-preview').hidden = false;
     $('search-image-details').textContent = `${file.name} · search copy ${image.width} × ${image.height}.`;
     $('search-state').textContent = 'Image ready. Nothing has been sent. Press Find moments to search.';
   } catch (error) {

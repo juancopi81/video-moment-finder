@@ -1,4 +1,4 @@
-# Native workspace: 0.4.0 candidate
+# Native workspace: 0.4.1 candidate
 
 ## Moment search update (2026-10-09)
 
@@ -19,13 +19,21 @@ automatically. Late results cannot appear under another selected video.
 Explain/Quiz me receives the selected candidate without a signed URL; a candidate
 requires source verification. Similarity rank is not certainty or person identity.
 
-Resource cache revision is `ui://vmf/workspace/0.4.0.html`. Consent version 4 adds
+Local reference and retrieved-frame previews draw their decoded pixels on a
+canvas. They do not require blob/data image URLs or additional CSP origins.
+The 0.4.1 patch fixes the broken reference preview observed in actual ChatGPT;
+the browser fixture now blocks both URL schemes and verifies rendered pixels.
+
+Resource cache revision is `ui://vmf/workspace/0.4.1.html`. Consent version 4 adds
 the tenth tool and requires one reconnect. Apply
 `20261009120000_image_search_api_usage.sql` before deploying this API: the older
 ledger constraint rejects the new event type. This migration preserves existing
-events and changes no balance, grant or retention setting. New production rollout
-and actual host image selection/inference remain separate gates. The verified
-0.3.0 production checkpoint below is the baseline, not a 0.4.0 deployment claim.
+events and changes no balance, grant or retention setting. The approved staging
+migration, renewed consent and actual text/image inference passed on 0.4.0;
+both retrieved the original lesson's 36-second zero-vector slide, with cached
+repeats. The broken local preview prompted this patch. Actual 0.4.1 preview
+verification and the new production rollout remain gates. The verified 0.3.0
+production checkpoint below is the baseline, not a 0.4.1 deployment claim.
 
 ## Production checkpoint (2026-10-09)
 
@@ -116,15 +124,33 @@ to YouTube are separate. No cookies or yt-dlp instructions are requested.
 
 ## Current verification and gate
 
-October 9, 0.4.0 candidate: full local validation passed with **736 backend
+October 9, 0.4.1 preview patch: full local validation passed with **736 backend
+cases**, **18 isolated PostgreSQL cases skipped locally**, **14 archive**, **four
+core**, **22 SDK browser** and **seven frontend** cases, lint and an 18-page
+production build. Browser checks now verify actual canvas pixels for references
+and retrieved frames under an image policy that permits neither blob nor data
+URLs. The portable archive has 46 files and six skills; SHA256
+`d2ef24e9435cdb7dd094acfcaf32119c00df2dacef7f356847ca0a22fc881665`.
+The API resource revision changes to bypass the host's old component cache;
+OAuth remains version 4, with no additional consent, tariff or storage change.
+Updated staging deployment and actual patched preview remain required.
+
+Before the patch, the actual ChatGPT 0.4.0 text query returned five visual and
+two spoken candidates; the image query returned five visual candidates. Both
+included the inspected zero-vector slide at 36 seconds. Same-query repeats used
+the cache. The staging ledger records exactly two new units, balance 79, one
+original job/attempt, one private grant and no trial. This single original
+sample verifies the workflow, not general search quality or exact-match rank.
+
+Historical October 9, pre-rollout 0.4.0 candidate: full local validation passed with **736 backend
 cases** and **18 isolated PostgreSQL cases skipped locally**, **14 archive**,
 **four core**, **22 SDK browser** and **seven frontend** cases, lint and an
 18-page production build. Search scenarios cover both modes, byte validation,
 ownership, atomic debit/refund, local image preview, explicit submission,
 changed tariffs, cached repeats, empty results, failures, stale video responses
-and candidate context clearing as playback moves. These are development checks;
-actual ChatGPT image selection, inference, source seeking and reconnect remain
-required after the approved migration and staging rollout. The isolated database
+and candidate context clearing as playback moves. These were development checks;
+actual ChatGPT image selection, inference, source seeking and reconnect had not
+yet been verified at that checkpoint. The isolated database
 cases run in CI, including the new event debit/refund test.
 
 The reproducible portable 0.4.0 archive has 46 files and six skills; SHA256
