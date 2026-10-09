@@ -40,8 +40,14 @@ passed at `1c7a89c`, and Railway staging deployed that head. Twenty free protoco
 checks passed for the exact 0.4.2 bundle, resource URI, unchanged CSP/tariffs and
 version-4 consent, with disposable authentication cleanup. ChatGPT tool metadata
 was refreshed and the new workspace loaded with the existing lesson and balance.
-Reloading clears the local reference file; manual reselection is needed before
-the final image-search/tutor handoff. That handoff and the new production rollout remain gates. The
+After manual reference reselection, actual 0.4.2 image search returned five
+candidates; selecting the 36-second zero-vector slide sought the source player
+correctly. An inspected thumbnail rendered on canvas. Quiz me sent that moment
+to the constrained test conversation, which asked one correct zero-vector/angle
+question and waited without more metered retrieval. The final ledger records six
+of ten approved additional units used, a balance of 75, one unchanged original
+job/attempt/private grant and no trial. The documentation head `f4dd2b3` also
+passed both CI runs and deployed the identical bundle. The new production rollout remains a gate. The
 verified 0.3.0 production checkpoint below is the baseline, not a 0.4.2 deployment claim.
 
 ## Production checkpoint (2026-10-09)
@@ -144,8 +150,9 @@ The portable archive has 46 files and six skills; SHA256
 The corrected clock fixture isolates the delayed response from cross-frame timer
 jumps; 24 repeated focused cases, the full browser suite and final error-notice
 assertions passed. Both CI runs and 20 deployed staging protocol checks passed
-at `1c7a89c`. Final live image-search/tutor handoff and production approval remain
-required; the refreshed ChatGPT workspace is waiting for local file reselection.
+at `1c7a89c`. The actual 0.4.2 image-search/source/tutor handoff subsequently
+passed after manual reference reselection, using two more staging units for one
+query and one thumbnail. Production approval remains required.
 
 October 9, 0.4.1 preview patch: full local validation passed with **736 backend
 cases**, **18 isolated PostgreSQL cases skipped locally**, **14 archive**, **four

@@ -33,10 +33,13 @@ three-minute wait and states that a timeout may still consume units, with no
 automatic retry. Local virtual-clock tests reproduce the former failure and
 verify slow completion and the bound. Both CI runs passed at `1c7a89c`; staging
 deployed the exact 0.4.2 bundle and all 20 free protocol checks passed. ChatGPT
-metadata was refreshed, but reloading cleared its local image selection; the
-final live image-search/tutor handoff is waiting for manual reselection.
-Four of ten approved additional staging units have been used, with no new
-indexing or grants. Its deployed-host handoff remains a gate. Production/private
+metadata was refreshed and the local reference manually reselected. Actual
+0.4.2 image search returned five candidates, source seeking and the inspected
+36-second frame passed, and Quiz me produced one correct zero-vector question
+then waited. Its constrained test conversation made no extra metered retrieval.
+Six of ten approved additional staging units have been used; balance is 75,
+with no new indexing, grants or trial. The subsequent documentation head
+`f4dd2b3` also passed both CI runs and deployed the identical bundle. Production/private
 plugin 0.3.0, public trial, submission and publication remain unchanged.
 
 **0.3.0 is now deployed to production and saved over the same private plugin.**
