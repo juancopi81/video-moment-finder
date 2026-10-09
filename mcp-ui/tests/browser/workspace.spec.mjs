@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
-import {reviewedCases, toolResult, video} from '../fixtures.js';
+import {guide, reviewedCases, toolResult, video} from '../fixtures.js';
 
 let media;
 test.beforeAll(async () => { media = await readFile(new URL('../lesson.webm', import.meta.url)); });
@@ -22,6 +22,42 @@ async function open(page, query = '') {
   return {ui, errors};
 }
 const calls = (page, name) => page.evaluate(name => window.fixtureHost.calls.filter(c => c.name === name), name);
+
+test('first learning request opens a full chat with its own source context; prepared views continue in place', async ({page}) => {
+  const {ui, errors} = await open(page, '?library&new-chat');
+  await ui.locator('#videos button').first().click();
+  await ui.getByRole('button', {name: 'Load transcript', exact: true}).click();
+  await ui.locator('#transcript button').nth(1).click();
+  await ui.getByRole('button', {name: /Show this frame/}).click();
+  await ui.getByRole('button', {name: 'Create study guide in a new chat', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.messages.length)).toBe(1);
+  const first = await page.evaluate(() => window.fixtureHost.messages[0]);
+  expect(first._meta['openai/message']).toEqual({target: 'new'});
+  expect(first.content[0].text).toContain(`"video_id":"${video.id}"`);
+  expect(first.content[0].text).toContain('"timestamp_s":6');
+  expect(first.content[0].text).toContain('"actual_timestamp_s":6');
+  expect(first.content[0].text).not.toContain('fixture=temporary');
+  expect(first.content[1].type).toBe('image');
+  // The old conversation's context must not be the only source of the new chat's selection.
+  expect(await page.evaluate(() => window.fixtureHost.contexts)).toEqual([]);
+  await page.evaluate(result => window.fixtureHost.push(result), toolResult({video, view: guide}));
+  await ui.getByRole('button', {name: 'Tutor', exact: true}).click();
+  await ui.getByRole('button', {name: 'Start tutoring in chat', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.messages.length)).toBe(2);
+  expect(await page.evaluate(() => window.fixtureHost.messages[1]._meta)).toBeUndefined();
+  expect(await page.evaluate(() => window.fixtureHost.contexts.length)).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('hosts without new-chat support keep the active conversation flow', async ({page}) => {
+  const {ui, errors} = await open(page, '?library');
+  await ui.locator('#videos button').first().click();
+  await ui.getByRole('button', {name: 'Create study guide', exact: true}).click();
+  await expect.poll(() => page.evaluate(() => window.fixtureHost.messages.length)).toBe(1);
+  expect(await page.evaluate(() => window.fixtureHost.messages[0]._meta)).toBeUndefined();
+  expect(await page.evaluate(() => window.fixtureHost.contexts.length)).toBe(1);
+  expect(errors).toEqual([]);
+});
 
 test('a delayed host module still receives the component initialization', async ({page}) => {
   let releaseModule;
@@ -173,6 +209,7 @@ test('upload transfers original bytes without account credentials; free polling 
   await page.evaluate(() => { window.fixtureHost.uploadStatus = 'ready'; });
   await page.clock.runFor(15001);
   await expect(ui.locator('#video-status')).toHaveText('Ready to explore');
+  await expect(ui.locator('#notice')).toHaveText('Your video is ready to explore.');
   const uploads = await calls(page, 'upload_video');
   expect(uploads.map(c => c.args.action)).toEqual(['start', 'complete']);
   expect(uploads[0].args.filename).toBe('My lesson.mp4');

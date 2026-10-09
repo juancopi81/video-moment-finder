@@ -29,22 +29,23 @@ and the model app is shared with
 production. The separately approved private Railway worker now uses
 `Dockerfile.worker`, one replica and the isolated staging database, bucket and
 vector write key. CI passed for `fb83158`; deployment and idle startup passed
-with the queue and video table empty before and after startup. Actual staging
-GPU execution and its ledger remain unverified. Both vector keys expire
+with the queue and video table empty before and after startup. Both vector keys expire
 November 7, 2026.
-The approved private test allowance was granted once: 600 units, no trial
-enrollment and zero usage. The worker's one-attempt limit is active. Automated
-in-app-browser file selection did not open a chooser; the user subsequently
-selected the sample manually. Native transfer then failed before processing.
-The ledger confirmed 600 units, zero usage, zero videos and zero jobs. The
-exact-origin video PUT preflight passed. A fresh component resource URI and
-matching descriptor/content security metadata address a possible cached
-pre-storage policy. Full local checks and both CI runs passed; `2c9cebf` is
-active in staging and eighteen free protocol checks passed with verified
-disposable-auth cleanup. Connector metadata refresh and workspace reload
-completed. Local file selection was cleared; actual-host retry remains required.
-Actual host file transfer/playback, conversation-side views and processing
-remain unverified. See [native workspace](NATIVE_WORKSPACE.md) for its
+The approved private 600-unit allowance was granted once, without trial enrollment.
+After an initial uncharged transfer failure, the resource-policy fix at
+`2c9cebf`, connector refresh and manual reselection, actual ChatGPT upload and
+processing passed: one original 41.8-second video, one completed first-attempt
+job, approximately 71 seconds. The normal worker retry setting was then restored.
+The ledger recorded 510 units and 90 remaining, with one indexing charge.
+Inspected source frames, transcript/search, authenticated playback, seeking and
+four full-conversation native views passed. CSV/JSON copy exports worked where
+direct downloads were unavailable. Editable PowerPoint delivery remains
+unverified because the test chat's output folder was read-only.
+The first learning request now explicitly opens a new chat on supporting hosts
+to avoid invisible results in the global workspace's floating conversation.
+Sixteen SDK browser tests passed; deployment, actual routing and reconnect of
+resource revision 0.3.2 remain pending. No second job, public trial or production
+change occurred. See [native workspace](NATIVE_WORKSPACE.md) for its
 build/browser evidence, expanded consent and required host checks. The
 deployed/installed 0.2.0 evidence below is
 historical proof of that release, not validation of the new UI. Record the

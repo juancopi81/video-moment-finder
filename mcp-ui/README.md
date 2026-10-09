@@ -27,6 +27,14 @@ Use `?empty` for onboarding, `?theme=dark` for dark theme, and
 automated tests intercept storage traffic and serve a tiny original geometric
 test video; an ordinary manual preview does not have real source playback.
 
+The first learning request opens a new conversation when the host advertises
+`openai/message` support. Its button explicitly says “in a new chat”; selected
+source context travels with that message. Follow-up requests from prepared
+views stay in the current conversation. Hosts without that extension retain
+the current-conversation flow or selectable-text fallback. Use `?library&new-chat`
+to exercise the extension in the local harness. Direct CSV/JSON downloads are
+optional host capabilities; unavailable downloads expose the same content for copying.
+
 The fixture host is not proof of ChatGPT placement, picker permissions, actual R2
 CORS or end-to-end indexing. See `docs/plugin/NATIVE_WORKSPACE.md` for the staged
 host gate. Do not use fixture screenshots or fixtures as the public review demo.

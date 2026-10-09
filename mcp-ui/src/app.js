@@ -14,7 +14,7 @@ const button = (text, handler, cls = 'quiet') => {
   node.addEventListener('click', () => Promise.resolve().then(handler).catch(showError));
   return node;
 };
-const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, xhr: null, poll: null, busy: false, frameUrl: null, selection: 0};
+const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, frameUrl: null, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
 const app = new App({name: 'Video Moment Finder', version: '0.3.0'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
@@ -97,6 +97,10 @@ function renderVideo(sourceUrl) {
   $('media-state').textContent = player.hidden ? 'Retained source playback is unavailable here. Timestamps and existing evidence remain usable; open the source on VMF when available.' : 'Select a transcript line or source timestamp to return to this player.';
   $('refresh-media').hidden = !media;
   const ready = state.selected.status === 'ready';
+  if (state.uploadNotice === state.selected.id && ['ready', 'failed'].includes(state.selected.status)) {
+    notice(ready ? 'Your video is ready to explore.' : 'Video processing failed. Open VMF for help before trying another upload.');
+    state.uploadNotice = null;
+  }
   for (const id of ['explain', 'quiz', 'visual', 'inspect-frame']) $(id).disabled = !ready;
   $('load-transcript').disabled = !ready || state.pendingTranscripts.has(state.selected.id);
   $('transcript-cost').textContent = `Load once: ${state.config.transcript_units ?? '?'} unit(s). Reused here for this conversation.`;
@@ -136,7 +140,8 @@ async function loadTranscript() {
     if (state.selected.id === id) renderTranscript();
   } finally { state.pendingTranscripts.delete(id); $('load-transcript').disabled = state.selected.status !== 'ready' || state.pendingTranscripts.has(state.selected.id); }
 }
-async function sendPrompt(prompt) {
+function canStartLearningChat() { return Boolean(app.getHostCapabilities()?.message?.text && app.getHostCapabilities()?.experimental?.['openai/message']); }
+async function sendPrompt(prompt, {newChat = false} = {}) {
   if (!state.selected || state.selected.status !== 'ready') return;
   const view = state.views.get(`${state.selected.id}:${state.active}`);
   const context = selectedContext(state.selected, state.time, state.segment, view);
@@ -149,7 +154,7 @@ async function sendPrompt(prompt) {
     showCopy('Paste this request into your conversation', `${text}\n\n${content[0].text}`); return;
   }
   let contextSent = false;
-  if (app.getHostCapabilities()?.updateModelContext?.text) {
+  if (!newChat && app.getHostCapabilities()?.updateModelContext?.text) {
     // Context support is optional. The message itself carries the same selection.
     const contextContent = app.getHostCapabilities().updateModelContext.image && frame ? [...content, frame.image] : content;
     try { const updated = await app.updateModelContext({content: contextContent}); contextSent = !updated.isError; } catch { /* inline fallback */ }
@@ -157,9 +162,9 @@ async function sendPrompt(prompt) {
   if (!contextSent) text += `\n\n${content[0].text}`;
   const message = [{type: 'text', text}];
   if (app.getHostCapabilities().message.image && frame) message.push(frame.image);
-  const sent = await app.sendMessage({role: 'user', content: message});
+  const sent = await app.sendMessage({role: 'user', content: message, ...(newChat ? {_meta: {'openai/message': {target: 'new'}}} : {})});
   if (sent.isError) { showCopy('Paste this request into your conversation', text); return; }
-  notice('Your request was sent to the conversation. ChatGPT can use the selected moment and prepare the result.');
+  notice(newChat ? 'Your learning chat is opening with the selected source. ChatGPT can show the result beside the conversation.' : 'Your request was sent to the conversation. ChatGPT can use the selected moment and prepare the result.');
 }
 function cite(root, ids, view) {
   const list = el('div', undefined, 'citations');
@@ -203,7 +208,8 @@ function renderLearning() {
       presentation: 'Create a presentation from this video or passage, with cited slides and speaker notes. Show it beside the source and offer editable PowerPoint export when available.',
       tutor: 'Tutor me on this video or selected passage. Ask one focused question and wait for my answer. Use the tutor skill.',
     };
-    root.append(button(state.active === 'tutor' ? 'Start tutoring in chat' : `Create ${labels[state.active].toLowerCase()}`, () => sendPrompt(prompts[state.active]), 'primary'));
+    const newChat = state.views.size === 0 && canStartLearningChat();
+    root.append(button(state.active === 'tutor' ? `Start tutoring in ${newChat ? 'a new chat' : 'chat'}` : `Create ${labels[state.active].toLowerCase()}${newChat ? ' in a new chat' : ''}`, () => sendPrompt(prompts[state.active], {newChat}), 'primary'));
     return;
   }
   viewHeading(root, view);
@@ -375,8 +381,9 @@ async function uploadVideo() {
 }
 async function finishUpload(video) {
   state.upload = null; state.file = null; $('file').value = ''; $('rights').checked = false; $('upload').hidden = true;
+  state.uploadNotice = video.id;
   await refreshLibrary(); await selectVideo(video);
-  notice(video.status === 'ready' ? 'Your video is ready to explore.' : 'Your video is processing. Status checks use no units. You can return later.');
+  notice(state.selected.status === 'ready' ? 'Your video is ready to explore.' : 'Your video is processing. Status checks use no units. You can return later.');
 }
 function pollVideo(id) {
   clearTimeout(state.poll);

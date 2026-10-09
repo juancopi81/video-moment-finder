@@ -217,10 +217,34 @@ wildcards. Full local validation passed: 724 backend cases (17 PostgreSQL
 cases skipped locally), archive and browser checks, frontend lint and build.
 Both CI runs passed, and Railway deployed `2c9cebf` to staging. Eighteen free
 protocol checks passed, including descriptor/content policy equality and the
-new URI; disposable authentication cleanup was verified. The connector metadata
-was refreshed and the actual workspace reloaded. This cleared its local file
-selection, so select the sample again and retry transfer within the existing
-approval. Check the ledger before treating ingestion as verified.
+new URI; disposable authentication cleanup was verified. After connector refresh,
+workspace reload and manual reselection, the actual native upload completed.
+One indexing job completed on its first attempt in approximately 71 seconds.
+The worker's normal three-attempt default was then restored and verified in its
+deployed startup log. There was no second indexing job or allowance grant.
+
+The October 8 actual-host test used the original lesson, not the synthetic
+harness. High-resolution frames at 10, 22 and 37 seconds were inspected, the
+transcript and one search were retrieved, and authenticated playback and seeking
+passed. The ledger recorded 510 units: 500 indexing plus 10 evidence calls,
+leaving 90 of the approved 600 units. All four prepared learning views rendered
+beside a full conversation. Cards revealed and advanced, slide notes opened,
+and the Playground preserved a pinned comparison, computed a negative dot
+product and kept zero-vector angles undefined. Its experiment handoff and tutor
+question used the selected context. Direct CSV/JSON downloads were unavailable
+in this web host; the selectable-text exports worked. Editable PowerPoint
+delivery remains unverified because the test chat's output folder was read-only.
+
+The global workspace's floating conversation accepted a render request without
+showing the result. The first learning button now explicitly opens a new chat
+when the host advertises `openai/message`; its source context travels in the
+message, rather than being attached only to the previous conversation. Prepared
+views keep follow-ups in place, and unsupported hosts retain their fallback.
+The resource cache revision is `ui://vmf/workspace/0.3.2.html`; the portable
+candidate version remains 0.3.0. Sixteen SDK browser cases passed, including
+new-chat context, active-chat fallback and clearing the completed-upload notice.
+Deployment, actual new-chat routing and reconnect verification of this revision
+remain pending.
 
 Portable candidate: 46 files and six skills; archive SHA256
 `4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`. This is not portal or live-host approval.
@@ -231,23 +255,19 @@ Review the local fixture experience using `mcp-ui/README.md`. Staging transport
 and private-package saving passed on October 7. Continue with the following
 checks in ChatGPT before requesting production rollout:
 
-1. Real staging consent, the global empty-workspace entrypoint and initial
-   combined setup workflow are verified. Test ready-video onboarding and the
-   conversation-side entrypoint; check initial result reuse without a duplicate
-   call. Nine tools and both entrypoint declarations passed protocol checks.
-2. Staging worker configuration and idle startup are verified. The bounded
-   original-sample test and 600-unit allowance are approved; the grant was
-   applied once, with zero usage after the failed native transfer. Manual file
-   selection is verified. Resolve host transfer while keeping the one-attempt
-   worker limit. Verify one completed
-   indexing job and its ledger, then verify source playback,
-   timestamp selection, native guide/cards/slides/Playground and chat handoff.
-   Verify exports and the unavailable-capability fallback in the actual host.
-3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks. Preserve
-   those restrictions and verify browser transfer/playback in the actual host.
-4. Reuse the approved original sample and allowance. Transfer bytes, complete
-   the same UUID, wait for ready and inspect the ledger. Check cancellation and
-   recovery without creating a second job or exceeding the approved attempt.
+1. Real staging consent, global empty workspace, initial combined setup and
+   full-conversation learning views passed. Deploy and verify the first-request
+   new-chat routing, ready-video onboarding and reconnect on the same account.
+2. One original-video job, its first-attempt completion and ledger passed.
+   Playback, seeking, guide/cards/slides/Playground and context handoff passed.
+   Native CSV/JSON copy fallback passed; editable PowerPoint delivery remains
+   host-dependent and must not be claimed as verified.
+3. Exact sandbox-origin CORS and storage-origin CSP passed hosted checks;
+   actual browser transfer and playback now passed with those restrictions.
+4. Reuse the indexed sample within the remaining approved allowance. Do not
+   create another job or grant. Cancellation and transfer-recovery regressions
+   passed in the harness; live retry of a failed byte transfer did not create
+   a duplicate job. Confirm the final ledger after reconnect and new-chat checks.
 5. Record five positive and three negative saved-release review cases. Only then
    request production rollout and update the existing private plugin identity
    with a matching production package. Recording follows the new real version.

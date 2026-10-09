@@ -34,7 +34,7 @@ window.addEventListener('message', async event => {
   if (message.id === undefined) return;
   const respond = (result) => iframe.contentWindow.postMessage({jsonrpc: '2.0', id: message.id, result}, '*');
   try {
-    if (message.method === 'ui/initialize') respond({protocolVersion: message.params.protocolVersion, hostInfo: {name: 'VMF fixture host', version: '1.0.0'}, hostCapabilities: {serverTools: {}, openLinks: {}, ...(query.has('no-message') ? {} : {message: {text: {}, image: {}}, updateModelContext: {text: {}, image: {}}}), ...(query.has('no-download') ? {} : {downloadFile: {}})}, hostContext: {theme: query.get('theme') ?? 'light', displayMode: 'fullscreen', availableDisplayModes: ['fullscreen']}});
+    if (message.method === 'ui/initialize') respond({protocolVersion: message.params.protocolVersion, hostInfo: {name: 'VMF fixture host', version: '1.0.0'}, hostCapabilities: {serverTools: {}, openLinks: {}, ...(query.has('no-message') ? {} : {message: {text: {}, image: {}}, updateModelContext: {text: {}, image: {}}}), ...(query.has('new-chat') ? {experimental: {'openai/message': {}}} : {}), ...(query.has('no-download') ? {} : {downloadFile: {}})}, hostContext: {theme: query.get('theme') ?? 'light', displayMode: 'fullscreen', availableDisplayModes: ['fullscreen']}});
     else if (message.method === 'tools/call') respond(await tool(message.params.name, message.params.arguments));
     else if (message.method === 'ui/message') { host.messages.push(message.params); respond({}); }
     else if (message.method === 'ui/update-model-context') { host.contexts.push(message.params); respond({}); }
