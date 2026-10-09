@@ -2,7 +2,7 @@
 
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
-release. Package and guidance checked: 2026-10-06 (America/Bogota). Historical
+release. Current package/deployment checkpoint checked: 2026-10-09 (America/Bogota). Historical
 production user-flow observations are dated 2026-10-02; subsequent staging and
 production database verification is dated separately below. The approved
 production code rollout and subsequent reviewer ingestion/retrieval/playback
@@ -11,13 +11,23 @@ validation and developer declarations remain gates.
 
 ## Current release
 
-**0.4.2 is the new source/package candidate**, adding native text and reference-image
-moment search. Production/private 0.3.0 is the verified baseline below. Candidate
-image selection is local until explicit search; current API tariffs apply,
+**0.4.2 is deployed to production and saved over the same private plugin**, adding
+native text and reference-image moment search. The production constraint
+migration preceded PR #97's merge at `7737afd`; main CI and API/worker/frontend
+deployments passed. Private read-back verified all 48 files and six skills,
+with identity, icons, starter prompts, publisher and MCP configuration preserved.
+Reviewer OAuth renewal, free library access and real native text search passed.
+Five visual/two spoken candidates, cached reuse, source seeking to 37 seconds
+and an inspected zero-vector thumbnail used two of ten approved existing units.
+Balance is 2,072, with no new indexing, grants or trial enrollment. Production
+reference-image selection/search and chat handoff remain to verify before
+recording. Public submission has not occurred.
+
+Image selection is local until explicit search; current API tariffs apply,
 similarity is a candidate, and clicked timestamps feed owned playback and chat.
 The app-only image tool expands consent to version 4 and requires the new
-`image_query` ledger migration before rollout. Do not record or submit 0.4.2 as
-live until migration/deployment/reconnect and real text/image host checks pass.
+`image_query` ledger migration before rollout. Migration/deployment and reviewer
+renewal are verified; finish the real image host check before recording 0.4.2.
 P2 now covers both searches within the existing five-positive/three-negative
 case set. Fresh ingestion remains reserved for P1 of the saved portal release.
 See [Native Workspace](NATIVE_WORKSPACE.md) and [Walkthrough](WALKTHROUGH.md).
@@ -39,10 +49,12 @@ metadata was refreshed and the local reference manually reselected. Actual
 then waited. Its constrained test conversation made no extra metered retrieval.
 Six of ten approved additional staging units have been used; balance is 75,
 with no new indexing, grants or trial. The subsequent documentation head
-`f4dd2b3` also passed both CI runs and deployed the identical bundle. Production/private
-plugin 0.3.0, public trial, submission and publication remain unchanged.
+`f4dd2b3` also passed both CI runs and deployed the identical bundle. At that
+staging checkpoint production/private plugin 0.3.0 was unchanged. The current
+production checkpoint above supersedes it; public trials, submission and
+publication remain unchanged.
 
-**0.3.0 is now deployed to production and saved over the same private plugin.**
+**Historical 0.3.0 production baseline:** it was deployed and saved over the same private plugin.
 After publisher review and explicit rollout approval on October 9, PR #95 was
 squash merged at `f1d04aa`; main CI and API/worker/frontend deployments passed.
 Ten free HTTP checks, current nine-tool consent, reconnect, free owned-library
@@ -51,8 +63,9 @@ Private R2 CORS now allows only the observed production ChatGPT origin in
 addition to the preserved website upload rule. Eight read-only storage checks
 passed; public access and retention were unchanged.
 
-The reviewer received the authorized once-only 600-unit test allowance and has
-2,080 units. No new units or indexing jobs were consumed during this rollout.
+At that baseline the reviewer received the authorized once-only 600-unit test
+allowance and had 2,080 units. No units or indexing jobs were consumed by that
+infrastructure rollout; subsequent demo/search usage is recorded separately.
 The approved single fresh job is reserved for ingestion against the saved
 review release. The portable archive has 46 files and six skills; the same
 private service record has 48 files including compatibility files. Public portal

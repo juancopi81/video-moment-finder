@@ -1,8 +1,8 @@
-# Native workspace: 0.4.2 candidate
+# Native workspace: 0.4.2
 
 ## Moment search update (2026-10-09)
 
-The candidate adds Find a moment for the selected owned ready video. Text uses
+The release adds Find a moment for the selected owned ready video. Text uses
 the existing semantic search across visual and transcript vectors; results
 label Visual or Spoken and seek the source player. Image accepts JPEG, PNG or
 WebP up to 10 MB, normalizes locally to a JPEG at most 1024 pixels per side and
@@ -47,10 +47,42 @@ to the constrained test conversation, which asked one correct zero-vector/angle
 question and waited without more metered retrieval. The final ledger records six
 of ten approved additional units used, a balance of 75, one unchanged original
 job/attempt/private grant and no trial. The documentation head `f4dd2b3` also
-passed both CI runs and deployed the identical bundle. The new production rollout remains a gate. The
-verified 0.3.0 production checkpoint below is the baseline, not a 0.4.2 deployment claim.
+passed both CI runs and deployed the identical bundle. The subsequent production
+rollout is recorded below; production image search remains a separate host check.
 
-## Production checkpoint (2026-10-09)
+## Production search checkpoint (2026-10-09)
+
+The publisher explicitly approved the search rollout. The single
+`image_query` constraint migration was applied to production before PR #97
+merged at `7737afd4bb19fcf6fcee4ab9c99a9a17989bab83`. Transaction snapshots
+verified unchanged data, balances, grants, jobs, billing functions and RLS.
+Main backend/workspace/frontend CI passed, followed by the production Railway
+API and worker and Vercel frontend deployments. Ten free public HTTP checks
+passed against the active release.
+
+The same USER-private plugin was updated to 0.4.2 with its existing release
+guard. Read-back verified all 48 files, six skills, matching portable/legacy
+manifests, onboarding, starter prompts, publisher and MCP configuration.
+Unchanged binary assets were preserved. The portable submission archive remains
+46 files; private compatibility files are not its public packaging contract.
+
+The connection requested and accepted OAuth renewal. Its free library result
+matched the dedicated reviewer's existing original video; the database records
+current consent version 4. Refreshed ChatGPT tool metadata loaded the new native
+search controls and owned 1280×720 playback. One semantic text query returned
+five visual and two spoken candidates. The spoken passage states that the zero
+vector's angle is undefined. Selecting the fourth visual candidate sought the
+actual player to 37 seconds, and a retrieved thumbnail rendered the same
+zero-vector slide on canvas. Repeating the text query reused its cache.
+
+The ledger records exactly two of ten approved existing reviewer units used:
+one text query and one thumbnail. Balance is 2,072; videos, indexing jobs,
+grants and trial enrollment are unchanged. Eight units remain for this smoke
+test. Production reference-image selection/inference, cache reuse and the
+moment-specific chat handoff remain to check. This rollout does not establish
+saved public-review cases, trial activation, recording, submission or publication.
+
+## Historical 0.3.0 production checkpoint (2026-10-09)
 
 The publisher reviewed the four native views and authorized production rollout.
 PR #95 was squash merged at `f1d04aac469d5ca97aab54504044d7d422a10575`;
@@ -186,8 +218,9 @@ cases run in CI, including the new event debit/refund test.
 
 The reproducible portable 0.4.0 archive has 46 files and six skills; SHA256
 `dda05089a514baf3b8c4f6251be8baab32054837578fdadaaa95bb95c6000226`.
-The currently installed private production plugin remains 0.3.0. This archive
-validation does not establish portal validation, installation or submission.
+At that pre-rollout checkpoint the installed private production plugin was
+0.3.0. This archive validation did not establish portal validation, installation
+or submission; the current production checkpoint is above.
 
 Earlier native workspace verification:
 
@@ -437,7 +470,8 @@ October 9; preserve these results and complete the remaining submission checks:
    verified real version; portal upload, public submission and publication remain
    separate gates.
 
-No new database migration is required. A synthetic fixture does not satisfy any
+The 0.3.0 baseline required no new migration; the search release's ledger
+migration is now applied as recorded above. A synthetic fixture does not satisfy any
 live account, storage-transfer, charge or saved-release review requirement.
 
 After building, check the local UI harness and intended ChatGPT host: placement,
@@ -448,9 +482,10 @@ slides/notes, vector limits and finite-case completeness. A harness does not
 replace a host test. Refresh the five positive and three negative cases and
 record the actual new version only after those checks.
 
-The 0.3.0 baseline uses consent version 3; the reviewer completed that transition
-during rollout. The new 0.4.0 image-search candidate uses version 4 and needs the
-ledger-event migration described above. The trial stays disabled. The approved production test allowance is
-bounded to one new job and 600 new units; the already-indexed reviewer sample
-supports free library/playback checks. Trial activation, recording, portal upload
-and human attestations remain separate release gates.
+The 0.3.0 baseline used consent version 3; current native search requires version
+4. Its production migration and reviewer OAuth renewal passed. The trial stays
+disabled. The current search smoke test is limited to ten existing units and
+zero new indexing jobs or grants. The separate earlier allowance of one fresh
+job and at most 600 units remains reserved for the saved public-review release;
+it is not used by this search rollout. Trial activation, recording, portal
+upload and human attestations remain separate release gates.

@@ -7,9 +7,11 @@ and the portal's saved-release connection are distinct checks.
 
 ## Current 0.4.2 recording plan
 
-The new text/image search candidate must pass approved migration, rollout,
-consent/reconnect and actual ChatGPT host tests before recording. The previous
-0.3.0 conversation's outputs remain reusable; this is not a new ingestion.
+The approved production migration, rollout, private 0.4.2 update and reviewer
+OAuth renewal passed. Actual ChatGPT text search, cached reuse, seeking and
+source-thumbnail inspection passed using two existing units. Finish the
+production image search and moment-specific chat handoff before recording.
+The previous 0.3.0 conversation's outputs remain reusable; this is not a new ingestion.
 
 1. Show installed VMF **0.4.2** and the ready original reviewer lesson. Explain
    that the learning outputs were generated earlier from that indexed sample.
@@ -40,7 +42,7 @@ URL, saved portal-release cases and human attestations remain later gates.
 
 **0.3.0 recording update (October 9):** production rollout, current consent,
 reconnect and owned source playback passed. The installed private production
-plugin is 0.3.0. Its real first-learning button created a full conversation;
+plugin was 0.3.0 at that checkpoint. Its real first-learning button created a full conversation;
 the publisher sent the bounded demo prompt there. That conversation now contains
 a study guide, six cards, a computed Playground, five presentation slides and
 one waiting tutor question. Actual guide citation seeking to 36 seconds, card
