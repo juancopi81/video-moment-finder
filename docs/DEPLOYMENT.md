@@ -4,6 +4,15 @@ This file is the concise operations reference that was intentionally removed fro
 
 ## Source of Truth for Environment Variables
 
+The native workspace candidate is documented in `docs/plugin/NATIVE_WORKSPACE.md`.
+Before staging, configure private R2 CORS for the actual sandbox origin using
+`GET`, `HEAD`, `PUT` and `Content-Type`. Preserve website origins and keep the
+bucket private. The component's CSP permits only the exact `R2_ENDPOINT_URL`
+origin for media/transfer and uses the MCP resource origin as its widget domain.
+Inspect the effective host origin rather than adding a wildcard. API calls go
+through MCP's host bridge and need no new public API CORS origin. Verify actual
+transfer/playback in the intended host before recording or submission.
+
 - Backend and infrastructure variables: `.env.example`
 - Frontend variables: `frontend/.env.example`
 
@@ -15,8 +24,10 @@ Use those files as the canonical variable list and defaults. This document expla
 | --- | --- | --- | --- | --- |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_DB_URL` | Required | Required | - | Database and Supabase API access. |
 | `QDRANT_URL`, `QDRANT_API_KEY` | Required | Required | - | Query path uses API; indexing path uses worker. |
+| `QDRANT_COLLECTION_NAME` | Optional | Optional | - | Defaults to `video_frames`. Set the same distinct collection on both staging services; a blank value fails configuration. An explicit Python collection argument takes precedence. |
 | `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL` | Required | Required | - | API handles upload/presign; worker handles processing outputs. |
 | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Required | Required | - | Required for Modal calls from both services. |
+| `MODAL_ENVIRONMENT` | Optional | Optional | - | SDK default is `main`. Set the same explicit environment on API and worker; the embedding app must already be deployed there. This selects a namespace and does not restrict a token's permissions. |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` | Optional | Optional | - | Runtime monitoring for API and worker. |
 | `CLERK_ISSUER`, `CLERK_AUDIENCE`, `CLERK_JWKS_URL` | Required | - | - | API JWT verification only. |
 | `CLERK_SECRET_KEY`, `API_TRIAL_ENABLED`, `API_TRIAL_UNITS` | Optional | - | - | Server-verified, once-per-account trial. Grants default OFF; secret required only to enroll new eligible accounts. |
@@ -39,6 +50,26 @@ Use those files as the canonical variable list and defaults. This document expla
 - Railway worker service: worker-required groups + shared API/worker groups.
 - Vercel frontend: `NEXT_PUBLIC_*` variables only.
 - Packaging note: Railway installs the default shared runtime dependencies from `pyproject.toml`, while the service image must also include `ffmpeg` plus a JavaScript runtime for best-effort `yt-dlp` YouTube import. The Modal image installs the additional `modal` dependency group. After merging dependency-group changes or renaming Modal objects, redeploy Modal with `uv run modal deploy src/embedding/modal_app.py`.
+
+For staging on a shared Qdrant cluster, provision a separate collection with an
+unnamed 2048-dimensional cosine vector and keyword indexes on `video_id` and
+`source`. Set `QDRANT_COLLECTION_NAME` explicitly on both staging services and
+restrict their credentials to that collection. A worker's collection read/write
+key can maintain payload indexes and points but cannot create a collection, so
+provision it before starting the worker. The plugin's API retrieval flows can use
+a collection read-only key; an API deployment that also removes vector data needs
+collection write access. Collection isolation restricts data access, while CPU,
+RAM and capacity remain shared. Keep production's collection and credentials
+unchanged.
+
+Staging may reuse the existing stateless inference app in Modal's `main`
+environment while keeping its database, media bucket and vector collection
+separate. A dedicated staging API token on Starter still has workspace-wide
+permissions; selecting `MODAL_ENVIRONMENT` does not narrow them. Limit its
+lifetime and store it only in service secrets and ignored private setup files.
+The October 8 staging token expires November 7, 2026. Authentication and metadata
+lookups do not prove actual GPU processing; verify that separately with an
+approved bounded video job.
 
 ## Worker Database Recovery
 
@@ -181,7 +212,7 @@ Behavior notes:
 
 - `/mcp` only accepts OAuth bearer tokens. Legacy `vmf_` API keys remain valid for REST and CLI, not for MCP.
 - Connector usage bills against the shared API unit balance (existing paid units plus any trial grant) and records `api_usage_events.api_key_id = null`.
-- The connect page blocks approval when `api_units_balance <= 0`, explains the unavailable operation neutrally, and offers denial. It does not advertise or link to digital-credit purchases. Ordinary website checkout remains independent.
+- Account consent is free and may be approved without API units or a billing record. Approval does not enroll a trial or change a balance. Library, status and native workspace tools remain free; metered operations enforce the required allowance when called. The connect page explains zero/unavailable balances without blocking consent or advertising digital-credit purchases. Ordinary website checkout remains independent.
 - `HEAD /mcp` must stay tokenless for Claude client compatibility checks.
 - Public clients registered with `token_endpoint_auth_method=none` may omit
   `client_secret` on token and revocation requests. The authenticator supplies an
@@ -207,7 +238,8 @@ PR #93 deployed at `ed31032`. Trial activation remains unapproved and disabled;
 details and remaining public-release gates are in `docs/plugin/SUBMISSION.md`.
 
 With grants enabled, an authenticated account is enrolled on a billing summary,
-connector approval, indexing admission, or metered API operation. The backend
+indexing admission, or metered API operation. Account consent itself does not
+enroll a trial. The backend
 fetches that same immutable Clerk user ID from `https://api.clerk.com/v1/users/`
 using the server-only `CLERK_SECRET_KEY`. Only a verified **primary** email on an
 unlocked, unbanned account qualifies. Client booleans, editable metadata, and an

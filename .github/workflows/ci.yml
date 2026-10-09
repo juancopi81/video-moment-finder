@@ -8,6 +8,24 @@ on:
   pull_request:
 
 jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mcp-ui/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm run check
+      - run: npm run test:browser
+
   backend:
     runs-on: ubuntu-latest
     steps:

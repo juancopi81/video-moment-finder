@@ -5,6 +5,17 @@ Use the final private development installation in the intended host; do not
 upload a submission draft merely to start recording. The development recording
 and the portal's saved-release connection are distinct checks.
 
+**0.3.0 recording update:** the native workspace is a candidate. Complete the
+staging/host gates in [Native Workspace](NATIVE_WORKSPACE.md), then record the
+actual installed version. Open Video Workspace, choose the ready reviewer
+sample, select a transcript moment and use Explain this moment. Show the cited
+guide, card reveal/advance/CSV, Playground prediction/pin/zero case, slide
+navigation/notes and tutor in the adjacent conversation. Include the purchase
+boundary response. If recording ingestion, show an actual authorized file
+transfer and processing result; do not index again just for a cleaner take.
+Fixture host screens are development tests and must not stand in for the live
+review walkthrough. The 0.2.0 observations and sequence below remain historical.
+
 Preparation status: private version 0.2.0 contains five workflows. Playground keeps the
 existing assumption-lab skill identity, and Presentation is the fifth skill. The
 existing custom connector passed OAuth reconnect and authenticated calls; the

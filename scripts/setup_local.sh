@@ -131,4 +131,12 @@ echo "Installing frontend dependencies..."
   npm ci
 )
 
+echo "Installing native workspace development dependencies..."
+(
+  cd "$ROOT_DIR/mcp-ui"
+  npm ci
+  npx playwright install chromium
+  npm run check
+)
+
 echo "Local setup complete."

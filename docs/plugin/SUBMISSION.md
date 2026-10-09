@@ -11,6 +11,70 @@ validation and developer declarations remain gates.
 
 ## Current release
 
+An authorized **0.3.0 native workspace candidate** is deployed to isolated
+staging. Zero-balance consent and vector isolation were introduced at `ccdca31`;
+the verified native resource revision is deployed at `c2b735a`.
+The separate private staging package is at 0.3.1 with its verified app binding.
+Real zero-balance OAuth, the global empty workspace and initial combined
+onboarding passed. On October 8,
+private bucket-scoped storage and exact-origin CORS were configured; nine storage
+checks and seventeen free deployed protocol checks passed. The staging API now
+uses an isolated Qdrant collection and a read-only, collection-scoped key;
+eighteen hosted vector checks passed, including production-access and API-write
+denials. The staging API also has an approved, dedicated Modal token expiring
+November 7, 2026, for the existing VMF inference app; five metadata lookups passed
+with no inference invocation.
+Seventeen free protocol checks passed after that deployment, and temporary
+authentication cleanup was verified. The token is workspace-wide on Starter,
+and the model app is shared with
+production. The separately approved private Railway worker now uses
+`Dockerfile.worker`, one replica and the isolated staging database, bucket and
+vector write key. CI passed for `fb83158`; deployment and idle startup passed
+with the queue and video table empty before and after startup. Both vector keys expire
+November 7, 2026.
+The approved private 600-unit allowance was granted once, without trial enrollment.
+After an initial uncharged transfer failure, the resource-policy fix at
+`2c9cebf`, connector refresh and manual reselection, actual ChatGPT upload and
+processing passed: one original 41.8-second video, one completed first-attempt
+job, approximately 71 seconds. The normal worker retry setting was then restored.
+The ledger recorded 510 units and 90 remaining, with one indexing charge.
+Inspected source frames, transcript/search, authenticated playback, seeking and
+four full-conversation native views passed. CSV/JSON copy exports worked where
+direct downloads were unavailable. The initial PowerPoint attempt hit a read-only
+test folder; the fresh learning chat delivered an editable file successfully.
+Its five slides, five source-note pages, native text and absence of signed URLs
+were checked, and every rendered slide was inspected. Three development boundary
+cases passed without paid retrieval or real-world actions.
+The first learning request now explicitly opens a new chat on supporting hosts
+to avoid invisible results in the global workspace's floating conversation.
+Full local checks, both CI runs and staging deployment passed at `c2b735a`.
+Eighteen free protocol checks verified resource revision 0.3.2 and its exact
+reviewed bundle, with disposable-auth cleanup. The actual first-learning button
+created a new conversation; after the existing bounded test authorization was
+supplied, it rendered a fresh guide from one transcript and one inspected
+thumbnail batch. Its 36-second source citation sought correctly. Same-account
+OAuth reconnect passed without a new grant or trial. Accounting at that
+checkpoint was 512 units used, 88 remaining and one completed job. No second job,
+public trial or production change occurred. These private development checks do
+not replace review cases against the saved public portal release. See
+[native workspace](NATIVE_WORKSPACE.md) for build/browser evidence, expanded
+consent and required host checks. The
+deployed/installed 0.2.0 evidence below is
+historical proof of that release, not validation of the new UI. Record the
+candidate only after its actual host checks pass.
+
+The fresh conversation preserved all four generated native views while reusing
+its cached evidence. Card controls, slide notes, prediction/pin/compare and
+zero-vector handling passed. Its last optional tutor handoff returned a ChatGPT
+security challenge; the earlier full-conversation tutor question/feedback passed.
+The publisher then resumed the cached-evidence tutor. After a normal reload,
+the native Tutor button successfully sent the selected 36-second moment and
+received the correct zero-vector question. No security bypass was performed.
+The latest read-only ledger recorded 513 units used, 87 remaining, one completed
+first-attempt job, one allowance event and no trial; it includes one additional
+transcript retrieval. Final publisher review of the four generated views remains
+before separate native production rollout authorization.
+
 Version **0.2.0** has **44 portable files and five workflows**. It was saved
 over the same USER-scoped PRIVATE plugin. Read-back confirmed both root and
 compatibility manifests at 0.2.0, all five skill files, unchanged starter prompts,
@@ -22,7 +86,7 @@ Playground expands the existing `assumption-lab` skill in place so installations
 do not accumulate duplicate skills. It supports computed models where justified
 and retains the finite case-table mode. Presentation is the new fifth skill.
 Editable PPTX export requires the host's presentation runtime; HTML generation
-uses Python's standard library. No production dependencies were added.
+uses Python's standard library. That 0.2.0 package added no production dependencies.
 
 ```sh
 uv run python -m unittest discover -s scripts/plugin -p 'test_*.py'

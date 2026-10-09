@@ -285,6 +285,9 @@ def test_mcp_lists_only_expected_tools(
         "search_video",
         "get_transcript",
         "get_frames",
+        "open_workspace",
+        "get_workspace_video",
+        "render_learning_view",
     }
 
     upload_tool = next(tool for tool in tools.tools if tool.name == "upload_video")
@@ -557,10 +560,13 @@ def test_mcp_search_video_surfaces_insufficient_units(
     assert "Insufficient API units" in result.content[0].text
 
 
-def test_mcp_tool_approval_items_lists_six_tools() -> None:
+def test_mcp_tool_approval_items_includes_native_workspace() -> None:
     items = mcp_tool_approval_items()
 
     assert [item["name"] for item in items] == [
+        "open_workspace",
+        "get_workspace_video",
+        "render_learning_view",
         "upload_video",
         "get_video_status",
         "list_videos",
@@ -574,6 +580,9 @@ def test_mcp_tool_approval_items_list_exact_unit_costs() -> None:
     costs = {item["name"]: item["cost"] for item in mcp_tool_approval_items()}
 
     assert costs == {
+        "open_workspace": "No units",
+        "get_workspace_video": "No units",
+        "render_learning_view": "No units; evidence retrieval uses the costs below",
         "upload_video": "500 units per indexed video",
         "get_video_status": "No units",
         "list_videos": "No units",

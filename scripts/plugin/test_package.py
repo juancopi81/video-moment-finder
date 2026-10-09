@@ -28,7 +28,7 @@ class PackageTests(unittest.TestCase):
         shutil.copytree(original / "assets", self.source / "assets")
         (self.source / "README.md").write_text("# Fixture package\n", encoding="utf-8")
         (self.source / "LICENSE").write_text("Fixture only\n", encoding="utf-8")
-        for skill in ("study-guide", "flashcards", "tutor", "assumption-lab", "presentation"):
+        for skill in ("study-guide", "flashcards", "tutor", "assumption-lab", "presentation", "setup"):
             target = self.source / "skills" / skill / "SKILL.md"
             target.parent.mkdir(parents=True)
             target.write_text(f"---\nname: {skill}\ndescription: Use for the fixture workflow.\n---\nFixture.\n", encoding="utf-8")
@@ -126,6 +126,15 @@ class PackageTests(unittest.TestCase):
         config = json.loads((self.source / "mcp.json").read_text())
         config["mcpServers"][PLUGIN_NAME]["headers"] = {"Authorization": "private"}
         (self.source / "mcp.json").write_text(json.dumps(config), encoding="utf-8")
+        self.assertFalse(self.build_and_check()["valid"])
+
+    def test_onboarding_must_exist_and_stay_inside_the_package(self):
+        self.manifest["extensions"]["com.openai"]["onboardingSkill"] = "../outside/SKILL.md"
+        self.write_manifest()
+        self.assertFalse(self.build_and_check()["valid"])
+        self.manifest["extensions"]["com.openai"]["onboardingSkill"] = "./skills/setup/SKILL.md"
+        self.write_manifest()
+        (self.source / "skills/setup/SKILL.md").unlink()
         self.assertFalse(self.build_and_check()["valid"])
 
     def test_output_cannot_be_inside_source(self):
