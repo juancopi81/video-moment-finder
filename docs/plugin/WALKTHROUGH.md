@@ -51,7 +51,7 @@ five timestamped note pages. Opening it in PowerPoint/Keynote and an independent
 visual render remain separate checks. The ledger records six new units, a
 2,074-unit balance and no new indexing job. Reuse these outputs for recording.
 
-Record this current sequence:
+Historical 0.3.0 sequence (use the 0.4.0 plan above for the next recording):
 
 1. Show the installed VMF 0.3.0 version and the prepared production conversation.
    Say that the outputs were generated earlier from the original indexed sample.
@@ -74,6 +74,8 @@ release; do not index again for recording. Fixture screens and screenshots are
 development evidence, not a recorded walkthrough. Recording, saved-release
 cases and human attestations remain gates. The 0.2.0 observations and sequence
 below are historical.
+
+## Historical 0.2.0 preparation
 
 Preparation status: private version 0.2.0 contains five workflows. Playground keeps the
 existing assumption-lab skill identity, and Presentation is the fifth skill. The
@@ -148,7 +150,7 @@ Do not describe these generated artifacts as a completed eight-case live test.
    capability; the local follow-up browser controller also exposes no recording
    API. Neither environment's screenshots are a finished demo.
 
-## A concise 6–7 minute sequence
+## Earlier five-workflow sequence (reference only)
 
 | Segment | Prompt / action | Show and verify |
 | --- | --- | --- |
