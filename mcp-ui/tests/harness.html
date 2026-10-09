@@ -3,7 +3,7 @@ import {video, secondVideo, uploadedVideo, segments, guide, cards, playground, p
 const query = new URLSearchParams(location.search);
 const iframe = document.getElementById('workspace');
 const initialViews = [guide, cards, playground, presentation];
-const host = window.fixtureHost = {calls: [], messages: [], contexts: [], downloads: [], links: [], failures: {}, delays: {}, balance: query.has('zero') ? 0 : 600, cost: 500, searchCost: 1, imageCost: 1, uploaded: false, uploadStatus: 'queued', empty: query.has('empty')};
+const host = window.fixtureHost = {calls: [], messages: [], contexts: [], downloads: [], links: [], failures: {}, delays: {}, holds: {}, release: {}, balance: query.has('zero') ? 0 : 600, cost: 500, searchCost: 1, imageCost: 1, uploaded: false, uploadStatus: 'queued', empty: query.has('empty')};
 const library = () => {
   const result = toolResult({videos: host.empty ? [] : [video, secondVideo, ...(host.uploaded ? [{...uploadedVideo, status: host.uploadStatus}] : [])], allowance: {api_units_balance: host.balance, unit_cost_index_video: host.cost}});
   result._meta.vmf.config = {...result._meta.vmf.config, text_search_units: host.searchCost, image_search_units: host.imageCost};
@@ -16,6 +16,7 @@ host.theme = (theme) => iframe.contentWindow.postMessage({jsonrpc: '2.0', method
 host.initial = () => query.has('unauthorized') ? {isError: true, content: [{type: 'text', text: '401 invalid_token: reconnect required'}]} : query.has('empty') || query.has('library') ? library() : toolResult({...query.has('render-only') ? {} : library().structuredContent, video, view: guide, companion_views: initialViews.slice(1)}, playback(video)._meta.vmf);
 async function tool(name, args) {
   host.calls.push({name, args});
+  if (host.holds[name]) await new Promise(resolve => { host.release[name] = resolve; });
   const delay = host.delays[`${name}:${args.video_id}`] ?? host.delays[name];
   if (delay) await new Promise(resolve => setTimeout(resolve, delay));
   if (name === 'open_workspace') return library();

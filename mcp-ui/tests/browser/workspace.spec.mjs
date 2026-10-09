@@ -103,7 +103,7 @@ for (const mode of ['text', 'image']) {
     await page.clock.install();
     const {ui, errors} = await open(page, '?no-media');
     const tool = mode === 'image' ? 'search_video_image' : 'search_video';
-    await page.evaluate(tool => { window.fixtureHost.delays[tool] = 120000; }, tool);
+    await page.evaluate(tool => { window.fixtureHost.holds[tool] = true; }, tool);
     if (mode === 'image') {
       await ui.locator('#search-image-mode').click();
       await ui.locator('#search-image-file').setInputFiles({name: 'reference.png', mimeType: 'image/png', buffer: referenceImage});
@@ -114,9 +114,14 @@ for (const mode of ['text', 'image']) {
     await page.clock.fastForward(61000);
     await expect(ui.locator('#run-search')).toBeDisabled();
     await expect(ui.locator('#search-state')).toContainText('Finding candidate moments');
-    await page.clock.fastForward(60000);
+    // Advance both frame clocks before releasing the host response. Letting the
+    // host timer resolve during the jump races the iframe's free balance call
+    // against its own clock jump; that would simulate an unrelated timeout.
+    await page.clock.fastForward(59000);
+    await page.evaluate(tool => { window.fixtureHost.release[tool](); }, tool);
     await expect(ui.locator('#search-results .search-match')).toHaveCount(mode === 'image' ? 1 : 2);
     await expect(ui.locator('#balance')).toContainText('599 units');
+    await expect(ui.locator('#notice')).toBeEmpty();
     expect(await calls(page, tool)).toHaveLength(1);
     expect(errors).toEqual([]);
   });
