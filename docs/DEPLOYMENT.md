@@ -245,6 +245,17 @@ Behavior notes:
   model; confidential-client secret checks and token ownership checks still apply.
   Revoking either token invalidates both access and refresh tokens for that connection.
 
+## OpenAI plugin domain verification
+
+The website serves the public ownership challenge from
+`frontend/public/.well-known/openai-apps-challenge`. In the plugin portal, use
+`https://videomomentfinder.com` as the Challenge Base URL; this parent
+hostname verifies the MCP endpoint at `https://api.videomomentfinder.com/mcp`.
+After an approved website deployment, confirm an anonymous GET returns the
+portal's exact token before selecting Verify Domain. The challenge is public
+ownership evidence, not an authentication credential. Replacing or removing it
+requires checking the portal's current verification requirements.
+
 ## Verified-account trial (inactive proposal)
 
 Apply `20261002120000_api_billing_retry_safety.sql` and
