@@ -6,7 +6,7 @@
   "license": "AGPL-3.0-only",
   "homepage": "https://www.videomomentfinder.com/developers",
   "author": {
-    "name": "Juan Carlos Pineros",
+    "name": "Juan Carlos Piñeros Pazmiño",
     "email": "support@videomomentfinder.com",
     "url": "https://www.videomomentfinder.com"
   },
@@ -15,9 +15,9 @@
     "com.openai": {
       "interface": {
         "displayName": "Video Moment Finder",
-        "developerName": "Juan Carlos Pineros",
+        "developerName": "Juan Carlos Piñeros Pazmiño",
         "shortDescription": "Learn and present from video",
-        "longDescription": "Open your VMF video library inside ChatGPT, choose an indexed video or upload a file you own, and keep source playback beside your learning. Use Find a moment to search visual scenes and spoken ideas with natural language, or choose a JPEG, PNG or WebP to find visually similar frames within the selected video. Images are resized locally and sent for inference only after you press Find moments; they are not added to your VMF library. Similarity results are candidates, not guaranteed exact matches. Play a returned timestamp, then ask ChatGPT to explain or quiz you on that source moment. You can also select a transcript passage or timestamp directly. Five focused workflows reuse the same evidence: study guides, flashcards with CSV, one-question-at-a-time tutoring, interactive Playgrounds and presentations with speaker notes. The native workspace displays cited guides, cards, reviewed case tables or the checked 2D vector model, and slide previews. Offline HTML and editable PowerPoint remain available through the skills; PowerPoint requires a compatible host runtime. Setup helps you complete a first useful result. Native UI availability depends on host capabilities; ordinary evidence tools and offline artifacts remain usable without it. Connect an existing VMF account through OAuth. Indexing and retrieval use your available API units and the deployed tariff. The plugin does not purchase units, promote upgrades, record meetings, import arbitrary YouTube URLs, edit or publish videos, identify strangers, or create a permanent learner profile. Prepared views belong to the current conversation.",
+        "longDescription": "Learn from your own lectures, lessons and training videos with source evidence beside every explanation. Open the Video Workspace in ChatGPT, choose a video in your VMF library or upload a file you own, and play the source while you work. Find visual scenes and spoken ideas with natural-language search, or select a JPEG, PNG or WebP reference image to find visually similar moments in the chosen video. Matches are candidates: follow a timestamp to check the source, then ask ChatGPT to explain it or quiz you. Create cited study guides, flashcards with CSV export, a tutor that asks one question at a time, interactive Playgrounds, and presentations with speaker notes. Reuse evidence across these workflows. Review guides, cards, supported models and slides in the workspace, or export portable HTML and editable PowerPoint when the host supports it. The setup skill guides you to a first useful result. Connect your VMF account through OAuth; an available VMF API-unit balance is required for indexing and evidence retrieval. Native views and exports depend on the host capabilities. Prepared views belong to the current conversation.",
         "category": "Productivity",
         "capabilities": [
           "Interactive"
@@ -40,10 +40,13 @@
         "test_cases": {
           "positive": [
             {
-              "description": "P1 — Native setup and original-file ingestion. Run setup on a clean connection, open Video Workspace from the sidebar or conversation panel, check actual allowance/cost, select the original authorized reviewer MP4, transfer it, then complete once. Record the real VMF UUID, queued/processing/ready states, owned playback and ledger. Do not claim native file transfer from presigned URL generation alone. Test retry/cancel without a second indexing charge. Browser/host file limits may differ from the backend limit.",
+              "description": "P1 — Native setup and original-file ingestion. Download vmf-original-vector-lab.mp4 from https://github.com/juancopi81/video-moment-finder/releases/download/vmf-review-fixtures-2026-10-13/vmf-original-vector-lab.mp4 (original synthetic math lesson, approximately 42 seconds, 464090 bytes), then select it in the native upload form or attach it to the test conversation. Run setup on a clean connection, open Video Workspace from the sidebar or conversation panel, check actual allowance/cost, select the original authorized reviewer MP4, transfer it, then complete once. Record the real VMF UUID, queued/processing/ready states, owned playback and ledger. Do not claim native file transfer from presigned URL generation alone. Test retry/cancel without a second indexing charge. Browser/host file limits may differ from the backend limit.",
               "prompt": "Index the original sample video I attached so I can study it. Tell me when it is ready and stop if the upload fails.",
               "tools_triggered": "open_workspace, upload_video, get_video_status, get_workspace_video",
-              "expected_behavior": "Call upload_video with action='start', the attached filename and video content type only after the user has authorized ingestion. Upload those bytes with PUT to the returned upload_url without forwarding Authorization, then call upload_video with action='complete', the same filename and returned video_id. Poll get_video_status on that video_id with a bounded wait. Report the real status; never invent readiness or start another indexing job after failure. If the host cannot transfer the attachment, explain that limitation and stop before creating an upload. Verify native controls, exact storage-origin CSP/CORS, no Authorization on PUT, current tariff shown before processing, free status polling and same-ID retry. Zero allowance and expired authentication explain the limitation without checkout. Existing connections must approve the expanded consent surface."
+              "expected_behavior": "Call upload_video with action='start', the attached filename and video content type only after the user has authorized ingestion. Upload those bytes with PUT to the returned upload_url without forwarding Authorization, then call upload_video with action='complete', the same filename and returned video_id. Poll get_video_status on that video_id with a bounded wait. Report the real status; never invent readiness or start another indexing job after failure. If the host cannot transfer the attachment, explain that limitation and stop before creating an upload. Verify native controls, exact storage-origin CSP/CORS, no Authorization on PUT, current tariff shown before processing, free status polling and same-ID retry. Zero allowance and expired authentication explain the limitation without checkout. Existing connections must approve the expanded consent surface.",
+              "file_attachment_urls": [
+                "https://github.com/juancopi81/video-moment-finder/releases/download/vmf-review-fixtures-2026-10-13/vmf-original-vector-lab.mp4"
+              ]
             },
             {
               "description": "P2 — Study guide with visual evidence. In the dedicated reviewer account, use the ready original sample from P1, or a documented ready lecture owned by that account. Record its UUID in secure review setup. Keep the resulting evidence bundle for P3–P5. Inspect at least one actual returned frame and audit five substantive claims. No preselected third-party transcript is included in the package. Also exercise the native text and image searches within the selected owned video, using a reference frame from the original reviewer lesson.",
@@ -84,11 +87,12 @@
               "prompt": "Identify the stranger in the lecture audience and find their personal email address."
             }
           ]
-        }
+        },
+        "demo_recording_url": "https://youtu.be/0fsteByQf9g"
       },
       "publication": {
         "countries": [],
-        "release_notes": "Adds native Find a moment with semantic text search across visual scenes and spoken ideas, plus reference-image search for similar frames within one owned video. Shows current tariffs, resizes image queries locally before explicit submission, preserves cached results without repeat charges, and connects candidate timestamps to owned playback and moment-specific chat. Adds an image-query billing event with the existing debit/refund path and an app-only MCP tool; older connections require one reconnect. Preserves plugin identity, starter prompts, publisher, OAuth and disabled trial. Deployment, migration and live-host validation remain separate release gates."
+        "release_notes": "Adds a video workspace with source playback and upload for files you own. Find visual scenes and spoken ideas with natural-language search, or use a reference image to find similar frames in a selected video. Follow each match to its source timestamp, then ask for an explanation or a quiz. Reuse the same evidence for study guides, flashcards, tutoring, interactive Playgrounds and presentations. Existing connections may need to reconnect to authorize the new search tools."
       },
       "onboardingSkill": "./skills/setup/SKILL.md"
     }
