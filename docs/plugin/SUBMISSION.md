@@ -7,7 +7,7 @@ production user-flow observations are dated 2026-10-02; subsequent staging and
 production database verification is dated separately below. The approved
 production code rollout and subsequent reviewer ingestion/retrieval/playback
 checks are recorded below. The approved recording, identity, domain and reviewer-login preparation are complete;
-remaining review-case checks, developer declarations, submission and publication
+remaining export/mobile visual checks, developer declarations, submission and publication
 are separate gates.
 
 ## Current release
@@ -45,10 +45,25 @@ All 40 installed private 0.4.2 skill/reference/template/tool/example files match
 the public source byte-for-byte. Live tests use that installed private package
 and the same production endpoint. The new public-draft app's direct workspace
 preview reported App unavailable; do not claim that separate app identity was
-end-user tested. P2–P5 and N1–N3 verification is continuing in the fresh review
-chat with cached evidence and a 20-unit additional retrieval cap. The five
-positive and three negative imported definitions are complete; definitions are
-not a claim that every check passed. The public trial remains disabled.
+end-user tested. Normal paths for P2–P5 and the three bounded negative requests were exercised
+in the fresh review chat. Seven source claims, six native vector cases,
+pin/reset/keyboard controls, card reveal/navigation, all six native slides and
+speaker notes, and correct/incorrect/ambiguous tutor replies passed. CSV and
+editable PowerPoint structures were checked independently. Source-ID validation
+was repaired for free; two free native-delivery timeouts were retained in the
+record and a subsequent unchanged-payload retry succeeded. Image search
+initially lost its handoff after a one-unit charge; same-account renewal and one
+explicit one-unit retry succeeded. Text/image cached repeats used no new units.
+The additional evidence tally is five of twenty approved units.
+
+Offline HTML visual inspection is blocked by this browser automation policy.
+A requested phone viewport override had no effect on the actual desktop window
+and was reset. Human export/narrow-window review remains pending. In-flight
+cancellation, every edge variant, native CSV download receipt, actual mobile
+host behavior and the new public-draft app identity were not independently
+verified in this run. The five positive/three negative definitions and successful
+normal paths do not imply that every declared check passed. The public trial
+remains disabled.
 
 ### Verified runtime checkpoint — October 9
 
@@ -255,7 +270,7 @@ to fail on external gates; do not fabricate facts to clear it.
 | CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
 | OAuth reconnect | Publisher custom connector reconnected October 2. On October 6 the reviewer connected and subsequently reconnected through the private plugin; a new production OAuth record and successful free list/status calls confirmed access. The single 2,000-unit grant, 507 units used and 1,493 balance were unchanged; no trial or API key | The prior reviewer connection remains active; this step did not test revocation or expired-token recovery. Saved portal-release connection remains separate |
 | Trial | Default-off code, unit tests, isolated migration CI, hosted staging checks, approved production schema migration and approved code rollout passed | Activation remains a separate decision; the flag is absent/default-off and no trial grants were issued |
-| Reviewer cases | Exactly five positive and three negative cases packaged | P3 now covers flashcards plus a teaching deck; P5 covers Playground. A full eight-case run against a saved portal release and dedicated account remains pending |
+| Reviewer cases | Five positive/three negative definitions imported; normal paths exercised with installed private 0.4.2 and dedicated original sample | Manual export/mobile review and unperformed edge variants remain gaps; new public-draft app runtime unverified |
 | Review recording | The approved narrated walkthrough is hosted unlisted at https://youtu.be/0fsteByQf9g and declared in the current manifest | Prepared outputs are disclosed; it is not a recording of fresh ingestion |
 | Submission/publication | Public draft, identity/domain verification, reviewer access and metadata scans prepared October 13 | Remaining case checks, legal attestations and explicit submission/publication authorization |
 
@@ -564,12 +579,12 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 
 ## Finish release in this order
 
-1. Complete and document the remaining P2–P5 and N1–N3 review checks using the
-   installed private 0.4.2 package, the same endpoint and the ready original
-   sample. Preserve the exact file comparison and the public-draft preview
-   limitation. Do not repeat indexing: the authorized single fresh job was used.
-   Retrieval remains bounded by the approved additional allowance; no purchase,
-   grant or public trial activation is authorized.
+1. Obtain the human visual review of the generated offline exports, including
+   a narrow window. Core normal paths were exercised on installed private
+   0.4.2; preserve the exact file comparison, repairs, unperformed edge checks
+   and public-draft preview limitation. Do not repeat indexing: the authorized
+   single fresh job was used. No more metered retrieval is needed; purchases,
+   grants and public trial activation are not authorized.
 2. Check the final portal metadata/MCP findings and the imported case inputs.
    Original fixture delivery, approved recording, individual/domain verification
    and secure reviewer credential entry are complete. Do not read or export
