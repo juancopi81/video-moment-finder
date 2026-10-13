@@ -123,10 +123,10 @@ allowance and had 2,080 units. No units or indexing jobs were consumed by that
 infrastructure rollout; subsequent demo/search usage is recorded separately.
 At that October 9 checkpoint, the single fresh job was reserved for review
 ingestion; it was subsequently used once in the October 13 test above. The portable archive has 46 files and six skills; the same
-private service record has 48 files including compatibility files. Public portal
-upload, complete saved-release cases, recording, developer verification,
-attestations, submission and publication remain gates. Public trials remain
-disabled. The following staging and 0.2.0 records describe earlier checkpoints.
+private service record had 48 files including compatibility files. Public portal
+upload, complete review cases, recording, developer verification, attestations,
+submission and publication remained gates at that historical checkpoint. The
+October 13 record above supersedes that status. Public trials remain disabled.
 
 An authorized **0.3.0 native workspace candidate** is deployed to isolated
 staging. Zero-balance consent and vector isolation were introduced at `ccdca31`;
