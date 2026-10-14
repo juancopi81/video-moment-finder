@@ -2,15 +2,35 @@
 
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
-release. Current submission checkpoint checked: 2026-10-13 (America/Bogota). Historical
+release. Current submission checkpoint checked: 2026-10-14 (America/Bogota). Historical
 production user-flow observations are dated 2026-10-02; subsequent staging and
 production database verification is dated separately below. The approved
 production code rollout and subsequent reviewer ingestion/retrieval/playback
-checks are recorded below. The approved recording, identity, domain and reviewer-login preparation are complete;
-remaining export/mobile visual checks, developer declarations, submission and publication
-are separate gates.
+checks are recorded below. Human export review, the approved recording, identity,
+domain, reviewer-login preparation and developer declarations are complete.
+Package 0.4.2 is **In review** and **Not published**. Independent mobile checks
+and public app identity runtime remain unverified; review approval and
+publication are separate from this completed submission.
 
 ## Current release
+
+### Submitted for review — October 14
+
+The developer accepted the exported examples for initial testing, personally
+checked all six current portal declarations, and explicitly approved submission
+of VMF 0.4.2 for review. The first Submit request returned a network error.
+A fresh portal read confirmed Not submitted before one bounded retry. The
+retry succeeded: the detail page showed **Metadata & skills version 0.4.2 · In
+review**, **Review status In review**, and **Publication Not published**.
+
+[Review status](https://platform.openai.com/plugins/manage/plugin_asdk_app_6ace850757d081919db5f2badf9c6a10)
+belongs to submission `appsub_6ace850757fc8191bda9419a3e8f1b5e`. No package
+replacement, production deployment, public trial activation or publication was
+performed. The submitted archive remains SHA-256
+`ba3e8d65d2cb10d8948f562c77460d200b3a112a5a508688c0e0813fcf6abacb`.
+The declaration panel's category note was non-blocking. Submission does not
+establish review approval or verify the separate public app's end-user runtime.
+Retain reviewer access and sample data while review is pending.
 
 ### Public-draft preparation — October 13
 
@@ -21,7 +41,7 @@ media capability. Identity and domain verification passed; the configured MCP
 connection discovered ten tools with no latest scan findings. All six skill
 checks passed. The publisher entered reviewer credentials directly in the
 secure portal; those credentials were not inspected or included in the package.
-The draft remains unsubmitted and unpublished, with two non-blocking metadata
+At that checkpoint the draft remained unsubmitted and unpublished, with two non-blocking metadata
 notes about category assessment and the automated privacy assessment.
 
 Approved unlisted walkthrough: https://youtu.be/0fsteByQf9g.
@@ -58,7 +78,8 @@ The additional evidence tally is five of twenty approved units.
 
 Offline HTML visual inspection is blocked by this browser automation policy.
 A requested phone viewport override had no effect on the actual desktop window
-and was reset. Human export/narrow-window review remains pending. In-flight
+and was reset. Human export/narrow-window review was pending at this checkpoint
+and was accepted on October 14. In-flight
 cancellation, every edge variant, native CSV download receipt, actual mobile
 host behavior and the new public-draft app identity were not independently
 verified in this run. The five positive/three negative definitions and successful
@@ -548,7 +569,7 @@ publisher selected **all platform-supported countries**, declared through
 `publication.countries: []`; the imported country selection was verified in
 the portal. Identity verification does not substitute for policy attestations.
 
-Official guidance was rechecked on 2026-10-06:
+Official guidance was rechecked on 2026-10-14:
 [submission requirements](https://developers.openai.com/plugins/deploy/submission)
 and [commerce guidance](https://developers.openai.com/plugins/plugin-guidelines#commerce-and-monetization).
 The earlier cloud destination-policy failure is resolved as an evidence gap.
@@ -558,8 +579,8 @@ digital-credit sales, upgrade promotion and checkout initiation through a plugin
 An informational entitlement explanation can be appropriate. Accordingly,
 `review.commerce` is false **for this plugin's actions**, with an explicit
 description of the separate website's paid credit/unit service and the inactive
-trial. This is a factual draft declaration, not a legal attestation or review
-approval. Check the complete deployed flow before submission.
+trial. This describes plugin behavior; the developer's separately completed
+portal attestations do not establish review approval.
 
 ## Anonymous listing URLs
 
@@ -579,19 +600,18 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 
 ## Finish release in this order
 
-1. Obtain the human visual review of the generated offline exports, including
-   a narrow window. Core normal paths were exercised on installed private
-   0.4.2; preserve the exact file comparison, repairs, unperformed edge checks
-   and public-draft preview limitation. Do not repeat indexing: the authorized
-   single fresh job was used. No more metered retrieval is needed; purchases,
-   grants and public trial activation are not authorized.
-2. Check the final portal metadata/MCP findings and the imported case inputs.
-   Original fixture delivery, approved recording, individual/domain verification
-   and secure reviewer credential entry are complete. Do not read or export
-   saved credentials. Preserve the documented source retention boundary.
-3. The authorized developer completes legal/policy attestations. Submit for
-   review only after explicit authorization; publication after review approval
-   is a separate action. Do not replay migrations or production deployments.
+1. Await the review decision for the submitted 0.4.2 package. Keep the dedicated
+   reviewer account and original sample data accessible. Do not read or export
+   saved credentials, replace the submitted bundle, or cancel review without
+   authorization.
+2. If feedback requires changes, reconcile it against the submitted version
+   before preparing a correction. Preserve the tested normal paths, exact
+   private/source comparison, repairs and unverified edge/mobile/public identity
+   checks. No additional indexing, grants or purchases are authorized here.
+3. After approval, verify the intended approved package and country targeting,
+   and test the public app identity when available. Obtain separate publication
+   authorization. Public trial activation remains separate; do not replay
+   migrations or production deployments.
 
 To retrieve the earlier cloud examples, ask that agent to attach its final
 real-lecture HTML files, CSV, tutor transcript and ZIP as downloadable chat files,
