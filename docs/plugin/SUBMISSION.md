@@ -2,24 +2,125 @@
 
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
-release. Package and guidance checked: 2026-10-06 (America/Bogota). Historical
+release. Current submission checkpoint checked: 2026-10-14 (America/Bogota). Historical
 production user-flow observations are dated 2026-10-02; subsequent staging and
 production database verification is dated separately below. The approved
 production code rollout and subsequent reviewer ingestion/retrieval/playback
-checks are recorded below. Live review cases, recording, saved portal-release
-validation and developer declarations remain gates.
+checks are recorded below. Human export review, the approved recording, identity,
+domain, reviewer-login preparation and developer declarations are complete.
+Package 0.4.2 is **In review** and **Not published**. Independent mobile checks
+and public app identity runtime remain unverified; review approval and
+publication are separate from this completed submission.
 
 ## Current release
 
-**0.4.2 is the new source/package candidate**, adding native text and reference-image
-moment search. Production/private 0.3.0 is the verified baseline below. Candidate
-image selection is local until explicit search; current API tariffs apply,
+### Submitted for review — October 14
+
+The developer accepted the exported examples for initial testing, personally
+checked all six current portal declarations, and explicitly approved submission
+of VMF 0.4.2 for review. The first Submit request returned a network error.
+A fresh portal read confirmed Not submitted before one bounded retry. The
+retry succeeded: the detail page showed **Metadata & skills version 0.4.2 · In
+review**, **Review status In review**, and **Publication Not published**.
+
+[Review status](https://platform.openai.com/plugins/manage/plugin_asdk_app_6ace850757d081919db5f2badf9c6a10)
+belongs to submission `appsub_6ace850757fc8191bda9419a3e8f1b5e`. No package
+replacement, production deployment, public trial activation or publication was
+performed. The submitted archive remains SHA-256
+`ba3e8d65d2cb10d8948f562c77460d200b3a112a5a508688c0e0813fcf6abacb`.
+The declaration panel's category note was non-blocking. Submission does not
+establish review approval or verify the separate public app's end-user runtime.
+Retain reviewer access and sample data while review is pending.
+
+### Public-draft preparation — October 13
+
+The portable 0.4.2 manifest now matches the uploaded public draft's verified
+publisher name, user-facing listing/release notes, approved demo URL and original
+upload fixture. It contains no reviewer password, personal app binding or signed
+media capability. Identity and domain verification passed; the configured MCP
+connection discovered ten tools with no latest scan findings. All six skill
+checks passed. The publisher entered reviewer credentials directly in the
+secure portal; those credentials were not inspected or included in the package.
+At that checkpoint the draft remained unsubmitted and unpublished, with two non-blocking metadata
+notes about category assessment and the automated privacy assessment.
+
+Approved unlisted walkthrough: https://youtu.be/0fsteByQf9g.
+The original synthetic 42-second reviewer upload fixture is available at
+[the public fixture release](https://github.com/juancopi81/video-moment-finder/releases/tag/vmf-review-fixtures-2026-10-13).
+P1 includes its attachment URL and an explicit download link. Anonymous download
+returned 464,090 bytes, SHA-256
+`c3b39b3f5bf4652042ed3e9ffd7ecc4f2eaa9ed659c8dd848869f8684e2627c4`.
+The file is original generated math material, not a third-party lecture.
+
+The reserved fresh production ingestion test completed through the native
+workspace: one original upload, one completed first-attempt job and one
+500-unit indexing charge. Playback loaded the 41.775976-second source, seeking
+to 28 seconds passed, and same-ID completion retry returned ready without a
+second charge. Transcript and frame controls succeeded. This does not establish
+cancel behavior during transfer or direct observation of every network header.
+The publisher manually selected the video and reference file because automated
+nested-frame file selection was unavailable in this in-app browser.
+
+All 40 installed private 0.4.2 skill/reference/template/tool/example files match
+the public source byte-for-byte. Live tests use that installed private package
+and the same production endpoint. The new public-draft app's direct workspace
+preview reported App unavailable; do not claim that separate app identity was
+end-user tested. Normal paths for P2–P5 and the three bounded negative requests were exercised
+in the fresh review chat. Seven source claims, six native vector cases,
+pin/reset/keyboard controls, card reveal/navigation, all six native slides and
+speaker notes, and correct/incorrect/ambiguous tutor replies passed. CSV and
+editable PowerPoint structures were checked independently. Source-ID validation
+was repaired for free; two free native-delivery timeouts were retained in the
+record and a subsequent unchanged-payload retry succeeded. Image search
+initially lost its handoff after a one-unit charge; same-account renewal and one
+explicit one-unit retry succeeded. Text/image cached repeats used no new units.
+The additional evidence tally is five of twenty approved units.
+
+Offline HTML visual inspection is blocked by this browser automation policy.
+A requested phone viewport override had no effect on the actual desktop window
+and was reset. Human export/narrow-window review was pending at this checkpoint
+and was accepted on October 14. In-flight
+cancellation, every edge variant, native CSV download receipt, actual mobile
+host behavior and the new public-draft app identity were not independently
+verified in this run. The five positive/three negative definitions and successful
+normal paths do not imply that every declared check passed. The public trial
+remains disabled.
+
+### Verified runtime checkpoint — October 9
+
+**0.4.2 is deployed to production and saved over the same private plugin**, adding
+native text and reference-image moment search. The production constraint
+migration preceded PR #97's merge at `7737afd`; main CI and API/worker/frontend
+deployments passed. Private read-back verified all 48 files and six skills,
+with identity, icons, starter prompts, publisher and MCP configuration preserved.
+Reviewer OAuth renewal, free library access and actual native text/image search
+passed. Text returned five visual/two spoken candidates; image returned five
+visual candidates. Cached reuse, source seeking to 37/40 seconds and inspected
+zero-vector thumbnails passed. A constrained image-only handoff reported
+missing image evidence; source-text fallback at 0:28 produced one grounded
+tutor question and waited without further metered retrieval. Image-only
+handoff grounding remains unverified. The normal Explain this moment action
+subsequently retrieved one permitted thumbnail at 0:40 and correctly read its
+heading/footer before explaining the zero-vector exception. Record that actual
+retrieval and cost, or use the verified transcript fallback; do not claim that
+cached workspace images alone reached the model.
+The four original learning views were reopened together in the current 0.4.2
+workspace with free `render_learning_view`; actual exported view data match
+the originals exactly. Guide citation seeking, card reveal/advance, computed
+Playground pin/change/zero-vector controls and slide navigation/notes passed
+again. One tutor question waits at 0:36; learner feedback remains to record.
+The ledger confirms six of ten approved existing units used and a 2,068 balance,
+with no new indexing, grants or trial enrollment. Public submission has not occurred.
+
+Image selection is local until explicit search; current API tariffs apply,
 similarity is a candidate, and clicked timestamps feed owned playback and chat.
 The app-only image tool expands consent to version 4 and requires the new
-`image_query` ledger migration before rollout. Do not record or submit 0.4.2 as
-live until migration/deployment/reconnect and real text/image host checks pass.
+`image_query` ledger migration before rollout. Migration/deployment and reviewer
+renewal, actual image search/source checks, the text-grounded chat fallback and
+visual explanation after one model-side thumbnail retrieval are verified.
+Recording must distinguish that retrieval from unverified image-only grounding.
 P2 now covers both searches within the existing five-positive/three-negative
-case set. Fresh ingestion remains reserved for P1 of the saved portal release.
+case set. The October 13 fresh P1 ingestion result is recorded above.
 See [Native Workspace](NATIVE_WORKSPACE.md) and [Walkthrough](WALKTHROUGH.md).
 
 Approved staging migration, deployment, consent and actual text/image search
@@ -39,10 +140,12 @@ metadata was refreshed and the local reference manually reselected. Actual
 then waited. Its constrained test conversation made no extra metered retrieval.
 Six of ten approved additional staging units have been used; balance is 75,
 with no new indexing, grants or trial. The subsequent documentation head
-`f4dd2b3` also passed both CI runs and deployed the identical bundle. Production/private
-plugin 0.3.0, public trial, submission and publication remain unchanged.
+`f4dd2b3` also passed both CI runs and deployed the identical bundle. At that
+staging checkpoint production/private plugin 0.3.0 was unchanged. The current
+production checkpoint above supersedes it; public trials, submission and
+publication remain unchanged.
 
-**0.3.0 is now deployed to production and saved over the same private plugin.**
+**Historical 0.3.0 production baseline:** it was deployed and saved over the same private plugin.
 After publisher review and explicit rollout approval on October 9, PR #95 was
 squash merged at `f1d04aa`; main CI and API/worker/frontend deployments passed.
 Ten free HTTP checks, current nine-tool consent, reconnect, free owned-library
@@ -51,14 +154,15 @@ Private R2 CORS now allows only the observed production ChatGPT origin in
 addition to the preserved website upload rule. Eight read-only storage checks
 passed; public access and retention were unchanged.
 
-The reviewer received the authorized once-only 600-unit test allowance and has
-2,080 units. No new units or indexing jobs were consumed during this rollout.
-The approved single fresh job is reserved for ingestion against the saved
-review release. The portable archive has 46 files and six skills; the same
-private service record has 48 files including compatibility files. Public portal
-upload, complete saved-release cases, recording, developer verification,
-attestations, submission and publication remain gates. Public trials remain
-disabled. The following staging and 0.2.0 records describe earlier checkpoints.
+At that baseline the reviewer received the authorized once-only 600-unit test
+allowance and had 2,080 units. No units or indexing jobs were consumed by that
+infrastructure rollout; subsequent demo/search usage is recorded separately.
+At that October 9 checkpoint, the single fresh job was reserved for review
+ingestion; it was subsequently used once in the October 13 test above. The portable archive has 46 files and six skills; the same
+private service record had 48 files including compatibility files. Public portal
+upload, complete review cases, recording, developer verification, attestations,
+submission and publication remained gates at that historical checkpoint. The
+October 13 record above supersedes that status. Public trials remain disabled.
 
 An authorized **0.3.0 native workspace candidate** is deployed to isolated
 staging. Zero-balance consent and vector isolation were introduced at `ccdca31`;
@@ -144,11 +248,12 @@ For the current portable package:
 ```sh
 uv run python -m unittest discover -s scripts/plugin -p 'test_*.py'
 uv run python scripts/plugin/build_package.py
-uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.3.0.zip
+uv run python scripts/plugin/validate_package.py dist/video-moment-finder-0.4.2.zip
 ```
 
-Current 0.3.0 ZIP SHA-256:
-`4165b93edb382ad9271c930cf8156a0a58150c0291301adbec09ed685771ca19`.
+Current 0.4.2 public-submission ZIP SHA-256:
+`ba3e8d65d2cb10d8948f562c77460d200b3a112a5a508688c0e0813fcf6abacb`.
+The normalized source build matches the uploaded final archive exactly.
 
 The private review collection is `docs/private/vmf-learning/review-0.2.0/index.html`.
 Its companion ZIP is `dist/vmf-private-review-0.2.0.zip`. They include the real
@@ -169,7 +274,7 @@ that structure and passes the portable archive contract. This is portable JSON
 Schema validation, not OpenAI's submission validator. `--submission` continues
 to fail on external gates; do not fabricate facts to clear it.
 
-## Evidence and remaining gates
+## Earlier development evidence and limits
 
 | Area | Verified result | Remaining boundary |
 | --- | --- | --- |
@@ -186,9 +291,9 @@ to fail on external gates; do not fabricate facts to clear it.
 | CSV | Eight rows, three fields, multiline evidence and quoting parsed successfully | In-app browser download event timed out; companion CSV is available. No external Anki import claimed |
 | OAuth reconnect | Publisher custom connector reconnected October 2. On October 6 the reviewer connected and subsequently reconnected through the private plugin; a new production OAuth record and successful free list/status calls confirmed access. The single 2,000-unit grant, 507 units used and 1,493 balance were unchanged; no trial or API key | The prior reviewer connection remains active; this step did not test revocation or expired-token recovery. Saved portal-release connection remains separate |
 | Trial | Default-off code, unit tests, isolated migration CI, hosted staging checks, approved production schema migration and approved code rollout passed | Activation remains a separate decision; the flag is absent/default-off and no trial grants were issued |
-| Reviewer cases | Exactly five positive and three negative cases packaged | P3 now covers flashcards plus a teaching deck; P5 covers Playground. A full eight-case run against a saved portal release and dedicated account remains pending |
-| Review recording | Original sample and a concrete walkthrough script are ready | No screen recording or reviewer-accessible recording URL exists |
-| Submission/publication | None performed | Developer/domain verification, account access, scans, legal attestations and release authorization remain |
+| Reviewer cases | Five positive/three negative definitions imported; normal paths exercised with installed private 0.4.2 and dedicated original sample | Manual export/mobile review and unperformed edge variants remain gaps; new public-draft app runtime unverified |
+| Review recording | The approved narrated walkthrough is hosted unlisted at https://youtu.be/0fsteByQf9g and declared in the current manifest | Prepared outputs are disclosed; it is not a recording of fresh ingestion |
+| Submission/publication | Public draft, identity/domain verification, reviewer access and metadata scans prepared October 13 | Remaining case checks, legal attestations and explicit submission/publication authorization |
 
 Private evidence lives under ignored `docs/private/vmf-learning/`:
 `second-lecture/` contains the real excerpt, outputs and claim audit;
@@ -458,13 +563,13 @@ new metered work; these observations are not a permanent price guarantee.
 
 ## Publisher and current policy
 
-The publisher selected **Juan Carlos Pineros** and **all platform-supported
-countries**. The manifest now has that author/developerName and explicitly sets
-`publication.countries: []`. The selected name is not proof of identity
-verification: the directory ultimately uses the verified identity chosen in the
-portal.
+The portal approved the individual identity **Juan Carlos Piñeros Pazmiño**
+on October 13. The manifest now uses that exact author/developerName. The
+publisher selected **all platform-supported countries**, declared through
+`publication.countries: []`; the imported country selection was verified in
+the portal. Identity verification does not substitute for policy attestations.
 
-Official guidance was rechecked on 2026-10-06:
+Official guidance was rechecked on 2026-10-14:
 [submission requirements](https://developers.openai.com/plugins/deploy/submission)
 and [commerce guidance](https://developers.openai.com/plugins/plugin-guidelines#commerce-and-monetization).
 The earlier cloud destination-policy failure is resolved as an evidence gap.
@@ -474,8 +579,8 @@ digital-credit sales, upgrade promotion and checkout initiation through a plugin
 An informational entitlement explanation can be appropriate. Accordingly,
 `review.commerce` is false **for this plugin's actions**, with an explicit
 description of the separate website's paid credit/unit service and the inactive
-trial. This is a factual draft declaration, not a legal attestation or review
-approval. Check the complete deployed flow before submission.
+trial. This describes plugin behavior; the developer's separately completed
+portal attestations do not establish review approval.
 
 ## Anonymous listing URLs
 
@@ -495,26 +600,18 @@ Tool annotations and the consent surface must describe actual deployed behavior.
 
 ## Finish release in this order
 
-1. Preserve the completed schema/code rollout in `docs/DEPLOYMENT.md`; do not
-   replay migrations. Trial activation is still a separate authorized action.
-2. Preserve the completed reviewer ingestion, retrieval, isolation and timestamp
-   playback, tutor, three negative-response and reviewer reconnect development
-   checks. Show the installed version in the intended host. Do not re-index
-   for rehearsal.
-3. Use the funded dedicated reviewer account and preserved original sample.
-   Retention is verified through the bounded review window; finish account access
-   instructions and durable delivery of the original ingestion fixture.
-   Sign-in must remain independent of the publisher's social login, mailbox,
-   phone or private network. Store credentials only in secure portal fields.
-4. Record the real walkthrough in `docs/plugin/WALKTHROUGH.md`, verify the
-   finished video and reviewer-accessible hosting, then add the actual
-   `review.demo_recording_url`. No recording API is exposed in this local
-   browser-control session; screenshots and a script do not substitute for it.
-5. Build and inspect the exact final ZIP, then perform the separately authorized
-   public-draft upload. Check imported fields, category, connection, five positive
-   and three negative cases, required scans, domain and developer verification.
-6. The authorized developer completes legal/policy attestations. Submit for
-   review only after authorization; publication after approval is another action.
+1. Await the review decision for the submitted 0.4.2 package. Keep the dedicated
+   reviewer account and original sample data accessible. Do not read or export
+   saved credentials, replace the submitted bundle, or cancel review without
+   authorization.
+2. If feedback requires changes, reconcile it against the submitted version
+   before preparing a correction. Preserve the tested normal paths, exact
+   private/source comparison, repairs and unverified edge/mobile/public identity
+   checks. No additional indexing, grants or purchases are authorized here.
+3. After approval, verify the intended approved package and country targeting,
+   and test the public app identity when available. Obtain separate publication
+   authorization. Public trial activation remains separate; do not replay
+   migrations or production deployments.
 
 To retrieve the earlier cloud examples, ask that agent to attach its final
 real-lecture HTML files, CSV, tutor transcript and ZIP as downloadable chat files,
