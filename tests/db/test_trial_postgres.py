@@ -2,6 +2,7 @@
 
 Opt in with VMF_RUN_POSTGRES_TESTS=1; requires a local Docker daemon and the
 postgres:16-alpine image. No ports are published and the container has no network.
+Queries default to service_role; only bootstrap and migrations use postgres.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ pytestmark = pytest.mark.skipif(
 )
 ROOT = Path(__file__).resolve().parents[2]
 DOCKER = ["docker", "--host=unix:///var/run/docker.sock"]
+GRANTS_MIGRATION = ROOT / "supabase/migrations/20261020120000_explicit_data_api_grants.sql"
 
 
 @pytest.fixture(scope="module")
@@ -33,9 +35,9 @@ def sql():
     started = docker("run", "--rm", "-d", "--network=none", "--name", name,
                      "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "postgres:16-alpine")
     assert started.returncode == 0, started.stderr
-    def execute(statement, *, check=True):
+    def execute(statement, *, check=True, role="service_role"):
         result = docker("exec", "-i", name, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1",
-                        "-U", "postgres", "-d", "postgres", input=statement)
+                        "-U", "postgres", "-d", "postgres", input=f"set role {role};\n{statement}")
         if check:
             assert result.returncode == 0, result.stderr
         return result.stdout.strip() if check else result
@@ -56,10 +58,11 @@ def sql():
           create function auth.jwt() returns jsonb language sql as
             $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
           grant usage on schema public, auth to anon, authenticated, service_role;
-        """)
+        """, role="postgres")
+        # Vanilla PostgreSQL supplies no automatic table grants to these roles,
+        # matching Supabase's new defaults. Only the migrations provide access.
         for path in sorted((ROOT / "supabase/migrations").glob("*.sql")):
-            execute(path.read_text())
-        execute("grant all on all tables in schema public to service_role; grant select on all tables in schema public to authenticated;")
+            execute(path.read_text(), role="postgres")
         yield execute
     finally:
         docker("rm", "-f", name)
@@ -89,14 +92,170 @@ def consume_sql(user, amount, request):
 
 def test_all_migrations_apply_and_trial_is_empty_by_default(sql):
     assert sql("select count(*) from public.api_trial_grants;") == "0"
-    # Both new migrations are safe to reapply before any grants are active.
+    # Billing and trial migrations remain safe to reapply before trial enrollment.
     for filename in ("20261002120000_api_billing_retry_safety.sql", "20261002121000_verified_account_trial.sql"):
-        sql((ROOT / "supabase/migrations" / filename).read_text())
+        sql((ROOT / "supabase/migrations" / filename).read_text(), role="postgres")
+
+
+def test_data_api_table_privileges(sql):
+    tables = set(sql("select tablename from pg_tables where schemaname = 'public';").splitlines())
+    crud = {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    expected = {(table, "service_role", privilege) for table in tables for privilege in crud}
+    for table in ("videos", "video_jobs", "video_transcript_segments"):
+        expected.update((table, "authenticated", privilege) for privilege in crud)
+    for table in (
+        "credits", "billing_credit_events", "video_access_overrides", "api_credits",
+        "api_billing_events", "api_usage_events", "api_trial_grants", "web_processing_charges",
+    ):
+        expected.add((table, "authenticated", "SELECT"))
+    expected.update(("api_keys", "authenticated", privilege) for privilege in ("SELECT", "DELETE"))
+    actual = sql("""
+      select t.tablename, r.role_name, p.privilege
+      from pg_tables t
+      cross join (values ('anon'), ('authenticated'), ('service_role')) r(role_name)
+      cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
+                         ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) p(privilege)
+      where t.schemaname = 'public'
+        and has_table_privilege(r.role_name, format('%I.%I', t.schemaname, t.tablename), p.privilege);
+    """)
+    assert {tuple(row.split("|")) for row in actual.splitlines()} == expected
+
+
+@pytest.mark.parametrize("operation", ("insert", "update", "delete", "truncate"))
+def test_authenticated_credits_are_read_only(sql, account, operation):
+    sql(f"insert into public.credits (user_id, balance) values ('{account}', 1), ('{account}other', 2);")
+    claims = f"set request.jwt.claims='{{\"sub\":\"{account}\"}}'; "
+    assert sql(claims + f"select balance from public.credits where user_id='{account}';",
+               role="authenticated") == "1"
+    assert sql(claims + f"select balance from public.credits where user_id='{account}other';",
+               role="authenticated") == ""
+    statements = {
+        "insert": f"insert into public.credits (user_id, balance) values ('{account}new', 1000000);",
+        "update": f"update public.credits set balance=1000000 where user_id='{account}';",
+        "delete": f"delete from public.credits where user_id='{account}';",
+        "truncate": "truncate public.credits;",
+    }
+    if operation == "insert":
+        claims = f"set request.jwt.claims='{{\"sub\":\"{account}new\"}}'; "
+    # Roll back even if a write unexpectedly succeeds, preserving shared fixtures.
+    denied = sql("begin; " + claims + statements[operation] + " rollback;",
+                 role="authenticated", check=False)
+    assert denied.returncode != 0
+    assert "permission denied for table credits" in denied.stderr
+    assert sql(f"select balance from public.credits where user_id='{account}';") == "1"
+    assert sql(f"update public.credits set balance=3 where user_id='{account}' returning balance;") == "3"
+
+
+def test_grants_migration_revokes_legacy_authenticated_credit_writes(sql):
+    privileges = """
+      select has_table_privilege('authenticated', 'public.credits', 'SELECT'),
+             has_table_privilege('authenticated', 'public.credits',
+                                 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER');
+    """
+    snapshots = sql(
+        "begin; grant all on public.credits to authenticated; "
+        + privileges + GRANTS_MIGRATION.read_text() + privileges
+        + GRANTS_MIGRATION.read_text() + privileges + "rollback;",
+        role="postgres",
+    ).splitlines()
+    assert snapshots == ["t|t", "t|f", "t|f"]
+
+
+def test_grants_migration_preserves_other_access_and_is_idempotent(sql, account):
+    sql(grant_sql(account))
+    enrollment = f"select row_to_json(g) from public.api_trial_grants g where user_id = '{account}';"
+    snapshot = """
+      select jsonb_agg(jsonb_build_array(c.relname, c.relacl, c.relrowsecurity, c.relforcerowsecurity,
+        (select jsonb_agg(to_jsonb(p) order by p.policyname) from pg_policies p
+         where p.schemaname = n.nspname and p.tablename = c.relname)) order by c.relname)
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind in ('r', 'p');
+      select jsonb_agg(to_jsonb(d) order by d.oid) from pg_default_acl d;
+    """ + enrollment + balance_sql(account)
+    # Preserve unrelated legacy grants and defaults. Compare policies and account
+    # data inside the transaction, before cleanup rolls back the test changes.
+    snapshots = sql(
+        "begin; grant select, insert, update, delete on public.videos "
+        "to anon, authenticated, service_role; "
+        "alter default privileges for role postgres in schema public "
+        "grant select, insert, update, delete on tables to anon, authenticated, service_role; "
+        + snapshot + GRANTS_MIGRATION.read_text() * 2 + snapshot + "rollback;",
+        role="postgres",
+    ).splitlines()
+    assert len(snapshots) == 8
+    assert snapshots[:4] == snapshots[4:]
+
+
+def test_grants_migration_does_not_expose_unlisted_or_future_tables(sql):
+    assert sql(
+        "begin; create table public.grants_unlisted_before (id integer); "
+        + GRANTS_MIGRATION.read_text() + """
+        create table public.grants_unlisted_after (id integer);
+        select bool_and(not has_table_privilege(r.role_name, t.table_name,
+                         'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))
+        from (values ('anon'), ('authenticated'), ('service_role')) r(role_name)
+        cross join (values ('public.grants_unlisted_before'),
+                           ('public.grants_unlisted_after')) t(table_name);
+        rollback;
+        """,
+        role="postgres",
+    ) == "t"
+
+
+def test_authenticated_video_writes_stay_scoped_to_owner(sql, account):
+    own_video, own_insert = video_sql(account)
+    other_video, other_insert = video_sql(account + "other")
+    claims = f"set request.jwt.claims='{{\"sub\":\"{account}\"}}'; "
+    sql(claims + own_insert, role="authenticated")
+    sql(other_insert)
+    ids = f"id in ('{own_video}', '{other_video}')"
+    assert sql(claims + f"select id from public.videos where {ids};", role="authenticated") == own_video
+    assert sql(claims + f"update public.videos set error_message='owner update' where {ids} returning id;",
+               role="authenticated") == own_video
+    _, forbidden_insert = video_sql(account + "other")
+    denied = sql(claims + forbidden_insert, role="authenticated", check=False)
+    assert "row-level security" in denied.stderr
+    assert sql(claims + f"delete from public.videos where {ids} returning id;", role="authenticated") == own_video
+    assert sql(f"select error_message is null from public.videos where id='{other_video}';") == "t"
+
+
+@pytest.mark.parametrize(("table", "columns", "values"), [
+    ("video_jobs", "video_id", "'{video}'"),
+    ("video_transcript_segments", "video_id, segment_index, start_s, end_s, text", "'{video}', 0, 0, 1, 'hello'"),
+])
+def test_authenticated_child_table_access_checks_video_owner(sql, account, table, columns, values):
+    own_video, own_insert = video_sql(account)
+    other_video, other_insert = video_sql(account + "other")
+    sql(own_insert + other_insert)
+    claims = f"set request.jwt.claims='{{\"sub\":\"{account}\"}}'; "
+    sql(f"insert into public.{table} ({columns}) values ({values.format(video=other_video)});")
+    sql(claims + f"insert into public.{table} ({columns}) values ({values.format(video=own_video)});",
+        role="authenticated")
+    ids = f"video_id in ('{own_video}', '{other_video}')"
+    assert sql(claims + f"select video_id from public.{table} where {ids};", role="authenticated") == own_video
+    denied = sql(claims + f"update public.{table} set video_id='{other_video}' where video_id='{own_video}';",
+                 role="authenticated", check=False)
+    assert "row-level security" in denied.stderr
+    assert sql(claims + f"delete from public.{table} where {ids} returning video_id;",
+               role="authenticated") == own_video
+    assert sql(f"select count(*) from public.{table} where video_id='{other_video}';") == "1"
+
+
+@pytest.mark.parametrize(("role", "statement"), [
+    ("anon", "select * from public.videos;"),
+    ("authenticated", "select * from public.analytics_events;"),
+    ("authenticated", "select * from public.mcp_oauth_access_tokens;"),
+    ("authenticated", "insert into public.api_credits (user_id, balance) values ('forbidden', 100);"),
+    ("authenticated", "update public.api_keys set name = 'forbidden';"),
+])
+def test_client_roles_cannot_access_backend_tables_or_write_read_only_fields(sql, role, statement):
+    denied = sql(statement, role=role, check=False)
+    assert "permission denied for table" in denied.stderr
 
 
 def test_image_search_migration_debit_refund_and_existing_events(sql, account):
     migration = ROOT / "supabase/migrations/20261009120000_image_search_api_usage.sql"
-    sql(migration.read_text())  # The production migration may be safely reapplied.
+    sql(migration.read_text(), role="postgres")  # The migration may be safely reapplied.
     sql(grant_sql(account))
     request = "image_" + uuid4().hex
     assert sql(f"select allowed from public.consume_api_units('{account}', null, 'image_query', 1, null, '{request}');") == "t"

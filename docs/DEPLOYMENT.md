@@ -56,6 +56,31 @@ unchanged. Inspect a new host's actual origin before extending this policy.
 
 Use those files as the canonical variable list and defaults. This document explains **where each group belongs**.
 
+## Data API Table Grants
+
+Supabase stops automatically granting Data API access to new `public` tables on
+October 30, 2026. Existing tables retain their grants. VMF's API and worker use
+the Data API with the server secret key, so `service_role` still needs explicit
+table privileges in addition to RLS.
+
+`supabase/migrations/20261020120000_explicit_data_api_grants.sql` grants backend
+CRUD on the 18 current application tables. Authenticated owners have CRUD on
+videos, jobs and transcript segments; SELECT/DELETE on API keys; SELECT on
+credits and owner-visible billing, trial and entitlement records. Authenticated
+credit access is read-only: the migration revokes legacy table privileges,
+including writes and TRUNCATE, and restores SELECT. Credit writes remain with
+`service_role`, even though older RLS policies permit owner writes. It adds no
+anonymous grants and preserves other grants, RLS policies, data and default
+privileges. It covers a full replay of the historical migrations on a fresh
+database. Applying it to a hosted environment is a separate operator
+step; implementation and isolated tests do not apply production migrations.
+
+Every future migration that creates a `public` table must include explicit grants
+for the operations each role needs, alongside RLS and policies. Use named tables
+and review owner access individually. Do not rely on automatic or schema-wide
+grants. Under the new defaults, unlisted and future tables remain inaccessible
+until granted.
+
 ## Environment Ownership by Service
 
 | Variable Group | API Service | Worker Service | Frontend | Notes |
@@ -356,8 +381,14 @@ uv run pytest -q tests/billing/test_trial.py tests/api/test_api_trial.py
 ```
 
 The PostgreSQL tests create a disposable container with no network and no exposed
-ports, apply every repository migration, exercise real concurrent transactions,
-and remove the container. Ordinary tests skip this opt-in integration suite.
+ports and apply every repository migration without automatic table grants.
+Application queries run as `service_role`; role-privilege checks, owner-isolation
+checks and real concurrent transactions verify migration-provided access.
+Migration replay also checks that legacy authenticated credit writes are revoked,
+other grants and RLS remain unchanged, and unlisted/future tables gain no access.
+Authenticated credit reads remain owner-scoped; insert, update, delete and
+truncate are denied, while backend writes still work. The container is removed
+after testing. Ordinary tests skip this opt-in integration suite.
 
 ## Quick Troubleshooting
 
