@@ -1,6 +1,6 @@
 -- Explicit Data API access for fresh databases after Supabase's default-grant
--- change on October 30, 2026. Grant only on named application tables; preserve
--- existing privileges, RLS policies, data, and defaults for future objects.
+-- change on October 30, 2026. Grant only on named application tables. Preserve
+-- RLS policies, data and defaults; revoke authenticated credit writes below.
 
 grant select, insert, update, delete on table
   public.videos,
@@ -23,15 +23,19 @@ grant select, insert, update, delete on table
   public.web_processing_charges
 to service_role;
 
--- Preserve the owner operations already defined by the RLS policies.
+-- Credit balances are backend-managed. Clear legacy table privileges (including
+-- TRUNCATE) before restoring owner SELECT access below; RLS alone allows writes.
+revoke all on table public.credits from authenticated;
+
+-- Preserve the other owner operations already defined by the RLS policies.
 grant select, insert, update, delete on table
   public.videos,
-  public.credits,
   public.video_jobs,
   public.video_transcript_segments
 to authenticated;
 
 grant select on table
+  public.credits,
   public.billing_credit_events,
   public.video_access_overrides,
   public.api_credits,

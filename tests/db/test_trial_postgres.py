@@ -101,10 +101,10 @@ def test_data_api_table_privileges(sql):
     tables = set(sql("select tablename from pg_tables where schemaname = 'public';").splitlines())
     crud = {"SELECT", "INSERT", "UPDATE", "DELETE"}
     expected = {(table, "service_role", privilege) for table in tables for privilege in crud}
-    for table in ("videos", "credits", "video_jobs", "video_transcript_segments"):
+    for table in ("videos", "video_jobs", "video_transcript_segments"):
         expected.update((table, "authenticated", privilege) for privilege in crud)
     for table in (
-        "billing_credit_events", "video_access_overrides", "api_credits",
+        "credits", "billing_credit_events", "video_access_overrides", "api_credits",
         "api_billing_events", "api_usage_events", "api_trial_grants", "web_processing_charges",
     ):
         expected.add((table, "authenticated", "SELECT"))
@@ -121,7 +121,47 @@ def test_data_api_table_privileges(sql):
     assert {tuple(row.split("|")) for row in actual.splitlines()} == expected
 
 
-def test_grants_migration_preserves_existing_access_and_is_idempotent(sql, account):
+@pytest.mark.parametrize("operation", ("insert", "update", "delete", "truncate"))
+def test_authenticated_credits_are_read_only(sql, account, operation):
+    sql(f"insert into public.credits (user_id, balance) values ('{account}', 1), ('{account}other', 2);")
+    claims = f"set request.jwt.claims='{{\"sub\":\"{account}\"}}'; "
+    assert sql(claims + f"select balance from public.credits where user_id='{account}';",
+               role="authenticated") == "1"
+    assert sql(claims + f"select balance from public.credits where user_id='{account}other';",
+               role="authenticated") == ""
+    statements = {
+        "insert": f"insert into public.credits (user_id, balance) values ('{account}new', 1000000);",
+        "update": f"update public.credits set balance=1000000 where user_id='{account}';",
+        "delete": f"delete from public.credits where user_id='{account}';",
+        "truncate": "truncate public.credits;",
+    }
+    if operation == "insert":
+        claims = f"set request.jwt.claims='{{\"sub\":\"{account}new\"}}'; "
+    # Roll back even if a write unexpectedly succeeds, preserving shared fixtures.
+    denied = sql("begin; " + claims + statements[operation] + " rollback;",
+                 role="authenticated", check=False)
+    assert denied.returncode != 0
+    assert "permission denied for table credits" in denied.stderr
+    assert sql(f"select balance from public.credits where user_id='{account}';") == "1"
+    assert sql(f"update public.credits set balance=3 where user_id='{account}' returning balance;") == "3"
+
+
+def test_grants_migration_revokes_legacy_authenticated_credit_writes(sql):
+    privileges = """
+      select has_table_privilege('authenticated', 'public.credits', 'SELECT'),
+             has_table_privilege('authenticated', 'public.credits',
+                                 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER');
+    """
+    snapshots = sql(
+        "begin; grant all on public.credits to authenticated; "
+        + privileges + GRANTS_MIGRATION.read_text() + privileges
+        + GRANTS_MIGRATION.read_text() + privileges + "rollback;",
+        role="postgres",
+    ).splitlines()
+    assert snapshots == ["t|t", "t|f", "t|f"]
+
+
+def test_grants_migration_preserves_other_access_and_is_idempotent(sql, account):
     sql(grant_sql(account))
     enrollment = f"select row_to_json(g) from public.api_trial_grants g where user_id = '{account}';"
     snapshot = """
@@ -132,7 +172,7 @@ def test_grants_migration_preserves_existing_access_and_is_idempotent(sql, accou
       where n.nspname = 'public' and c.relkind in ('r', 'p');
       select jsonb_agg(to_jsonb(d) order by d.oid) from pg_default_acl d;
     """ + enrollment + balance_sql(account)
-    # Model legacy grants and defaults. Compare access, policies and account
+    # Preserve unrelated legacy grants and defaults. Compare policies and account
     # data inside the transaction, before cleanup rolls back the test changes.
     snapshots = sql(
         "begin; grant select, insert, update, delete on public.videos "

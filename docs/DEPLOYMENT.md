@@ -64,12 +64,15 @@ the Data API with the server secret key, so `service_role` still needs explicit
 table privileges in addition to RLS.
 
 `supabase/migrations/20261020120000_explicit_data_api_grants.sql` grants backend
-CRUD on the 18 current application tables. Authenticated grants follow existing
-owner policies: CRUD on videos, credits, jobs and transcript segments;
-SELECT/DELETE on API keys; SELECT on owner-visible billing, trial and entitlement
-records. It adds no anonymous grants and preserves existing grants, RLS policies,
-data and default privileges. It covers a full replay of the historical migrations
-on a fresh database. Applying it to a hosted environment is a separate operator
+CRUD on the 18 current application tables. Authenticated owners have CRUD on
+videos, jobs and transcript segments; SELECT/DELETE on API keys; SELECT on
+credits and owner-visible billing, trial and entitlement records. Authenticated
+credit access is read-only: the migration revokes legacy table privileges,
+including writes and TRUNCATE, and restores SELECT. Credit writes remain with
+`service_role`, even though older RLS policies permit owner writes. It adds no
+anonymous grants and preserves other grants, RLS policies, data and default
+privileges. It covers a full replay of the historical migrations on a fresh
+database. Applying it to a hosted environment is a separate operator
 step; implementation and isolated tests do not apply production migrations.
 
 Every future migration that creates a `public` table must include explicit grants
@@ -381,9 +384,11 @@ The PostgreSQL tests create a disposable container with no network and no expose
 ports and apply every repository migration without automatic table grants.
 Application queries run as `service_role`; role-privilege checks, owner-isolation
 checks and real concurrent transactions verify migration-provided access.
-Migration replay also checks that existing grants and RLS remain unchanged and
-unlisted/future tables gain no access. The container is removed after testing.
-Ordinary tests skip this opt-in integration suite.
+Migration replay also checks that legacy authenticated credit writes are revoked,
+other grants and RLS remain unchanged, and unlisted/future tables gain no access.
+Authenticated credit reads remain owner-scoped; insert, update, delete and
+truncate are denied, while backend writes still work. The container is removed
+after testing. Ordinary tests skip this opt-in integration suite.
 
 ## Quick Troubleshooting
 
