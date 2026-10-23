@@ -797,3 +797,67 @@ def test_process_visual_branch_maps_qdrant_payload_limit_to_non_retriable(
             qdrant_config=object(),
             r2_config=None,
         )
+
+
+@pytest.mark.parametrize("frame_count", [0, 42, 128, 1211])
+def test_visual_branch_bounds_remote_calls_and_preserves_frame_alignment(
+    monkeypatch, tmp_path: Path, frame_count: int,
+) -> None:
+    """A long upload must not put every frame under one Modal deadline."""
+    frames = []
+    for index in range(frame_count):
+        path = tmp_path / f"frame_{index}.jpg"
+        path.write_bytes(str(index).encode())
+        frames.append(FrameInfo(index=index, timestamp_s=float(index), path=path))
+    calls = []
+    stored = []
+
+    class Embedder:
+        def remote(self, images, *, batch_size):
+            # Model the per-invocation budget at the actual worker/Modal seam.
+            if len(images) > 64:
+                raise TimeoutError("one invocation exceeded its processing budget")
+            assert batch_size == 8
+            calls.append(images)
+            return [[float(image)] for image in images]
+
+    class Pipeline:
+        def __init__(self, *args):
+            pass
+
+        def process_video(self, video_id, frames, embeddings):
+            stored.extend(zip(frames, embeddings))
+            return ProcessingResult(video_id, len(frames), len(embeddings), 0)
+
+    monkeypatch.setattr(processing_module, "extract_frames", lambda *a, **kw: frames)
+    monkeypatch.setattr(processing_module, "get_embedding_modal_function", lambda _: Embedder())
+    monkeypatch.setattr(processing_module, "StoragePipeline", Pipeline)
+    result = processing_module._process_visual_branch(
+        video_id="long-upload", video_path=tmp_path / "video.mp4",
+        frames_dir=tmp_path, thumbnails_dir=tmp_path,
+        qdrant_config=object(), r2_config=None,
+    )
+    assert result.frames_processed == frame_count
+    assert len(calls) == (frame_count + 63) // 64
+    assert [(frame.index, vector) for frame, vector in stored] == [
+        (index, [float(index)]) for index in range(frame_count)
+    ]
+
+
+def test_visual_branch_rejects_incomplete_chunk_before_storing(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    path = tmp_path / "frame.jpg"
+    path.write_bytes(b"frame")
+    monkeypatch.setattr(processing_module, "extract_frames", lambda *a, **kw: [
+        FrameInfo(index=0, timestamp_s=0, path=path),
+    ])
+    monkeypatch.setattr(processing_module, "get_embedding_modal_function", lambda _: SimpleNamespace(
+        remote=lambda *a, **kw: [],
+    ))
+    monkeypatch.setattr(processing_module, "StoragePipeline", lambda *a: pytest.fail("partial result stored"))
+    with pytest.raises(processing_module.VideoProcessingError, match="embedding count"):
+        processing_module._process_visual_branch(
+            video_id="upload", video_path=path, frames_dir=tmp_path,
+            thumbnails_dir=tmp_path, qdrant_config=object(), r2_config=None,
+        )

@@ -5,7 +5,9 @@ import argparse
 import os
 import socket
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from threading import Event, Thread
 
 import httpx
 from postgrest.exceptions import APIError
@@ -27,6 +29,7 @@ from src.db.supabase import (
     get_video,
     list_stale_processing_video_jobs,
     requeue_video_job,
+    refresh_video_job_lock,
     reset_client,
     update_video_status,
 )
@@ -41,6 +44,37 @@ DEFAULT_DB_RETRY_BASE_DELAY_S = 1.0
 DEFAULT_DB_RETRY_MAX_DELAY_S = 30.0
 STALE_RECOVERY_BATCH_LIMIT = 25
 TRANSIENT_DB_HTTP_CODES = {"429", "500", "502", "503", "504"}
+
+
+class VideoJobLeaseLost(RuntimeError):
+    """A processing attempt no longer owns its queue row."""
+
+
+@contextmanager
+def _processing_lease(job: VideoJobRecord, worker_id: str, *, interval_s: float = 60):
+    """Keep long jobs alive without increasing the crash-recovery timeout."""
+    stop = Event()
+    lost = Event()
+
+    def heartbeat() -> None:
+        while not stop.wait(interval_s):
+            try:
+                if not refresh_video_job_lock(job.id, worker_id, job.attempt_count):
+                    lost.set()
+                    return
+            except Exception:
+                # A transport failure is not proof that ownership changed.
+                logger.warning("Job lock refresh failed job_id=%s", job.id, exc_info=True)
+
+    thread = Thread(target=heartbeat, name=f"job-heartbeat:{job.id}", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+        if lost.is_set():
+            raise VideoJobLeaseLost(f"Processing lock lost for job {job.id}")
 
 
 def _default_worker_id() -> str:
@@ -99,7 +133,12 @@ def _recover_stale_jobs(
                 "Job exceeded max attempts during stale-lock recovery: "
                 f"{job.attempt_count}/{max_attempts}"
             )
-            complete_video_job(job.id, "failed", error_message=error_message)
+            completed = complete_video_job(
+                job.id, "failed", error_message=error_message,
+                expected_locked_at=job.locked_at,
+            )
+            if completed is None:
+                continue
             if video is not None:
                 update_video_status(video.id, "failed", error_message=error_message)
             logger.warning(
@@ -121,7 +160,10 @@ def _recover_stale_jobs(
             )
             continue
 
-        requeued = requeue_video_job(job.id, error_message="Recovered stale processing lock")
+        requeued = requeue_video_job(
+            job.id, error_message="Recovered stale processing lock",
+            expected_locked_at=job.locked_at,
+        )
         if requeued is None:
             logger.warning(
                 "Stale job no longer recoverable job_id=%s video_id=%s",
@@ -159,6 +201,7 @@ def _process_claimed_job(
     *,
     worker_id: str,
     max_attempts: int,
+    heartbeat_interval_s: float = 60,
 ) -> bool:
     video = get_video(job.video_id)
     if video is None:
@@ -186,7 +229,11 @@ def _process_claimed_job(
     update_video_status(video.id, "processing")
 
     try:
-        process_video(video)
+        with _processing_lease(job, worker_id, interval_s=heartbeat_interval_s):
+            process_video(video)
+    except VideoJobLeaseLost:
+        logger.warning("Leaving changed job untouched job_id=%s", job.id)
+        return False
     except VideoValidationError as exc:
         # Validation failures are expected user/input rejections, so we keep them
         # out of Sentry and handle them as terminal queue outcomes only.
@@ -337,6 +384,7 @@ def run_once(
         job,
         worker_id=current_worker_id,
         max_attempts=max_attempts,
+        heartbeat_interval_s=min(60, stale_lock_timeout_s / 3),
     )
     return True
 

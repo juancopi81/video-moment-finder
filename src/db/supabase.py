@@ -917,14 +917,29 @@ def claim_next_video_job(worker_id: str) -> VideoJobRecord | None:
     return None
 
 
+def refresh_video_job_lock(job_id: str, worker_id: str, attempt_count: int) -> bool:
+    """Refresh only the processing attempt still owned by this worker."""
+    result = (
+        get_client().table("video_jobs")
+        .update({"locked_at": _utc_now_iso()})
+        .eq("id", job_id)
+        .eq("status", "processing")
+        .eq("worker_id", worker_id)
+        .eq("attempt_count", attempt_count)
+        .execute()
+    )
+    return bool(result.data)
+
+
 def requeue_video_job(
     job_id: str,
     *,
     error_message: str | None = None,
+    expected_locked_at: str | None = None,
 ) -> VideoJobRecord | None:
     """Move a processing job back to queued state for retry."""
     client = get_client()
-    result = (
+    query = (
         client.table("video_jobs")
         .update(
             {
@@ -938,8 +953,10 @@ def requeue_video_job(
         )
         .eq("id", job_id)
         .eq("status", "processing")
-        .execute()
     )
+    if expected_locked_at is not None:
+        query = query.eq("locked_at", expected_locked_at)
+    result = query.execute()
     if not result.data:
         return None
     return _row_to_video_job(result.data[0])
@@ -950,6 +967,7 @@ def complete_video_job(
     status: TerminalJobStatus,
     *,
     error_message: str | None = None,
+    expected_locked_at: str | None = None,
 ) -> VideoJobRecord | None:
     """Mark a processing job as completed or failed."""
     client = get_client()
@@ -963,13 +981,15 @@ def complete_video_job(
     else:
         data["error_message"] = None
 
-    result = (
+    query = (
         client.table("video_jobs")
         .update(data)
         .eq("id", job_id)
         .eq("status", "processing")
-        .execute()
     )
+    if expected_locked_at is not None:
+        query = query.eq("locked_at", expected_locked_at)
+    result = query.execute()
     if not result.data:
         return None
     return _row_to_video_job(result.data[0])
