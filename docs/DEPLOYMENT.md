@@ -163,8 +163,11 @@ window rather than a total processing deadline. Transient heartbeat errors are
 logged and retried at the next interval; a confirmed ownership change prevents
 the old attempt from marking the job ready or requeuing it.
 
-This worker-only change needs no Modal redeployment or database migration.
-It bounds work per invocation rather than total processing cost or duration.
+These worker behavior changes need no Modal redeployment or database migration.
+A merge to the linked Git branch can rebuild both Railway services when watch
+paths are unrestricted; check deployment triggers and verify API health and
+reviewer access after rollout. It bounds work per invocation rather than total
+processing cost or duration.
 A failed attempt still restarts the video; chunks are not durable checkpoints.
 Validate a representative long upload in staging before production rollout,
 including vectors, thumbnails, transcript access, unchanged reviewer fixtures
