@@ -145,6 +145,35 @@ authentication, schema, and query failures remain visible. Restarting the worker
 does not resolve an upstream database outage; these retries keep it running until
 requests succeed again.
 
+## Long Upload Processing
+
+The worker sends at most 64 sampled frames per call to the existing
+`embed_images_in_batches` Modal function. Its GPU micro-batch remains 8; a
+micro-batch does not reset Modal's 1,800-second invocation deadline. Calls run
+sequentially, preserving frame order, full-resolution input, and 1 fps sampling.
+Each completed chunk logs cumulative frame progress and duration. Storage runs
+only after all chunks return the expected number of embeddings.
+
+While processing, the worker refreshes its queue lock every 60 seconds (or one
+third of `VIDEO_JOB_STALE_LOCK_TIMEOUT_S`, whichever is shorter). Refreshes match
+both worker ID and attempt count. Stale recovery compares the observed lock
+timestamp before requeuing or failing a job, so a concurrent heartbeat wins.
+The default 2,700-second stale timeout remains a crash/heartbeat-loss recovery
+window rather than a total processing deadline. Transient heartbeat errors are
+logged and retried at the next interval; a confirmed ownership change prevents
+the old attempt from marking the job ready or requeuing it.
+
+These worker behavior changes need no Modal redeployment or database migration.
+A merge to the linked Git branch can rebuild both Railway services when watch
+paths are unrestricted; check deployment triggers and verify API health and
+reviewer access after rollout. It bounds work per invocation rather than total
+processing cost or duration.
+A failed attempt still restarts the video; chunks are not durable checkpoints.
+Validate a representative long upload in staging before production rollout,
+including vectors, thumbnails, transcript access, unchanged reviewer fixtures
+and allowance, and bounded provider spend. Local regression tests establish call
+boundaries and alignment, not GPU throughput or a guaranteed video-length limit.
+
 ## Modal Deploy-Time Variables
 
 - `MODAL_QUERY_EMBED_MIN_CONTAINERS` and `MODAL_QUERY_EMBED_MAX_CONTAINERS` are optional deploy-time knobs for the Modal app.

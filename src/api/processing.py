@@ -24,7 +24,7 @@ from src.pipeline.orchestrator import ProcessingResult, StoragePipeline
 from src.storage.config import QdrantConfig, R2Config, StorageConfigError
 from src.storage.qdrant import QdrantPayloadTooLargeError
 from src.storage.r2 import R2Store, R2StorageError
-from src.utils.logging import get_logger
+from src.utils.logging import Timer, get_logger
 from src.video.audio import AudioExtractionError, extract_audio_track
 from src.video.download import download_video
 from src.video.frames import extract_frames
@@ -42,6 +42,8 @@ from src.video.transcripts import (
 logger = get_logger(__name__)
 
 FRAME_SAMPLE_FPS = 1.0
+# This bounds a remote invocation, independently of the GPU micro-batch size.
+IMAGE_EMBED_FRAMES_PER_CALL = 64
 
 
 def _max_frames_for_duration_limit() -> int:
@@ -217,13 +219,30 @@ def _process_visual_branch(
         frames = frames[:max_frames]
 
     logger.info("Embedding %d frames via Modal", len(frames))
-    frame_bytes = [frame.path.read_bytes() for frame in frames]
-    embed_fn = get_embedding_modal_function(EMBED_IMAGES_FUNCTION_NAME)
-    try:
-        embeddings = embed_fn.remote(frame_bytes, batch_size=8)
-    except Exception as exc:
-        raise_modal_auth_error(exc, context="embedding video frames")
-        raise
+    embeddings: list[list[float]] = []
+    if frames:
+        embed_fn = get_embedding_modal_function(EMBED_IMAGES_FUNCTION_NAME)
+        for start in range(0, len(frames), IMAGE_EMBED_FRAMES_PER_CALL):
+            chunk = frames[start:start + IMAGE_EMBED_FRAMES_PER_CALL]
+            # Read only this invocation's images; keep original frame order and
+            # sampling quality while giving each chunk its own Modal deadline.
+            frame_bytes = [frame.path.read_bytes() for frame in chunk]
+            try:
+                with Timer("Embed frame chunk", logger, level="debug") as timer:
+                    chunk_embeddings = embed_fn.remote(frame_bytes, batch_size=8)
+            except Exception as exc:
+                raise_modal_auth_error(exc, context="embedding video frames")
+                raise
+            if len(chunk_embeddings) != len(chunk):
+                raise VideoProcessingError(
+                    f"Frame chunk embedding count {len(chunk_embeddings)} "
+                    f"does not match frame count {len(chunk)}"
+                )
+            embeddings.extend(chunk_embeddings)
+            logger.info(
+                "Embedded frames %d/%d for video_id=%s chunk_duration_s=%.2f",
+                len(embeddings), len(frames), video_id, timer.elapsed or 0.0,
+            )
     logger.info("Got %d embeddings", len(embeddings))
 
     logger.info("Storing embeddings and thumbnails for video_id=%s", video_id)

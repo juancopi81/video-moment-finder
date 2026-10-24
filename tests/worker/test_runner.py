@@ -8,6 +8,7 @@ import pytest
 from src.api.processing import NonRetriableVideoProcessingError, VideoValidationError
 from src.db.supabase import VideoJobRecord, VideoRecord
 from src.worker.runner import run_forever, run_once
+from src.worker import runner
 
 
 def _job(
@@ -57,6 +58,109 @@ def _default_no_stale_jobs(monkeypatch) -> None:
         lambda stale_before_iso, limit=25: [],
     )
     monkeypatch.setattr("src.worker.runner.track", lambda *args, **kwargs: None)
+
+
+def test_processing_lease_refreshes_while_work_is_blocked_and_stops(monkeypatch):
+    from threading import Event
+
+    refreshed = Event()
+    calls = []
+
+    def refresh(job_id, worker_id, attempt_count):
+        calls.append((job_id, worker_id, attempt_count))
+        refreshed.set()
+        return True
+
+    monkeypatch.setattr(runner, "refresh_video_job_lock", refresh, raising=False)
+    with runner._processing_lease(_job("video"), "worker:test", interval_s=0.01):
+        assert refreshed.wait(1), "long processing did not refresh its lock"
+    count = len(calls)
+    refreshed.clear()
+    assert not refreshed.wait(0.03), "heartbeat continued after processing exited"
+    assert len(calls) == count
+    assert all(call == ("job_123", "worker:test", 1) for call in calls)
+
+
+def test_processing_lease_retries_transient_heartbeat_failure(monkeypatch):
+    from threading import Event
+
+    refreshed = Event()
+    calls = []
+
+    def refresh(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise httpx.ConnectError("temporary transport failure")
+        refreshed.set()
+        return True
+
+    monkeypatch.setattr(runner, "refresh_video_job_lock", refresh, raising=False)
+    with runner._processing_lease(_job("video"), "worker:test", interval_s=0.01):
+        assert refreshed.wait(1)
+    assert len(calls) >= 2
+
+
+def test_processing_lease_rejects_lost_ownership(monkeypatch):
+    from threading import Event
+
+    lost = Event()
+
+    def refresh(*args):
+        lost.set()
+        return False
+
+    monkeypatch.setattr(runner, "refresh_video_job_lock", refresh, raising=False)
+    with pytest.raises(runner.VideoJobLeaseLost):
+        with runner._processing_lease(_job("video"), "worker:test", interval_s=0.01):
+            assert lost.wait(1)
+
+
+def test_runner_does_not_complete_or_requeue_an_attempt_that_lost_its_lock(monkeypatch):
+    from threading import Event
+
+    lost = Event()
+    statuses = []
+    monkeypatch.setattr(runner, "get_video", lambda _: _video("video"))
+    monkeypatch.setattr(runner, "update_video_status", lambda *a, **kw: statuses.append(a[1]))
+    monkeypatch.setattr(runner, "refresh_video_job_lock", lambda *a: lost.set() or False)
+    monkeypatch.setattr(runner, "process_video", lambda _: lost.wait(1) or pytest.fail("no heartbeat"))
+    monkeypatch.setattr(runner, "complete_video_job", lambda *a, **kw: pytest.fail("other attempt completed"))
+    monkeypatch.setattr(runner, "requeue_video_job", lambda *a, **kw: pytest.fail("other attempt requeued"))
+    assert runner._process_claimed_job(
+        _job("video"), worker_id="worker:test", max_attempts=3, heartbeat_interval_s=0.01,
+    ) is False
+    assert statuses == ["processing"]
+
+
+def test_processing_failure_stops_the_heartbeat(monkeypatch):
+    from threading import Event
+
+    refreshed = Event()
+    monkeypatch.setattr(runner, "refresh_video_job_lock", lambda *a: refreshed.set() or True)
+    with pytest.raises(ValueError, match="processing failure"):
+        with runner._processing_lease(_job("video"), "worker:test", interval_s=0.01):
+            assert refreshed.wait(1)
+            raise ValueError("processing failure")
+    refreshed.clear()
+    assert not refreshed.wait(0.03)
+
+
+@pytest.mark.parametrize("attempt_count", [1, 3])
+def test_stale_recovery_does_not_overwrite_a_refreshed_job(monkeypatch, attempt_count):
+    job = _job("video", attempt_count=attempt_count)
+    guarded = []
+    monkeypatch.setattr(runner, "list_stale_processing_video_jobs", lambda *a, **kw: [job])
+    monkeypatch.setattr(runner, "get_video", lambda _: _video("video"))
+
+    def changed(*args, expected_locked_at=None, **kwargs):
+        guarded.append(expected_locked_at)
+        return None
+
+    monkeypatch.setattr(runner, "requeue_video_job", changed)
+    monkeypatch.setattr(runner, "complete_video_job", changed)
+    monkeypatch.setattr(runner, "update_video_status", lambda *a, **kw: pytest.fail("live job overwritten"))
+    assert runner._recover_stale_jobs(worker_id="other", max_attempts=3, stale_lock_timeout_s=2700) == 0
+    assert guarded == [job.locked_at]
 
 
 def test_run_once_returns_false_when_queue_empty(monkeypatch) -> None:
@@ -362,7 +466,7 @@ def test_run_once_recovers_stale_lock_and_processes_next_job(monkeypatch) -> Non
     )
     monkeypatch.setattr(
         "src.worker.runner.requeue_video_job",
-        lambda job_id, error_message=None: requeues.append((job_id, error_message))
+        lambda job_id, error_message=None, expected_locked_at=None: requeues.append((job_id, error_message))
         or _job(
             "video_stale",
             job_id=job_id,
@@ -386,7 +490,7 @@ def test_run_once_recovers_stale_lock_and_processes_next_job(monkeypatch) -> Non
     )
     monkeypatch.setattr(
         "src.worker.runner.complete_video_job",
-        lambda job_id, status, error_message=None: completions.append(
+        lambda job_id, status, error_message=None, expected_locked_at=None: completions.append(
             (job_id, status, error_message)
         )
         or _job("video_fresh", job_id=job_id, status="completed", attempt_count=2),
@@ -423,7 +527,7 @@ def test_run_once_marks_stale_job_terminal_after_retry_cap(monkeypatch) -> None:
     monkeypatch.setattr("src.worker.runner.claim_next_video_job", lambda worker_id: None)
     monkeypatch.setattr(
         "src.worker.runner.requeue_video_job",
-        lambda job_id, error_message=None: requeues.append((job_id, error_message)),
+        lambda job_id, error_message=None, expected_locked_at=None: requeues.append((job_id, error_message)),
     )
     monkeypatch.setattr("src.worker.runner.get_video", lambda video_id: _video(video_id))
     monkeypatch.setattr(
@@ -435,7 +539,7 @@ def test_run_once_marks_stale_job_terminal_after_retry_cap(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "src.worker.runner.complete_video_job",
-        lambda job_id, status, error_message=None: completions.append(
+        lambda job_id, status, error_message=None, expected_locked_at=None: completions.append(
             (job_id, status, error_message)
         )
         or _job("video_stale", job_id=job_id, status="failed", attempt_count=3),
