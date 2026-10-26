@@ -109,6 +109,34 @@ Authoring rules:
 | 2026-10-09 | Phase 7 | Final production search and grounded chat fallback | Search/source/text handoff passed; recording next | Original reference preview rendered locally without a debit. One image query returned five visual candidates; selected 40-second source playback and the retrieved zero-vector canvas thumbnail passed. Repeated image search reused cache. The constrained image-only handoff identified the timestamp but reported missing image evidence and declined to invent a question; image-only grounding remains unverified. Loading the transcript once and selecting its 28-second passage produced one correct tutor question then waited, with no extra chat retrieval. Read-only ledger confirms five of ten authorized existing units, balance 2,069, and unchanged videos/jobs/grants/trial state. Recording instructions now use this verified source-text fallback. Saved portal-release cases, recording, declarations, trial activation, submission and publication remain gates. |
 | 2026-10-09 | Phase 7 | Visual explanation and current-version recording preparation | Grounded retrieval and four restored views passed; recording next | A second no-retrieval image probe still reported missing image content; its root cause remains unknown. The normal Explain this moment action retrieved one permitted thumbnail at 40 seconds, correctly read its heading/footer and explained the zero-vector exception. Actual exported guide, six cards, computed Playground and five-slide presentation were reopened together with free render_learning_view in the current 0.4.2 workspace and match the saved originals exactly. Citation seek-to-36, card reveal/advance, pin/change/zero-vector computations and slide notes/navigation passed again; one tutor question waits at 36 seconds. Read-only ledger records six of ten approved existing units, balance 2,068 and no new indexing/grants/trial. Search caches and original reference are retained for recording. Cached-image-only grounding, recorded learner feedback, the actual walkthrough video and saved portal-release cases remain unverified; no public submission or publication. |
 
+## Weekly acquisition experiment — October 26, 2026
+
+Prepared for review; not deployed. Live `/how-it-works` still denied transcript
+search, and The Geeks Club repeated that explanation while linking to it.
+`/support` also described only visual retrieval. The implementation and README
+support transcript-aware text search.
+
+- Hypothesis: an accurate explanation of visual and spoken search helps owners
+  of educational videos understand which queries to try.
+- Change: correct the existing how-it-works page and matching support answer,
+  including their descriptions and review dates; retain transcript-availability
+  and accuracy limits. No new acquisition page or distribution campaign.
+- Primary metric: unique `/how-it-works` visitors reaching `upload_complete`
+  within 14 days of that pageview, excluding verified internal/test accounts.
+- Guardrails: submitted → ready → positive-result search for linked accounts,
+  terminal processing failures, and correct public-page rendering. Keep API
+  activity and unresolved internal/ICP classifications separate.
+- Observation: at least 28 complete days after an approved deployment and 10
+  eligible page visitors, with a full 14-day follow-up per entrant. Smaller
+  cohorts remain inconclusive; this is an observational correction, not a
+  randomized conversion test.
+- Rollback: remove or correct any newly unsupported claim immediately; revert
+  the affected change for a rendering or navigation regression. Do not restore
+  the known false claim that text search excludes transcripts.
+- Validation: focused frontend lint and the full workflow passed (754 backend
+  tests; 34 PostgreSQL tests skipped locally; 14 package, four workspace core,
+  25 browser, and seven frontend checks; production build).
+
 ## Blockers
 
 - Best-effort YouTube URL import can be blocked from cloud IP ranges; direct upload is the supported reliable path.
