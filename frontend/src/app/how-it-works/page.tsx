@@ -5,12 +5,12 @@ import { howItWorksArticleSchema } from "@/lib/schema";
 export const metadata: Metadata = {
   title: "How it works",
   description:
-    "The Video Moment Finder pipeline: frame extraction, Qwen3-VL multimodal embeddings, vector similarity search, and where the approach works best (and where it doesn't).",
+    "How Video Moment Finder searches visual moments and spoken explanations in your own videos, with timestamped results and practical accuracy limits.",
   alternates: { canonical: "/how-it-works" },
 };
 
 const DATE_PUBLISHED = "2026-04-21";
-const DATE_MODIFIED = "2026-07-09";
+const DATE_MODIFIED = "2026-10-26";
 
 const pipelineSteps = [
   {
@@ -18,35 +18,35 @@ const pipelineSteps = [
     body: "You upload a video file up to 90 minutes, or import a YouTube video you own. The upload is direct-to-storage via a presigned URL, so the file never round-trips through our API servers.",
   },
   {
-    title: "2. Frame extraction",
-    body: "A background worker samples frames from the video at a fixed cadence. We deliberately sample frames rather than run on raw video — it keeps the embedding cost bounded by video length and makes every hit in search map back to a timestamp you can jump to.",
+    title: "2. Frames and speech",
+    body: "A background worker samples video frames and transcribes speech in direct uploads. YouTube imports use available subtitle or automatic caption tracks; they do not fall back to speech transcription when captions are missing. Frames and transcript segments keep their source timestamps.",
   },
   {
     title: "3. Multimodal embeddings (Qwen3-VL)",
-    body: "Each frame is passed through Qwen3-VL, an open-weight vision-language model. The output is a dense vector that encodes what is visually and semantically present in the frame — objects, actions, scene composition, on-screen text — in a space that text queries also live in.",
+    body: "Qwen3-VL represents sampled frames as vectors for visual search. Available transcript segments are also embedded for semantic search, so a text query can retrieve a spoken explanation as well as something shown on screen.",
   },
   {
     title: "4. Vector store",
-    body: "Frame vectors are written to a vector database with row-level security scoping them to your account. A single video becomes a few hundred to a few thousand vectors depending on length.",
+    body: "Visual and transcript vectors are stored for retrieval. Before searching, the API checks that you can access the selected video, then restricts retrieval to that video.",
   },
   {
     title: "5. Search",
-    body: "At query time, your text prompt or example image is embedded with the same model into the same space. We run an approximate nearest-neighbor search, rank the top matches, and return each hit with its timestamp and thumbnail.",
+    body: "A text query searches visual moments and available transcripts, returning timestamped visual and spoken matches. Spoken matches include transcript text; visual matches include thumbnails. An example-image query searches visual frames only. Review the source moment to check whether it answers your question.",
   },
 ];
 
 const tradeoffs = [
   {
     title: "Best at",
-    body: 'Describing visually distinctive moments in plain language ("a whiteboard with a diagram of a neural network", "two people shaking hands outdoors"), or showing an example frame and asking for moments that look like it.',
+    body: 'Finding a teaching, demo, or explanation moment in a lesson, webinar, or workshop you own. Try "a whiteboard diagram of a neural network" for a visual moment or "where I explain the difference between training and inference" for a spoken explanation.',
   },
   {
     title: "Weaker at",
-    body: "Precise dialogue recall or anything that hinges on spoken words — a transcript search will usually beat us there. Very subtle visual distinctions that look nearly identical across many frames also degrade precision.",
+    body: "Speech retrieval depends on the available transcript: transcription errors, unclear audio, or missing YouTube captions can hide relevant passages. Visually similar frames and details between sampled frames can also be missed. Results are candidates, not guaranteed exact matches.",
   },
   {
     title: "Practical tips",
-    body: "Describe what would be on screen, not what is being said. If the first query misses, rephrase rather than going deeper into the results — a better query beats a longer scroll. For image-based search, pick an example frame that is visually clean and unambiguous.",
+    body: "Describe what you showed or explained, then review both visual and spoken results. If the first query misses, try a more specific topic or rephrase it. For image search, choose a clear example of the scene you want; an image query does not search spoken words.",
   },
 ];
 
@@ -62,18 +62,17 @@ export default function HowItWorksPage() {
 
       <h1 className="font-heading text-4xl font-bold">How it works</h1>
       <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400">
-        From an uploaded video to a searchable index of visual moments, in five
-        steps.
+        Find the teaching, demo, or explanation moment in your own video using
+        visual and transcript search.
       </p>
 
       <section className="mt-10 space-y-5 text-zinc-700 dark:text-zinc-300">
         <p>
-          Video Moment Finder treats video as a sequence of images, not a
-          sequence of words. Instead of indexing transcripts and searching
-          dialogue, we index the frames themselves with a multimodal
-          vision-language model, then search that visual space directly. If you
-          can describe what the moment would <em>look like</em> — or show an
-          example frame — you can find it.
+          Video Moment Finder indexes sampled frames and available speech
+          transcripts. Select a video from your private library and describe
+          what you showed or said: text search can return both visual moments
+          and spoken passages with timestamps. You can also upload an example
+          image to find visually similar frames.
         </p>
       </section>
 

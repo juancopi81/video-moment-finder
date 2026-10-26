@@ -26,8 +26,8 @@ const faqs = [
   {
     question: "How does the search work?",
     answer:
-      "We use AI-powered semantic search. When you process a video, we extract frames and create embeddings using a multimodal AI model (Qwen3-VL). When you search, your text query or uploaded example image is embedded into the same space to find the most visually relevant moments.",
-    dateModified: FAQ_BASELINE_REVIEWED,
+      "Text queries search sampled visual frames and available speech transcripts in the selected video, returning timestamped visual and spoken matches. Direct uploads use speech transcription; YouTube imports use available subtitle or automatic caption tracks, without transcription fallback when captions are missing. You can describe what you showed or explained. Example-image queries search visual frames only. Transcript errors and visually similar scenes can affect accuracy, so check the source moment.",
+    dateModified: "2026-10-26",
   },
   {
     question: "How long does processing take?",

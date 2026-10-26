@@ -120,7 +120,7 @@ export function howItWorksArticleSchema({
     "@id": `${url}#article`,
     headline: "How Video Moment Finder works",
     description:
-      "Technical overview of the Video Moment Finder pipeline: frame extraction, Qwen3-VL multimodal embeddings, vector search, and accuracy tradeoffs.",
+      "How Video Moment Finder indexes sampled frames and available speech transcripts for timestamped visual and spoken search, with practical accuracy limits.",
     url,
     mainEntityOfPage: url,
     inLanguage: "en",
