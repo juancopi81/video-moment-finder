@@ -3,14 +3,15 @@
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
 release. Current submission checkpoint checked: 2026-11-12 (America/Bogota).
-The portal shows package **0.4.2 · Changes required · Not published**. The
+The portal now has package **0.4.3 · Draft · Not submitted · Not published**. The
 rejection reports unnecessary personal identifiers and incomplete privacy
-disclosures; the portal provides no field-level MCP findings. Earlier successful
+disclosures for 0.4.2; that view provided no field-level MCP findings. Earlier successful
 checks below are historical and do not establish current review readiness.
 
 Candidate **0.4.3** minimizes tool results and errors, expands privacy disclosures,
-and adds transport-level privacy regression coverage. It is prepared locally;
-it has not been deployed, uploaded, or resubmitted. The source, validation results,
+and adds transport-level privacy regression coverage. PR #103 is merged and
+deployed to production API, worker and frontend, and the ZIP is uploaded to the
+existing submission. It has not been resubmitted. The source, validation results,
 reviewer explanation and remaining gates are in [Privacy review](PRIVACY_REVIEW.md).
 
 ## 0.4.3 resubmission candidate — November 12
@@ -21,14 +22,19 @@ response/error/privacy checks; the category is `Education & Research`. The
 workspace revision is `ui://vmf/workspace/0.4.3.html`, with unchanged consent
 version 4. The ZIP contains no private app binding or reviewer credentials.
 
-The portal's existing MCP connection is authorized and domain-verified. Six
-skill checks passed for the rejected 0.4.2 package; that does not certify 0.4.3.
-MCP rescan controls are disabled in the rejected view. Deploy API and privacy
-page, upload the exact candidate, then refresh/reconnect and scan the preserved
-connection. Run the updated cases against that saved version and have the
-developer complete the current attestations before resubmission. See the
-privacy review's explicit unverified items, including provider retention and
-actual mobile-host coverage. No trial or balance changes are included.
+The portal's existing MCP app and endpoint are preserved. OAuth was refreshed;
+metadata, all six skills and the new ten-tool MCP scan passed with no findings.
+The scanned template is `ui://vmf/workspace/0.4.3.html`, with the expected exact
+storage origin. Reviewer information was saved in the secure portal without
+copying credentials to this repository. Run the remaining actual-host cases
+against that saved version, and have the developer complete the current
+attestations before resubmission. The retention audit confirmed current Modal,
+Sentry, Supabase, Railway and Vercel plans; it identified processor input/output
+retention that requires a policy correction. See the privacy review for live
+checks, provider backup/purge uncertainties and actual mobile-host coverage.
+No trial grant or tariff changed. The authorized live fixture reached ready,
+produced a transcript, and a same-ID completion retry added no charge or job
+attempt. Total live usage was 509 existing API units; 1,046 remain.
 
 ## Historical submission and release checks
 

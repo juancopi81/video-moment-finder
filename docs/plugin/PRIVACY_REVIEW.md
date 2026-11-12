@@ -1,9 +1,13 @@
 # Privacy and resubmission review — 0.4.3
 
-Checked November 12, 2026. This is a prepared candidate, not a deployed or
-resubmitted release. The portal shows 0.4.2, Changes required, Not published;
-the associated MCP connection is authorized and domain-verified. No field-level
-MCP findings are available in that view. The rejection email identifies
+Checked November 12, 2026. PR #103 was merged and deployed to production API,
+worker and frontend at `04242b8b87299ed596bee9331aaf1aa9ffddf855`;
+main-branch CI passed. Package 0.4.3 is now saved as an unsubmitted portal draft.
+The existing MCP app and endpoint were preserved and OAuth was refreshed for a
+new discovery scan. Metadata and all six skill checks passed with no findings;
+the refreshed MCP scan found all ten tools and the 0.4.3 workspace resource,
+also with no findings. Review information was saved in the secure portal.
+The rejection email identifies
 unnecessary personal identifiers and undisclosed data categories, so the fixes
 address every identified response path rather than assume one exact field was
 the reviewer's concern.
@@ -27,7 +31,7 @@ available; source material itself can contain personal information.
 | `upload_video` start | New video ID, temporary PUT URL, method/expiry, next step and instruction to omit Authorization | A necessary exception: the client needs this capability to transfer the explicitly requested file. No account ID or internal storage-key field. |
 | `upload_video` complete | Action/video ID and minimal completed video record | No signed URL, record-creation time or stored exception. |
 | `search_video` | Video ID/status and matches containing timestamp, similarity score, visual/spoken source and requested transcript excerpt | Signed thumbnail URLs only in `_meta.vmf.search_thumbnails`; no source playback URL or nested diagnostic fields. |
-| `search_video_image` | Same allowlisted match contract; tool is workspace-only | Same metadata-only thumbnails. Query image is transient, not added to the library. |
+| `search_video_image` | Same allowlisted match contract; tool is workspace-only | Same metadata-only thumbnails. Query image is not added to VMF's library; processor retention below still applies. |
 | `get_transcript` | Requested source ID, language and timestamped transcript segments | Explicit transcript projection; no account, authorization or processing records. |
 | `get_frames` | Source ID, resolution/fallback, requested/actual times, image-index mapping and actual images | Failed frames use a fixed message. No ffmpeg exception, filesystem path or signed URL in errors. |
 
@@ -67,13 +71,44 @@ Retention evidence is deliberately separate from credential expiry:
   deletion cutoff and `default_period_deletes=false`. A default/plan window of
   twelve months is not proof that events are automatically deleted; the policy
   does not claim it is.
-- Provider logs/backups: exact current deletion windows have not been verified.
-  The policy describes provider-controlled retention without inventing a VMF
-  guarantee. Confirm these settings before making any more specific promise.
+- Modal: the signed-in workspace is on Starter. VMF calls Functions with
+  `.remote` for text/image queries, video frames, audio and transcript text.
+  [Modal documents](https://modal.com/docs/guide/security) up to seven days of
+  input/output retention before deletion, one day for Starter app/container
+  logs, and account-lifetime app/function/container metadata. Corrected the
+  inaccurate claim that search images are not retained after a request:
+  VMF does not save them in its library, database or object store, but processor
+  retention still applies. This code does not configure customer-data Volumes
+  or memory snapshots.
+- Sentry: the signed-in subscription is Developer. Its current
+  [error-event retention](https://docs.sentry.io/security-legal-pii/security/data-retention-periods/)
+  is thirty days; an event keeps the retention applicable at ingestion. VMF
+  sends exception events, not Sentry session replays or tracing spans.
+- Railway: production deployment metadata confirms Hobby and no attached
+  volumes. The [seven-day log window](https://docs.railway.com/observability/logs)
+  is not proof of permanent deletion: Railway says upgrading restores older
+  logs. No underlying purge deadline was verified.
+- Vercel: the signed-in team is Hobby. All four project deployment-retention
+  selectors are thirty days. [Deployment retention](https://vercel.com/docs/deployment-retention)
+  includes exceptions for active/recent deployments and a recovery period;
+  it is not a thirty-day guarantee for all copies. Runtime logs have a one-hour
+  [Hobby window](https://vercel.com/docs/limits); build logs are tied to retained
+  deployments. Neither establishes a backup-purge deadline.
+- Supabase: the signed-in organization is Free. The production backup screen
+  says the plan does not include project backups and exposes no backup list.
+  Official pages conflict: the [Free backup FAQ](https://supabase.com/kb/faqs/platform/free-plan-backups)
+  says no automatic backups, while the [upgrade FAQ](https://supabase.com/kb/troubleshooting/will-backups-be-accessible-from-the-dashboard-immediately-after-upgrading-to-a-paid-plan-hXY4rs)
+  says up to seven daily copies may exist for Free projects. Therefore absence
+  of a dashboard backup is not evidence of no provider copies. Free API/database
+  logs have a [one-day window](https://supabase.com/pricing). Read-only SQL
+  confirmed `pg_cron` is not installed; repository inspection found no scheduled
+  account/OAuth/usage/billing deletion. Other provider backup copies and physical
+  purge timing remain unverified; the policy does not invent a deadline.
 
-No deletion jobs, retention settings, grants, balances or credentials are changed.
-The owner still needs to review the policy as the service operator before it is
-published. Unlinking in a host is not represented as deleting the account or as
+No deletion jobs, retention settings or grants are changed. Live checks consume
+existing API units, and the submission connection uses normal OAuth renewal.
+The operator must still review the final policy before resubmission.
+Unlinking in a host is not represented as deleting the account or as
 proof that every outstanding credential was revoked.
 
 ## Other submission checks
@@ -94,8 +129,12 @@ webhook documentation](https://docs.lemonsqueezy.com/help/webhooks/example-paylo
 - Archive validation checks required public URLs, metadata lengths, icons,
   categories, commerce boolean, case counts, unsafe paths, secrets and private
   app bindings. It validates the actual ZIP but does not replace a portal scan.
-- Developer, support, privacy and terms pages are reachable. The deployed
-  privacy page still needs replacement by this candidate.
+- Developer, support, privacy and terms pages are reachable. PR #103's policy
+  is deployed; the processor-retention follow-up corrects its remaining
+  search-image retention claim in both Privacy and Terms. The Terms also stop
+  claiming ownership of third-party AI models: the production code uses
+  [Qwen's model](https://huggingface.co/Qwen/Qwen3-VL-Embedding-2B) and
+  [OpenAI Whisper](https://github.com/openai/whisper/blob/main/LICENSE).
 - The existing [0.4.2 demo](https://youtu.be/0fsteByQf9g) loads and plays; duration
   is approximately 153 seconds. This was checked in the signed-in browser, not
   an anonymous session. It remains an earlier-version walkthrough, not evidence
@@ -127,16 +166,46 @@ Candidate archive: `dist/video-moment-finder-0.4.3.zip`; its matching
 `.validation.json` records the SHA-256 and inventory. The generated report
 intentionally leaves submission eligibility false until online gates are met.
 
+## Production verification — November 12
+
+Ten public HTTP checks passed, including OAuth discovery, the protected MCP
+endpoint and public review URLs. Actual connected-tool calls passed for library,
+allowance, status, source refresh, text search, transcript, high-resolution frame
+and prepared learning-view responses. Their model-visible records omit account
+identifiers, trial history, creation timestamps, signed media URLs and backend
+diagnostics. A malformed source identifier returned a safe `INVALID_ARGUMENT`
+without echoing the input. The connector does not expose component-only metadata
+to this client; its complete contract remains covered by transport regression
+tests, not claimed as an inspected live component payload.
+
+R2 object headers confirm the retained reviewer copy expires January 4, 2027,
+and the October 13 ordinary copy expires November 12, 2026 at 20:32 UTC. Bucket
+lifecycle/CORS listing returned `AccessDenied` under the existing object-scoped
+credential; no permission expansion was attempted. The retained reviewer copy
+has the same two-segment transcript. Ordinary source expiry must not be confused
+with the reviewer exception. No lifecycle rule or object expiry was changed.
+
+The developer authorized one original synthetic fixture upload. Its 464,090
+bytes matched the published SHA-256; PUT returned HTTP 200 without forwarding
+Authorization. Completion returned the minimized nested record; queued,
+processing and ready states were observed, and the new transcript has two
+segments. After verifying the deployed idempotent path, the same-video
+completion retry returned ready without another charge or job attempt. The
+ledger records one 500-unit indexing charge, nine retrieval units and a final
+balance of 1,046. The existing reviewer account connection remains usable.
+This does not establish native-host file transfer or actual mobile-host
+behavior. Those checks and final developer attestations remain separate gates.
+
 ## Deployment and final review gates
 
-1. Review and merge the patch; deploy the API/workspace and frontend policy.
-   No migration, new dependency or change to consent, tariffs or CSP is needed.
-2. Refresh tool metadata. Verify the 0.4.3 resource and inspect complete success
-   and error responses against the table above, including component metadata.
+1. PR #103 is merged and deployed. Deploy the processor-retention correction;
+   no migration or change to consent, tariffs or CSP is needed.
+2. The refreshed scan confirms `ui://vmf/workspace/0.4.3.html`, the exact R2
+   CSP origin and ten tools. Inspect live component-only success/error metadata.
    Check owned playback and text/image search after the response change.
-3. Upload the candidate to the existing rejected submission, preserving the
-   configured MCP app. Run the new scans; the rejected view currently disables
-   rescan and diagnostic-download controls. Read back the saved version.
+3. Package 0.4.3 is saved in the existing submission with the same MCP app;
+   new metadata, six skill and MCP scans all passed. The draft remains
+   unsubmitted and unpublished; final developer declarations remain unchecked.
 4. Reconfirm reviewer login, adequate existing units, retained ready sample and
    attachment access. Run updated P1–P5/N1–N3 on the exact saved release, including
    upload retry/cancel and actual desktop/mobile host behavior. Replace or
