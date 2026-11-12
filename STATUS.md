@@ -115,9 +115,12 @@ Merged PR #103 at `04242b8` after passing CI; Railway API/worker and Vercel
 production deployments succeeded. Ten public HTTP checks and connected-tool
 privacy/search/transcript/frame/view checks passed. Uploaded 0.4.3 to the
 existing submission as an unsubmitted draft and refreshed its MCP OAuth access
-for discovery. The developer authorized one synthetic fixture upload; transfer,
-minimized completion response and one 500-unit ledger charge were verified.
-Processing readiness and final portal checks are tracked in
+for discovery. Metadata, six skills and the ten-tool MCP scan passed without
+findings; the scanned resource is 0.4.3. The developer authorized one synthetic
+fixture upload; transfer, ready status, transcript and same-video completion
+retry passed with one 500-unit charge and one processing attempt. Nine retrieval
+units bring total live usage to 509, leaving 1,046. Saved secure reviewer details;
+final declarations and remaining actual-host checks are tracked in
 `docs/plugin/PRIVACY_REVIEW.md`.
 
 Verified provider plans and Vercel deployment-retention selectors. Modal's

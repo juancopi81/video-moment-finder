@@ -4,7 +4,10 @@ Checked November 12, 2026. PR #103 was merged and deployed to production API,
 worker and frontend at `04242b8b87299ed596bee9331aaf1aa9ffddf855`;
 main-branch CI passed. Package 0.4.3 is now saved as an unsubmitted portal draft.
 The existing MCP app and endpoint were preserved and OAuth was refreshed for a
-new discovery scan. The rejection email identifies
+new discovery scan. Metadata and all six skill checks passed with no findings;
+the refreshed MCP scan found all ten tools and the 0.4.3 workspace resource,
+also with no findings. Review information was saved in the secure portal.
+The rejection email identifies
 unnecessary personal identifiers and undisclosed data categories, so the fixes
 address every identified response path rather than assume one exact field was
 the reviewer's concern.
@@ -181,22 +184,25 @@ with the reviewer exception. No lifecycle rule or object expiry was changed.
 
 The developer authorized one original synthetic fixture upload. Its 464,090
 bytes matched the published SHA-256; PUT returned HTTP 200 without forwarding
-Authorization. Completion returned the minimized nested record and processing
-was observed. The ledger recorded exactly one 500-unit indexing charge, with
-1,047 units remaining after eight retrieval units. A duplicate-completion live
-probe was blocked by automatic approval review; local retry/idempotency checks
-passed. This does not establish native-host file transfer or actual mobile-host
+Authorization. Completion returned the minimized nested record; queued,
+processing and ready states were observed, and the new transcript has two
+segments. After verifying the deployed idempotent path, the same-video
+completion retry returned ready without another charge or job attempt. The
+ledger records one 500-unit indexing charge, nine retrieval units and a final
+balance of 1,046. The existing reviewer account connection remains usable.
+This does not establish native-host file transfer or actual mobile-host
 behavior. Those checks and final developer attestations remain separate gates.
 
 ## Deployment and final review gates
 
 1. PR #103 is merged and deployed. Deploy the processor-retention correction;
    no migration or change to consent, tariffs or CSP is needed.
-2. Finish the refreshed tool scan. Verify the 0.4.3 resource and inspect complete success
-   and error responses against the table above, including component metadata.
+2. The refreshed scan confirms `ui://vmf/workspace/0.4.3.html`, the exact R2
+   CSP origin and ten tools. Inspect live component-only success/error metadata.
    Check owned playback and text/image search after the response change.
-3. Package 0.4.3 is saved in the existing submission with the same MCP app.
-   Complete the new metadata/skill/MCP scans and read back the saved version.
+3. Package 0.4.3 is saved in the existing submission with the same MCP app;
+   new metadata, six skill and MCP scans all passed. The draft remains
+   unsubmitted and unpublished; final developer declarations remain unchecked.
 4. Reconfirm reviewer login, adequate existing units, retained ready sample and
    attachment access. Run updated P1–P5/N1–N3 on the exact saved release, including
    upload retry/cancel and actual desktop/mobile host behavior. Replace or

@@ -22,15 +22,19 @@ response/error/privacy checks; the category is `Education & Research`. The
 workspace revision is `ui://vmf/workspace/0.4.3.html`, with unchanged consent
 version 4. The ZIP contains no private app binding or reviewer credentials.
 
-The portal's existing MCP app and endpoint are preserved. OAuth was refreshed
-and a new discovery scan started. Complete the current scans, run the updated
-cases against that saved version, and have the developer complete the current
+The portal's existing MCP app and endpoint are preserved. OAuth was refreshed;
+metadata, all six skills and the new ten-tool MCP scan passed with no findings.
+The scanned template is `ui://vmf/workspace/0.4.3.html`, with the expected exact
+storage origin. Reviewer information was saved in the secure portal without
+copying credentials to this repository. Run the remaining actual-host cases
+against that saved version, and have the developer complete the current
 attestations before resubmission. The retention audit confirmed current Modal,
 Sentry, Supabase, Railway and Vercel plans; it identified processor input/output
 retention that requires a policy correction. See the privacy review for live
 checks, provider backup/purge uncertainties and actual mobile-host coverage.
-No trial grant or tariff changed; the explicitly authorized live fixture test
-uses existing API units.
+No trial grant or tariff changed. The authorized live fixture reached ready,
+produced a transcript, and a same-ID completion retry added no charge or job
+attempt. Total live usage was 509 existing API units; 1,046 remain.
 
 ## Historical submission and release checks
 
