@@ -17,11 +17,15 @@ This document covers the client-neutral remote MCP server, its OAuth flow, compa
   - `POST /revoke`
 - Frontend approval page:
   - `https://www.videomomentfinder.com/connectors/claude?request_id=...`
-- Current MCP tools (six):
+- Current MCP tools (ten; nine model-visible and one workspace-only):
+  - `open_workspace`
+  - `get_workspace_video`
+  - `render_learning_view`
   - `upload_video`
   - `get_video_status`
   - `list_videos`
   - `search_video`
+  - `search_video_image` (workspace-only)
   - `get_transcript`
   - `get_frames`
 - MCP prompts:
@@ -35,25 +39,27 @@ Behavior notes:
 - REST API and CLI keep their existing JWT + `vmf_` API-key behavior.
 - Connector usage bills against the account's API units, including an eligible trial grant when enrollment is enabled. Trial rollout and legacy-credit reconciliation are documented in [deployment guidance](DEPLOYMENT.md#verified-account-trial-inactive-proposal).
 - MCP tool execution records `api_usage_events.api_key_id = null` for OAuth calls.
-- `upload_video` is annotated as a write tool; the other five tools are read-only.
+- `upload_video` is annotated as a write tool; the other nine tools are read-only.
 
 ## Current Tool Scope
 
 - `upload_video` is a two-step presigned upload flow:
   - `action="start"` returns `video_id` + `upload_url`
   - `action="complete"` finalizes the upload after the file bytes are written
-- `search_video` is text-only in MCP
+- `search_video` accepts text; `search_video_image` accepts a bounded reference image from the workspace only. Both return timestamped candidates, not an assertion of a match.
+- `open_workspace` returns the owned library, available units and indexing cost. `get_workspace_video` supplies selected-source playback to the component. `render_learning_view` validates and displays prepared learning content without persisting a learner profile.
+- In 0.4.3, video records omit creation timestamps, playback URLs and raw processing errors. Search results omit signed URLs; the workspace receives playback and search thumbnails only in component metadata. Only explicit upload start returns a signed transfer capability to the caller. All tool errors use safe messages. See [the response inventory](plugin/PRIVACY_REVIEW.md).
 - `get_transcript` returns the full spoken transcript with per-segment `start_s`/`end_s` timestamps, optionally filtered with `start_s`/`end_s` query bounds. Bills 1 API unit per call for API-key/OAuth callers.
 - `get_frames` returns **actual image content blocks**, not URLs: the tool result is a JSON summary block first (with per-requested-timestamp `image_index` mapping into the images that follow, or `error` when a frame couldn't be produced), then the image blocks themselves.
   - Defaults to `resolution="high"` (on-demand ffmpeg extraction from the retained source video, up to 1280px wide, best for reading board/slide text), capped at 8 timestamps per call, 5 API units/call.
   - Automatically falls back to `resolution="thumb"` (the stored 1-fps thumbnails) when the source video isn't retained (for example YouTube imports), noting the fallback in the summary's `note` field; only one billing event is recorded for the call either way.
   - Explicit `resolution="thumb"` allows up to 25 timestamps per call, 1 API unit/call.
 - YouTube submit is not part of the MCP tool surface
-- REST remains the canonical public contract for one-shot multipart upload, image search, and non-MCP programmatic usage
+- REST remains the canonical public contract for one-shot multipart upload and non-MCP programmatic usage.
 
 ## Tool Approval Versioning (One-Time Re-Consent)
 
-Connector grants record the version of the tool list the user approved (`approved_tools_version`; version 1 was the historical four-tool screen, version 2 is the current six-tool screen). The server-side constant `MCP_APPROVED_TOOLS_VERSION` in `src/api/mcp_oauth.py` is the single source of truth.
+Connector grants record the version of the tool list the user approved (`approved_tools_version`; version 1 was the historical four-tool screen, version 2 had six tools, and version 4 covers the current ten-tool surface). The server-side constant `MCP_APPROVED_TOOLS_VERSION` in `src/api/mcp_oauth.py` is the single source of truth. The 0.4.3 response minimization does not expand the consent surface or change version 4.
 
 Operational impact of deploying a version bump:
 
@@ -71,7 +77,7 @@ Bump `MCP_APPROVED_TOOLS_VERSION` whenever the approval screen's tool surface ch
 4. The user lands on `https://www.videomomentfinder.com/connectors/claude?request_id=...`.
 5. If signed out, they sign in or create an account.
 6. The page shows the connected account and its current units. When trial enrollment is enabled, verified eligible accounts receive a single reconciled grant. If units remain unavailable, approval stays disabled with a neutral explanation; the user can deny the request. The connection flow does not advertise digital-credit purchases or upgrades.
-7. They review the six MCP tools and explicitly approve access.
+7. They review the ten MCP tools and explicitly approve access.
 8. The client receives the authorization code callback, exchanges it for tokens, and begins using VMF. Reconnecting does not renew an enrolled trial.
 
 Supported redirect URIs:
@@ -129,8 +135,9 @@ uv run uvicorn src.api.app:app --reload --port 8000
 Run the targeted backend test suite:
 
 ```bash
-.venv/bin/pytest -q \
+uv run --frozen --no-sync pytest -q \
   tests/api/test_mcp.py \
+  tests/api/test_mcp_privacy.py \
   tests/api/test_mcp_oauth.py \
   tests/api/test_api_billing.py \
   tests/api/test_openapi.py \
@@ -150,7 +157,7 @@ These checks must pass before Anthropic directory submission:
 - Claude.ai custom connector completes connect/auth successfully
 - Claude Desktop completes connect/auth successfully
 - MCP Inspector or Claude Code completes connect/auth successfully
-- All six tools (`upload_video`, `get_video_status`, `list_videos`, `search_video`, `get_transcript`, `get_frames`) work end to end
+- All ten tools work end to end in their declared model/workspace contexts; host capability gaps are disclosed.
 - Privacy and support URLs are reachable over HTTPS
 - Public docs contain no preview, deferred, or manual-auth wording
 

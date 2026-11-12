@@ -1,6 +1,23 @@
-# Native workspace: 0.4.2
+# Native workspace
 
-## Moment search update (2026-10-09)
+## Privacy candidate 0.4.3 (2026-11-12)
+
+Model-visible library/status records retain source ID, filename or YouTube
+reference, type and status. They omit creation times, signed playback links and
+raw processing errors. Text and image search share an explicit match allowlist;
+signed thumbnails travel only in component metadata. Workspace allowance is
+limited to the available units and indexing cost. Protocol errors and failed
+frame entries never forward raw backend diagnostics or invalid input values.
+The library no longer displays creation dates.
+
+Resource cache revision is `ui://vmf/workspace/0.4.3.html`. Consent remains
+version 4; there is no migration, new dependency, tariff or CSP change. The
+browser fixture now uses the same metadata-only thumbnail contract for both
+search modes. Desktop and 390/768-pixel fixture checks pass; actual mobile
+ChatGPT remains a separate host check. This candidate is not deployed.
+See [Privacy review](PRIVACY_REVIEW.md) for the complete response inventory.
+
+## Historical 0.4.2 moment search update (2026-10-09)
 
 The release adds Find a moment for the selected owned ready video. Text uses
 the existing semantic search across visual and transcript vectors; results

@@ -28,8 +28,9 @@ async function tool(name, args) {
     host.balance -= units;
     const visual = {timestamp_s: 6, score: .88, source: 'visual', thumbnail_url: `${mediaOrigin}/reference-frame.png?fixture=temporary`};
     const spoken = {timestamp_s: 6, score: .91, source: 'transcript', transcript_text: query.has('injection') ? '<img src=x onerror="window.badSearch=true"> Quoted spoken text.' : 'If one vector is zero, its dot product is zero but its angle is undefined.'};
-    const result = toolResult({video_id: args.video_id, status: 'ready', results: host.noMatches ? [] : name === 'search_video_image' ? [{...visual, thumbnail_url: undefined}] : [spoken, visual]});
-    if (name === 'search_video_image') result._meta.vmf.search_thumbnails = [visual.thumbnail_url];
+    const matches = host.noMatches ? [] : name === 'search_video_image' ? [visual] : [spoken, visual];
+    const result = toolResult({video_id: args.video_id, status: 'ready', results: matches.map(({thumbnail_url, ...match}) => match)},
+      {search_thumbnails: matches.map(match => match.thumbnail_url ?? null)});
     return result;
   }
   if (name === 'get_transcript') return toolResult({video_id: args.video_id, segments: query.has('injection') ? [segments[0], {...segments[1], text: '<img src=x onerror="window.badSource=true"> Source markup stays text.'}] : segments});

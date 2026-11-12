@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <h1 className="font-heading text-4xl font-bold">
         Privacy Policy
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: October 6, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: November 12, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -20,23 +20,37 @@ export default function PrivacyPage() {
           <p className="mt-2">We collect the following types of information:</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>
-              <strong>Account information:</strong> Email address and authentication data provided
-              through our identity provider (Clerk).
+              <strong>Account information:</strong> Email address, internal account identifier,
+              and authentication and verification state provided through our identity provider (Clerk).
             </li>
             <li>
               <strong>Video data:</strong> Video files you upload for processing and optional
-              YouTube URLs you submit for import.
+              YouTube URLs you submit for import, original filenames, and the images, speech,
+              text, and other information contained in that material. Your content and filenames
+              may include personal information about you or other people.
             </li>
             <li>
               <strong>Usage data:</strong> Search queries, optional example images submitted for
               search, processing history, website credit and API-unit usage, and
-              one-time trial grant records.
+              one-time trial grant records. Operational records associate your account with
+              video identifiers, operation types, timestamps, processing status, and units used.
+            </li>
+            <li>
+              <strong>Website payment records:</strong> For purchases on the separate VMF
+              website, Lemon Squeezy sends payment notifications that VMF stores to apply
+              credits and prevent duplicate grants. These can include customer name and
+              email, customer/order/subscription identifiers, purchased items, amounts,
+              currency, tax, payment/refund status, event timestamps, receipt links, and
+              card brand and last four digits when supplied by the processor. VMF does not
+              receive full payment-card numbers. The plugin does not initiate purchases or
+              return these payment records.
             </li>
             <li>
               <strong>Connected app authorization:</strong> OAuth client and
               connection records, approved permissions, authorization requests,
-              token hashes, and expiration or revocation state used to authenticate
-              connected apps.
+              token hashes, identifiers and timestamps for these records, and expiration or
+              revocation state used to authenticate connected apps. Account passwords and
+              authentication tokens must not be pasted into chat.
             </li>
             <li>
               <strong>Traffic analytics:</strong> We use Vercel Web Analytics to measure page
@@ -47,8 +61,28 @@ export default function PrivacyPage() {
             <li>
               <strong>Product analytics:</strong> We use PostHog to record client-side product
               analytics such as page views, feature usage, and button clicks. We also record
-              limited server-side product events, such as signup completion and processing
-              outcomes, in our own database to understand onboarding and improve the Service.
+              limited server-side product events, such as signup completion, processing
+              outcomes, searches and checkout outcomes, in our own database. These records
+              can contain the account and video identifiers, operation type, result count,
+              and event time. Website analytics can include browser/device information,
+              referrer and campaign information, and cookie-based visitor/session identifiers.
+              Signed-in website events are associated with your internal account identifier.
+              Hosting and analytics providers also receive network information such as IP addresses.
+            </li>
+            <li>
+              <strong>Operational diagnostics:</strong> Hosting and processing logs may contain
+              request paths, status codes, durations, error messages, timestamps, and account
+              or video references used to diagnose failures. Sentry receives exception messages,
+              stack traces, service/version labels, event timestamps, and related account,
+              job or video identifiers for error monitoring. Raw diagnostic messages and
+              internal request, trace, session, and account identifiers are not returned by
+              the plugin&apos;s video tools.
+            </li>
+            <li>
+              <strong>Prepared learning content:</strong> When you ask to display a guide,
+              flashcards, a Playground, or slides, the connected app sends that prepared
+              content and its selected source references to VMF for validation and display.
+              This operation does not store a learner profile or a copy in VMF&apos;s database.
             </li>
           </ul>
         </section>
@@ -104,6 +138,12 @@ export default function PrivacyPage() {
               <strong>Vercel:</strong> Frontend hosting and web analytics
             </li>
             <li>
+              <strong>Railway:</strong> API and worker hosting, including operational logs
+            </li>
+            <li>
+              <strong>Sentry:</strong> API and worker error monitoring and diagnostics
+            </li>
+            <li>
               <strong>Clerk:</strong> Authentication and user management
             </li>
             <li>
@@ -129,10 +169,33 @@ export default function PrivacyPage() {
             Each provider processes data in accordance with their own privacy policies.
           </p>
           <p className="mt-2">
-            When you authorize a connected app, requested video information,
-            transcripts, search results, and frames can be returned to that app
-            through the approved tools. The receiving app processes that content
-            under its own terms and privacy policy.
+            When you authorize a connected app such as ChatGPT, its approved tools can receive
+            the video identifier needed to select your source, its filename or YouTube source
+            reference, source type, and processing status; timestamped search matches,
+            similarity scores, transcript text and language, and requested frame images;
+            your available API-unit balance and the cost of an operation; and the prepared
+            learning content you ask to display. These categories also apply when the data
+            appears inside a list, search result, source reference, or learning view.
+          </p>
+          <p className="mt-2">
+            The workspace also receives temporary signed playback and thumbnail links in
+            component-only tool metadata to load the private media. Starting an explicitly
+            requested upload returns a temporary signed upload link and transfer instructions
+            so the client can send the file. These links grant temporary access to the
+            specified object; they must not be included in exported learning materials.
+            Video identifiers allow follow-up tools to select the same source; filenames help
+            you recognize it.
+            Tools do not return your account email or account identifier, VMF authentication
+            tokens, trial/grant history, record-creation timestamps, or raw backend diagnostics.
+            Personal information present in the requested video, filename, transcript, or
+            learning content is still part of that content.
+          </p>
+          <p className="mt-2">
+            The receiving app processes and retains tool results and conversation content
+            under its own terms and privacy policy. VMF does not request your full chat history.
+            Selecting a passage or a learning action shares only the selected video reference,
+            timestamp, and relevant excerpt, requested frame, or learning-view context with
+            the connected conversation.
           </p>
         </section>
 
@@ -146,6 +209,28 @@ export default function PrivacyPage() {
             and thumbnails remain available. Temporary link expiration does not delete the
             stored video. Already-deleted originals are not restored by this retention policy.
             You can request deletion of all your data by contacting us.
+          </p>
+          <p className="mt-2">
+            Account records, completed authorization/connection records, usage and billing
+            history, and first-party product events currently have no fixed automatic deletion
+            period in VMF&apos;s database. Website product analytics also currently have no
+            scheduled automatic event deletion in our PostHog project. You can request deletion
+            through the contact below. Disconnecting a plugin does not delete these records
+            or your video library; contact support for help revoking remaining authorization.
+          </p>
+          <p className="mt-2">
+            Pending authorization requests expire after one hour and expired pending requests
+            are cleaned up when a new authorization starts. Authorization codes expire after
+            ten minutes, access tokens after one hour, and refresh tokens after thirty days.
+            Expiration or revocation prevents use of a credential; it does not itself delete
+            the associated authorization or accounting records.
+          </p>
+          <p className="mt-2">
+            Search images are not retained after their request completes. Prepared learning
+            views are not persisted by VMF; copies in chats or exported files remain subject
+            to the receiving app&apos;s retention and your own file controls. Infrastructure
+            providers retain their technical logs and backups according to their configured
+            service retention policies, separately from VMF&apos;s application records.
           </p>
         </section>
 
@@ -177,6 +262,7 @@ export default function PrivacyPage() {
             <li>Request correction of inaccurate data</li>
             <li>Request deletion of your data and account</li>
             <li>Export your data in a portable format</li>
+            <li>Disconnect VMF in the connected app&apos;s settings and request authorization revocation from support</li>
           </ul>
           <p className="mt-2">
             To exercise these rights, contact us at the address below.

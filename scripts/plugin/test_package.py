@@ -117,6 +117,13 @@ class PackageTests(unittest.TestCase):
                 self.assertFalse(self.build_and_check()["valid"])
                 self.manifest = original
 
+    def test_submission_category_requires_exact_supported_title(self):
+        for category in ("Education", "education-research", [], None):
+            with self.subTest(category=category):
+                self.manifest["extensions"]["com.openai"]["interface"]["category"] = category
+                self.write_manifest()
+                self.assertTrue(any("category" in error for error in self.build_and_check()["errors"]))
+
     def test_small_listing_logo_is_rejected(self):
         self.manifest["extensions"]["com.openai"]["interface"]["logo"] = "./assets/composer-icon.png"
         self.write_manifest()

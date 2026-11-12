@@ -2,17 +2,35 @@
 
 The portable source in `plugins/video-moment-finder/` owns listing text, prompts
 and review cases. This record separates a private working package from a public
-release. Current submission checkpoint checked: 2026-10-14 (America/Bogota). Historical
-production user-flow observations are dated 2026-10-02; subsequent staging and
-production database verification is dated separately below. The approved
-production code rollout and subsequent reviewer ingestion/retrieval/playback
-checks are recorded below. Human export review, the approved recording, identity,
-domain, reviewer-login preparation and developer declarations are complete.
-Package 0.4.2 is **In review** and **Not published**. Independent mobile checks
-and public app identity runtime remain unverified; review approval and
-publication are separate from this completed submission.
+release. Current submission checkpoint checked: 2026-11-12 (America/Bogota).
+The portal shows package **0.4.2 · Changes required · Not published**. The
+rejection reports unnecessary personal identifiers and incomplete privacy
+disclosures; the portal provides no field-level MCP findings. Earlier successful
+checks below are historical and do not establish current review readiness.
 
-## Current release
+Candidate **0.4.3** minimizes tool results and errors, expands privacy disclosures,
+and adds transport-level privacy regression coverage. It is prepared locally;
+it has not been deployed, uploaded, or resubmitted. The source, validation results,
+reviewer explanation and remaining gates are in [Privacy review](PRIVACY_REVIEW.md).
+
+## 0.4.3 resubmission candidate — November 12
+
+The candidate preserves the existing endpoint, publisher identity, demo, six
+skills and five positive/three negative review cases. P1/P2 now require nested
+response/error/privacy checks; the category is `Education & Research`. The
+workspace revision is `ui://vmf/workspace/0.4.3.html`, with unchanged consent
+version 4. The ZIP contains no private app binding or reviewer credentials.
+
+The portal's existing MCP connection is authorized and domain-verified. Six
+skill checks passed for the rejected 0.4.2 package; that does not certify 0.4.3.
+MCP rescan controls are disabled in the rejected view. Deploy API and privacy
+page, upload the exact candidate, then refresh/reconnect and scan the preserved
+connection. Run the updated cases against that saved version and have the
+developer complete the current attestations before resubmission. See the
+privacy review's explicit unverified items, including provider retention and
+actual mobile-host coverage. No trial or balance changes are included.
+
+## Historical submission and release checks
 
 ### Submitted for review — October 14
 

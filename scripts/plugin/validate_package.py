@@ -24,6 +24,11 @@ from PIL import Image
 PLUGIN_NAME = "video-moment-finder"
 SEMVER = r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
 CORE_SKILLS = {"study-guide", "flashcards", "tutor", "assumption-lab", "presentation"}
+SUBMISSION_CATEGORIES = {
+    "Business & Operations", "Communication", "Creativity", "Data & Analytics",
+    "Developer Tools", "Education & Research", "Entertainment", "Finance", "Healthcare",
+    "Other", "Productivity", "Scientific Research", "Security", "Travel",
+}
 MAX_UNCOMPRESSED = 30 * 1024 * 1024
 TOP_LEVEL = {"plugin.json", "mcp.json", "README.md", "LICENSE", "assets", "skills", "templates", "references", "tools", "examples", ".codex-plugin"}
 FORBIDDEN_PARTS = {".git", ".env", ".app.json", "node_modules", ".venv", "__pycache__", "private", ".DS_Store"}
@@ -134,6 +139,8 @@ def validate_archive(archive: Path, *, submission: bool = False) -> dict:
     for field, limit in (("displayName", 30), ("shortDescription", 30), ("longDescription", 4000)):
         value = interface.get(field)
         require(isinstance(value, str) and 0 < len(value.strip()) <= limit, f"{field} must be nonblank and at most {limit} characters")
+    require(isinstance(interface.get("category"), str) and interface["category"] in SUBMISSION_CATEGORIES,
+            "category must be an exact supported submission category")
     developer = interface.get("developerName")
     if developer is not None:
         require(isinstance(developer, str) and 0 < len(developer.strip()) <= 80, "developerName must be 1–80 characters")
@@ -208,6 +215,7 @@ def validate_archive(archive: Path, *, submission: bool = False) -> dict:
         errors.append("review.test_cases must be an object")
         return {"valid": False, "errors": errors, "submission_gaps": gaps}
     cases = review["test_cases"]
+    require(isinstance(review.get("commerce"), bool), "review.commerce must be a boolean")
     for kind, count in (("positive", 5), ("negative", 3)):
         group = cases.get(kind, [])
         require(isinstance(group, list) and len(group) == count, f"Exactly {count} {kind} review cases are required")

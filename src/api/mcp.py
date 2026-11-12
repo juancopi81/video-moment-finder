@@ -17,6 +17,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.api.auth import AuthIdentity
+from src.api.mcp_privacy import PrivateErrorsFastMCP, PublicToolError
 from src.api.frames import (
     FramePlanItem,
     build_high_res_frame_plan,
@@ -53,14 +54,11 @@ class McpVideoRecord(BaseModel):
     status: VideoStatus
     source_type: SourceType
     source_filename: str | None = None
-    source_url: str | None = None
-    created_at: str
     error_message: str | None = None
 
 
 class McpSearchResult(BaseModel):
     timestamp_s: float
-    thumbnail_url: str | None = None
     score: float
     source: Literal["visual", "transcript"]
     transcript_text: str | None = None
@@ -84,8 +82,6 @@ class ListVideosResult(BaseModel):
 
 class SearchVideoResult(BaseModel):
     video_id: str
-    youtube_url: str | None
-    source_url: str | None = None
     status: VideoStatus
     results: list[McpSearchResult]
 
@@ -232,22 +228,20 @@ def _video_record_from_response(response: Any) -> McpVideoRecord:
         status=response.status,
         source_type=response.source_type,
         source_filename=response.source_filename,
-        source_url=_optional_str(response.source_url),
-        created_at=response.created_at.isoformat(),
-        error_message=response.error_message,
+        error_message=(
+            "Video processing failed. Check its status on VMF before retrying."
+            if response.status == "failed" else None
+        ),
     )
 
 
 def _search_result_from_response(response: Any) -> SearchVideoResult:
     return SearchVideoResult(
         video_id=response.video_id,
-        youtube_url=_optional_str(response.youtube_url),
-        source_url=_optional_str(response.source_url),
         status=response.status,
         results=[
             McpSearchResult(
                 timestamp_s=result.timestamp_s,
-                thumbnail_url=_optional_str(result.thumbnail_url),
                 score=result.score,
                 source=result.source,
                 transcript_text=result.transcript_text,
@@ -257,7 +251,7 @@ def _search_result_from_response(response: Any) -> SearchVideoResult:
     )
 
 
-vmf_mcp = FastMCP(
+vmf_mcp = PrivateErrorsFastMCP(
     name="Video Moment Finder",
     instructions=(
         "OAuth-protected remote MCP server for Video Moment Finder. "
@@ -374,10 +368,7 @@ def mcp_tool_approval_items() -> list[dict[str, str]]:
 
 
 def _workspace_video(response: Any) -> dict:
-    video = _video_record_from_response(response).model_dump(mode="json")
-    # Only the UI receives ephemeral playback capabilities.
-    video.pop("source_url", None)
-    return video
+    return _video_record_from_response(response).model_dump(mode="json")
 
 
 def _workspace_config() -> dict:
@@ -467,7 +458,9 @@ def open_workspace(ctx: Context | None = None):
     identity = _request_identity(ctx)
     videos = [_workspace_video(v) for v in v1_list_my_videos(identity=identity)[:50]]
     balance = v1_api_billing_summary(identity=identity).model_dump(mode="json")
-    return workspace_result({"videos": videos, "allowance": balance}, config=_workspace_config())
+    # Trial/grant history and bookkeeping are not needed to browse or use a video.
+    allowance = {key: balance[key] for key in ("api_units_balance", "unit_cost_index_video")}
+    return workspace_result({"videos": videos, "allowance": allowance}, config=_workspace_config())
 
 
 @vmf_mcp.tool(
@@ -512,14 +505,14 @@ def render_learning_view(
         raise RuntimeError("MCP context is required")
     companions = companion_views or []
     if any(v.video_id != view.video_id for v in companions):
-        raise ValueError("Companion views must refer to the same video")
+        raise PublicToolError("Companion views must refer to the same video")
     if len({v.kind for v in [view, *companions]}) != len(companions) + 1:
-        raise ValueError("Include only one view per workflow")
+        raise PublicToolError("Include only one view per workflow")
     from src.api.app import v1_get_video
 
     response = v1_get_video(video_id=str(view.video_id), identity=_request_identity(ctx))
     if response.status != "ready":
-        raise ValueError("Choose a ready video before preparing a learning view")
+        raise PublicToolError("Choose a ready video before preparing a learning view")
     return workspace_result(
         {"view": view.model_dump(mode="json"), "companion_views": [v.model_dump(mode="json") for v in companions], "video": _workspace_video(response)},
         source_url=_optional_str(response.source_url), config=_workspace_config(),
@@ -579,7 +572,7 @@ def upload_video(
         )
 
     if video_id is None:
-        raise ValueError("video_id is required when action is complete")
+        raise PublicToolError("video_id is required when action is complete")
 
     response = v1_complete_upload(
         UploadCompleteRequest(video_id=video_id, filename=filename),
@@ -632,7 +625,11 @@ def list_videos(
     ] = 20,
     ctx: Context | None = None,
 ) -> ListVideosResult:
-    """List recent videos for the authenticated API-key owner."""
+    """List recent videos owned by the connected account, with labels and status.
+
+    Video IDs select sources for follow-up tools; filenames identify the user's
+    uploads. Playback capabilities and account identifiers are not returned.
+    """
     if ctx is None:
         raise RuntimeError("MCP context is required")
 
@@ -664,8 +661,12 @@ def search_video(
         Field(default=5, ge=1, le=20, description="Per-source result cap, matching the public API contract."),
     ] = 5,
     ctx: Context | None = None,
-) -> SearchVideoResult:
-    """Search a ready video by text and return timestamped matches."""
+):
+    """Search a ready video by text and return timestamped matches.
+
+    Signed thumbnails are available only to the workspace. Use get_frames for
+    model-visible images and get_workspace_video for source playback.
+    """
     if ctx is None:
         raise RuntimeError("MCP context is required")
 
@@ -677,7 +678,11 @@ def search_video(
         request=VideoSearchRequest(query_text=query_text, limit=limit),
         identity=identity,
     )
-    return _search_result_from_response(response)
+    return workspace_result(
+        _search_result_from_response(response).model_dump(mode="json"),
+        search_thumbnails=[_optional_str(r.thumbnail_url) for r in response.results],
+        config=_workspace_config(),
+    )
 
 
 @vmf_mcp.tool(
@@ -706,15 +711,15 @@ def search_video_image(
     try:
         image_bytes = base64.b64decode(image_base64, validate=True)
         if not image_bytes or len(image_bytes) > MAX_SEARCH_IMAGE_BYTES:
-            raise ValueError("Choose an image within the 512 KiB search limit")
+            raise PublicToolError("Choose an image within the 512 KiB search limit")
         with PILImage.open(io.BytesIO(image_bytes)) as image:
             if image.format not in {"JPEG", "PNG", "WEBP"} or max(image.size) > 2048:
-                raise ValueError("Choose a JPEG, PNG or WebP of at most 2048 pixels per side")
+                raise PublicToolError("Choose a JPEG, PNG or WebP of at most 2048 pixels per side")
             image.verify()
     except (binascii.Error, UnidentifiedImageError, OSError, SyntaxError, PILImage.DecompressionBombError) as exc:
-        raise ValueError("Choose a valid JPEG, PNG or WebP image") from exc
+        raise PublicToolError("Choose a valid JPEG, PNG or WebP image") from exc
     response = mcp_search_video_by_image(video_id, image_bytes, limit, _request_identity(ctx))
-    matches = [r.model_dump(exclude={"thumbnail_url"}) for r in response.results]
+    matches = _search_result_from_response(response).model_dump(mode="json")["results"]
     return workspace_result(
         {"video_id": response.video_id, "status": response.status, "results": matches},
         search_thumbnails=[r.thumbnail_url for r in response.results],
@@ -809,7 +814,7 @@ def _frames_summary_content(
             )
             continue
 
-        data, error = resolved_by_key.get(key, (None, "Frame not available"))
+        data, _error = resolved_by_key.get(key, (None, "Frame not available"))
         if data is not None:
             image_index = len(images)
             images.append(Image(data=data, format="jpeg"))
@@ -828,7 +833,7 @@ def _frames_summary_content(
                     "requested_timestamp_s": item.requested_timestamp_s,
                     "actual_timestamp_s": item.actual_timestamp_s,
                     "image_index": None,
-                    "error": error,
+                    "error": "Frame unavailable at this timestamp. Try a nearby moment or stored thumbnail.",
                 }
             )
 
@@ -928,7 +933,7 @@ def get_frames(
     same order as the requested ``timestamps``). ``image_index`` is the
     0-based position of that frame's image among the image content blocks
     that follow this JSON object (``null`` when extraction/download failed for
-    that timestamp, with ``error`` describing why).
+    that timestamp, with a safe ``error`` message).
 
     Board content accumulates while a speaker writes, so when illustrating a
     transcript moment, prefer a timestamp a few seconds after the speaker

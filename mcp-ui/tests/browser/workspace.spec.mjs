@@ -24,6 +24,30 @@ async function open(page, query = '') {
 }
 const calls = (page, name) => page.evaluate(name => window.fixtureHost.calls.filter(c => c.name === name), name);
 
+for (const width of [390, 768]) {
+  test(`private-media search and learning controls work at ${width}px`, async ({page}) => {
+    await page.setViewportSize({width, height: 844});
+    const {ui, errors} = await open(page);
+    await expect(ui.locator('.video-list')).toContainText('Vector lesson.mp4');
+    await ui.locator('#moment-query').fill('a diagram');
+    await ui.locator('#run-search').click();
+    await expect(ui.locator('#search-results .search-match')).toHaveCount(2);
+    // The fixture returns signed thumbnails only in component metadata.
+    await expect(ui.locator('#search-results img')).toBeVisible();
+    await ui.getByRole('button', {name: 'Go to 0:06 spoken match 1'}).click();
+    await expect.poll(() => ui.locator('#player').evaluate(p => p.currentTime)).toBe(6);
+    await ui.getByRole('button', {name: 'Quiz me', exact: true}).click();
+    await expect.poll(() => page.evaluate(() => window.fixtureHost.messages.length)).toBe(1);
+    const handoff = await page.evaluate(() => JSON.stringify([window.fixtureHost.messages, window.fixtureHost.contexts]));
+    expect(handoff).not.toContain('fixture=temporary');
+    await ui.getByRole('button', {name: 'Flashcards', exact: true}).click();
+    await ui.getByRole('button', {name: 'Reveal answer', exact: true}).click();
+    await expect(ui.locator('.answer')).toContainText('3 × 2 + 4 × 0 = 6');
+    expect(await ui.locator('html').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('text search finds spoken and visual candidates, seeks and hands off clean context; repeats are cached', async ({page}) => {
   const {ui, errors} = await open(page, '?injection');
   await ui.getByLabel('Describe what you want to find', {exact: true}).fill('the zero-vector example');

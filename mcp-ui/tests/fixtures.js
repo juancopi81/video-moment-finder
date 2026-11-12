@@ -1,4 +1,4 @@
-export const video = {id: '00000000-0000-4000-8000-000000000001', source_filename: 'Vector lesson.mp4', source_type: 'upload', status: 'ready', created_at: '2026-10-01T12:00:00Z'};
+export const video = {id: '00000000-0000-4000-8000-000000000001', source_filename: 'Vector lesson.mp4', source_type: 'upload', status: 'ready'};
 export const secondVideo = {...video, id: '00000000-0000-4000-8000-000000000002', source_filename: 'Second lesson.mp4'};
 export const uploadedVideo = {...video, id: '00000000-0000-4000-8000-000000000003', source_filename: 'My lesson.mp4', status: 'queued'};
 export const segments = [{segment_index: 0, start_s: 0, end_s: 5, text: 'Multiply matching coordinates, then add the products.'}, {segment_index: 1, start_s: 6, end_s: 10, text: 'If one vector is zero, its dot product is zero but its angle is undefined.'}];

@@ -18,7 +18,7 @@ const button = (text, handler, cls = 'quiet') => {
 const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
 const search = {mode: 'text', image: null, imageSequence: 0, preparing: false, pending: false, request: 0, cache: new Map(), result: null, match: null};
-const app = new App({name: 'Video Moment Finder', version: '0.4.2'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
+const app = new App({name: 'Video Moment Finder', version: '0.4.3'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
 let currentExperiment = null;
 
@@ -74,7 +74,7 @@ function renderLibrary() {
   for (const video of videos) {
     const row = button('', () => selectVideo(video));
     row.append(el('span', video.source_filename ?? (video.source_type === 'youtube' ? 'YouTube video' : 'Uploaded video')),
-      el('small', `${video.status === 'ready' ? 'Ready to explore' : video.status} · ${new Date(video.created_at).toLocaleDateString()}`));
+      el('small', video.status === 'ready' ? 'Ready to explore' : video.status));
     row.setAttribute('aria-pressed', String(state.selected?.id === video.id));
     list.append(row);
   }
