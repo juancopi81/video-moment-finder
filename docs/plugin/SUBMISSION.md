@@ -29,12 +29,21 @@ storage origin. Reviewer information was saved in the secure portal without
 copying credentials to this repository. Run the remaining actual-host cases
 against that saved version, and have the developer complete the current
 attestations before resubmission. The retention audit confirmed current Modal,
-Sentry, Supabase, Railway and Vercel plans; it identified processor input/output
-retention that requires a policy correction. See the privacy review for live
+Sentry, Supabase, Railway and Vercel plans; PR #104 deployed its processor
+input/output retention correction and passed live policy checks. See the privacy review for live
 checks, provider backup/purge uncertainties and actual mobile-host coverage.
 No trial grant or tariff changed. The authorized live fixture reached ready,
 produced a transcript, and a same-ID completion retry added no charge or job
-attempt. Total live usage was 509 existing API units; 1,046 remain.
+attempt. That protocol test used 509 existing API units, leaving 1,046.
+
+The later actual ChatGPT check passed playback, timestamp seeking, native text
+search and cached reuse after refreshing the installed app and making a new
+workspace request. Its displayed balance was 1,044. A phone-sized desktop
+viewport exposed clipping with three library videos. The component 0.4.4 fix
+and its regression checks are prepared separately; it is not deployed. The
+portable package stays 0.4.3. After the component rollout, refresh the portal's
+MCP scan and verify the new resource and actual narrow layout before submitting.
+See [Native workspace](NATIVE_WORKSPACE.md) for evidence and limitations.
 
 ## Historical submission and release checks
 

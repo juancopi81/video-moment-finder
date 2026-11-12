@@ -24,10 +24,22 @@ async function open(page, query = '') {
 }
 const calls = (page, name) => page.evaluate(name => window.fixtureHost.calls.filter(c => c.name === name), name);
 
-for (const width of [390, 768]) {
+for (const width of [375, 390, 768]) {
   test(`private-media search and learning controls work at ${width}px`, async ({page}) => {
     await page.setViewportSize({width, height: 844});
     const {ui, errors} = await open(page);
+    // A third library item exposed the live host's single-column grid minimum:
+    // two 160px cards fit on a phone, but three must scroll within the library.
+    await page.evaluate(() => {
+      window.fixtureHost.uploaded = true;
+      window.fixtureHost.uploadStatus = 'ready';
+      window.fixtureHost.push(window.fixtureHost.initial());
+    });
+    await expect(ui.locator('#videos button')).toHaveCount(3);
+    expect(await ui.locator('html').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    if (width < 560) {
+      expect(await ui.locator('#videos').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    }
     await expect(ui.locator('.video-list')).toContainText('Vector lesson.mp4');
     await ui.locator('#moment-query').fill('a diagram');
     await ui.locator('#run-search').click();
