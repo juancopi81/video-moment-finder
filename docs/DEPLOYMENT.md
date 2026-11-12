@@ -2,6 +2,23 @@
 
 This file is the concise operations reference that was intentionally removed from `README.md`.
 
+## Privacy release 0.4.3 candidate
+
+Deploy the API (including its rebuilt workspace asset) and frontend privacy
+page together before requesting a new plugin review. Refresh tool metadata so
+hosts load `ui://vmf/workspace/0.4.3.html`. Consent remains version 4; this patch
+requires no migration, new production dependency, balance change, retention
+change, worker or Modal model redeployment. Existing API/worker deployment
+automation may rebuild both services when the branch is merged.
+
+The patch removes unnecessary response fields, places playback/search media
+capabilities in component metadata, and sanitizes tool-level and per-frame
+errors. Explicit upload start still returns the capability needed for PUT.
+Verify actual nested responses and failed calls after deployment; local tests
+and the package ZIP do not change the currently deployed endpoint. Rollback
+requires reverting both the API asset/response contract and matching frontend
+policy; do not resubmit a rolled-back build. See `docs/plugin/PRIVACY_REVIEW.md`.
+
 ## Source of Truth for Environment Variables
 
 The 0.4.2 native-search release requires

@@ -875,7 +875,7 @@ def test_mcp_get_frames_high_cap_exceeded_is_tool_error(
     result = _run_mcp_session(_authorized_headers(access_token), _callback)
 
     assert result.isError is True
-    assert "At most 8 timestamps" in result.content[0].text
+    assert "8 timestamps" in result.content[0].text
 
 
 def test_mcp_get_frames_thumb_cap_exceeded_is_tool_error(
@@ -897,7 +897,7 @@ def test_mcp_get_frames_thumb_cap_exceeded_is_tool_error(
     result = _run_mcp_session(_authorized_headers(access_token), _callback)
 
     assert result.isError is True
-    assert "At most 25 timestamps" in result.content[0].text
+    assert "25 timestamps" in result.content[0].text
 
 
 def test_mcp_get_frames_per_frame_error_does_not_fail_whole_call(
@@ -954,7 +954,7 @@ def test_mcp_get_frames_per_frame_error_does_not_fail_whole_call(
     assert payload["frames"][0]["image_index"] == 0
     assert payload["frames"][0]["error"] is None
     assert payload["frames"][1]["image_index"] is None
-    assert "past the end" in payload["frames"][1]["error"]
+    assert "Frame unavailable" in payload["frames"][1]["error"]
     assert image_block.type == "image"
 
 

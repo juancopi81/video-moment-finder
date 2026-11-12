@@ -1,6 +1,6 @@
 # Video Moment Finder learning plugin
 
-## Native workspace (0.4.2)
+## Native workspace (0.4.3)
 
 Find a moment searches the selected owned video using a text description of a
 scene or spoken idea, or a reference image to find similar frames. Results show
@@ -13,6 +13,13 @@ an exact match. Image input accepts JPEG, PNG or WebP up to 10 MB; the workspace
 normalizes it to at most 1024 pixels per side and a 512 KiB search payload.
 Reference and retrieved-frame previews render locally without requiring extra
 image-loading permissions in the host.
+
+Video tools return source labels, processing status and the requested evidence.
+Temporary playback and search-thumbnail links are reserved for the workspace;
+an explicit upload start returns the temporary link required to transfer the
+file. Account identifiers, trial history, record-creation times and raw backend
+diagnostics are omitted. The [privacy policy](https://www.videomomentfinder.com/privacy)
+describes these categories, processors, retention and deletion requests.
 
 Where supported, open Video Workspace from the sidebar or conversation panel.
 Choose a ready video or upload a file you own, select a source moment and ask
@@ -29,7 +36,7 @@ evidence and describes visuals only after inspecting the returned images.
 
 ## Connect and reach a first result
 
-1. Install this package through your host's supported private-plugin flow.
+1. Install this package through your host's supported plugin flow.
 2. Connect Video Moment Finder and complete the VMF account sign-in and OAuth
    approval in the host's connection flow. Check that the account shown is yours.
 3. Ask: “Show my ready VMF lectures and make a study guide from one.” Choose a
@@ -67,11 +74,8 @@ metered work. A high-resolution request may return thumbnails if the source
 file is no longer retained. Read the returned summary before describing image
 quality. Reusing already retrieved evidence costs no additional VMF units.
 
-A configurable, one-time verified-account trial is prepared in the repository;
-its starting proposal is 600 units with no payment card. Availability depends on
-the deployed service configuration. Installing or reconnecting this package
-does not itself issue a grant, and reconnecting must not repeat one. This source
-package does not activate the trial for real accounts.
+The plugin uses your account's existing allowance. Installing or reconnecting
+does not itself add units.
 
 If authorization expires, use the host's supported reconnect flow. If units are
 unavailable, stop metered calls and continue from sufficient cached evidence,

@@ -109,6 +109,26 @@ Authoring rules:
 | 2026-10-09 | Phase 7 | Final production search and grounded chat fallback | Search/source/text handoff passed; recording next | Original reference preview rendered locally without a debit. One image query returned five visual candidates; selected 40-second source playback and the retrieved zero-vector canvas thumbnail passed. Repeated image search reused cache. The constrained image-only handoff identified the timestamp but reported missing image evidence and declined to invent a question; image-only grounding remains unverified. Loading the transcript once and selecting its 28-second passage produced one correct tutor question then waited, with no extra chat retrieval. Read-only ledger confirms five of ten authorized existing units, balance 2,069, and unchanged videos/jobs/grants/trial state. Recording instructions now use this verified source-text fallback. Saved portal-release cases, recording, declarations, trial activation, submission and publication remain gates. |
 | 2026-10-09 | Phase 7 | Visual explanation and current-version recording preparation | Grounded retrieval and four restored views passed; recording next | A second no-retrieval image probe still reported missing image content; its root cause remains unknown. The normal Explain this moment action retrieved one permitted thumbnail at 40 seconds, correctly read its heading/footer and explained the zero-vector exception. Actual exported guide, six cards, computed Playground and five-slide presentation were reopened together with free render_learning_view in the current 0.4.2 workspace and match the saved originals exactly. Citation seek-to-36, card reveal/advance, pin/change/zero-vector computations and slide notes/navigation passed again; one tutor question waits at 36 seconds. Read-only ledger records six of ten approved existing units, balance 2,068 and no new indexing/grants/trial. Search caches and original reference are retained for recording. Cached-image-only grounding, recorded learner feedback, the actual walkthrough video and saved portal-release cases remain unverified; no public submission or publication. |
 
+## Plugin privacy resubmission candidate — November 12, 2026
+
+Prepared 0.4.3 after the portal showed 0.4.2 Changes required/Not published.
+Allowlisted MCP records and nested matches; removed creation times, unnecessary
+playback capabilities and trial history; restricted media URLs to component
+metadata except explicit upload transfer; replaced raw tool/frame diagnostics
+with safe errors. Expanded the privacy policy to cover actual nested data,
+OAuth, analytics, website billing notifications and enabled Railway/Sentry
+processors, without inventing retention deadlines. Updated review cases and
+category, and removed inactive-trial promotion from the portable README.
+
+Full local validation passed: 769 backend tests, 34 isolated PostgreSQL cases
+skipped, 15 archive, four workspace core, 27 browser and seven frontend checks,
+lint and production build. The browser suite includes 390/768-pixel privacy
+flows; it does not replace actual mobile-host checks. Existing demo playback
+and anonymous reviewer-fixture checksum passed. API/policy deployment, exact
+saved-release tests, portal scans and developer attestations remain before
+resubmission. No production data, retention, balances or publication changed.
+See `docs/plugin/PRIVACY_REVIEW.md` for evidence and the response inventory.
+
 ## Weekly acquisition experiment — October 26, 2026
 
 Prepared for review; not deployed. Live `/how-it-works` still denied transcript
