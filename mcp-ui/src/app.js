@@ -18,7 +18,7 @@ const button = (text, handler, cls = 'quiet') => {
 const state = {videos: [], allowance: null, config: {}, selected: null, segments: new Map(), pendingTranscripts: new Set(), frames: new Map(), pendingFrames: new Set(), views: new Map(), active: 'study-guide', time: 0, resumeTime: null, segment: null, file: null, upload: null, uploadNotice: null, xhr: null, poll: null, busy: false, selection: 0};
 const labels = {'study-guide': 'Study guide', flashcards: 'Flashcards', playground: 'Playground', presentation: 'Presentation', tutor: 'Tutor'};
 const search = {mode: 'text', image: null, imageSequence: 0, preparing: false, pending: false, request: 0, cache: new Map(), result: null, match: null};
-const app = new App({name: 'Video Moment Finder', version: '0.4.3'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
+const app = new App({name: 'Video Moment Finder', version: '0.4.4'}, {availableDisplayModes: ['fullscreen']}, {autoResize: true});
 let connected = false, libraryLoaded = false, libraryPending = false;
 let currentExperiment = null;
 

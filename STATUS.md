@@ -111,6 +111,26 @@ Authoring rules:
 
 ## Plugin privacy deployment and retention verification — November 12, 2026
 
+PR #104 subsequently merged at `2390e44`; main CI and production API, worker
+and frontend deployments passed. Ten public HTTP checks, both corrected policy
+pages, four post-deployment API checks and the connected workspace passed.
+
+The actual ChatGPT follow-up initially could not open its workspace. Refreshed
+the existing developer app's tools and made a new request in the same chat;
+the new workspace opened while the previous failed card remained failed.
+Playback, 28.66-second seeking, seven native text-search candidates and cached
+reuse passed. The UI showed 1,044 units after the additional transcript/search
+checks. A phone-sized desktop viewport exposed horizontal clipping with three
+videos. The focused component 0.4.4 candidate changes the mobile grid track;
+regressions fail on the old asset at 375/390 pixels and pass with the fix at
+375/390/768. It is not deployed; portable package 0.4.3 remains unchanged.
+Actual phone-app behavior, image search, native upload cancellation and final
+publisher attestations remain unverified in this pass.
+Full local validation passed: 769 backend tests, 34 isolated PostgreSQL cases
+skipped, 15 archive checks, four workspace core tests, 28 browser cases, seven
+frontend checks, lint and production build. The portable 0.4.3 ZIP checksum is
+unchanged.
+
 Merged PR #103 at `04242b8` after passing CI; Railway API/worker and Vercel
 production deployments succeeded. Ten public HTTP checks and connected-tool
 privacy/search/transcript/frame/view checks passed. Uploaded 0.4.3 to the

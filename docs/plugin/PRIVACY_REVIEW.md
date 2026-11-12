@@ -2,7 +2,9 @@
 
 Checked November 12, 2026. PR #103 was merged and deployed to production API,
 worker and frontend at `04242b8b87299ed596bee9331aaf1aa9ffddf855`;
-main-branch CI passed. Package 0.4.3 is now saved as an unsubmitted portal draft.
+main-branch CI passed. PR #104 then deployed the processor-retention correction
+at `2390e441e5502761a72d368b08c2d1e19ff508ea`; main CI, production services,
+both live policy pages and HTTP checks passed. Package 0.4.3 is now saved as an unsubmitted portal draft.
 The existing MCP app and endpoint were preserved and OAuth was refreshed for a
 new discovery scan. Metadata and all six skill checks passed with no findings;
 the refreshed MCP scan found all ten tools and the 0.4.3 workspace resource,
@@ -129,8 +131,8 @@ webhook documentation](https://docs.lemonsqueezy.com/help/webhooks/example-paylo
 - Archive validation checks required public URLs, metadata lengths, icons,
   categories, commerce boolean, case counts, unsafe paths, secrets and private
   app bindings. It validates the actual ZIP but does not replace a portal scan.
-- Developer, support, privacy and terms pages are reachable. PR #103's policy
-  is deployed; the processor-retention follow-up corrects its remaining
+- Developer, support, privacy and terms pages are reachable. PR #104's deployed
+  processor-retention follow-up corrects PR #103's remaining
   search-image retention claim in both Privacy and Terms. The Terms also stop
   claiming ownership of third-party AI models: the production code uses
   [Qwen's model](https://huggingface.co/Qwen/Qwen3-VL-Embedding-2B) and
@@ -196,13 +198,32 @@ balance of 1,046. The existing reviewer account connection remains usable.
 This does not establish native-host file transfer or actual mobile-host
 behavior. Those checks and final developer attestations remain separate gates.
 
+## Actual ChatGPT follow-up
+
+The installed developer app initially failed to open its workspace while its
+transcript tool succeeded. Refreshing the app's tools and issuing a new
+workspace request opened it in the same conversation; the original failed card
+still failed on retry. Playback and seeking to 28.66 seconds passed. Native
+text search returned seven visual/spoken candidates; selecting the spoken
+candidate sought to 28.66 seconds, and repeating the search reported cached
+reuse with no new search units. The displayed balance was 1,044.
+
+A 390-pixel desktop viewport exposed a 516-pixel page inside a 375-pixel
+component. Three library cards triggered the mobile grid's automatic minimum.
+The separate component 0.4.4 candidate fixes that track and adds three-video
+regression coverage at 375, 390 and 768 pixels. It is not deployed. This is
+responsive desktop-browser evidence, not an actual phone-app check. Live image
+search and native upload cancellation were not repeated in this pass.
+
 ## Deployment and final review gates
 
-1. PR #103 is merged and deployed. Deploy the processor-retention correction;
-   no migration or change to consent, tariffs or CSP is needed.
+1. PRs #103 and #104 are merged and deployed. Deploy the narrow-screen component
+   correction; no migration or change to consent, tariffs or CSP is needed.
 2. The refreshed scan confirms `ui://vmf/workspace/0.4.3.html`, the exact R2
    CSP origin and ten tools. Inspect live component-only success/error metadata.
-   Check owned playback and text/image search after the response change.
+   Refresh this scan after the component patch to discover
+   `ui://vmf/workspace/0.4.4.html`. Recheck narrow layout and remaining image-search
+   behavior; current desktop playback/text-search evidence is recorded above.
 3. Package 0.4.3 is saved in the existing submission with the same MCP app;
    new metadata, six skill and MCP scans all passed. The draft remains
    unsubmitted and unpublished; final developer declarations remain unchecked.

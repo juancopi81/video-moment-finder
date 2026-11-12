@@ -7,8 +7,18 @@ This file is the concise operations reference that was intentionally removed fro
 Production API, worker and frontend deployed PR #103 (`04242b8`) on November 12,
 2026. Main CI and public/connected-tool checks passed; the portal's refreshed
 scan discovers ten tools and `ui://vmf/workspace/0.4.3.html` without findings.
-Provider retention evidence and the follow-up policy correction are recorded
-in `docs/plugin/PRIVACY_REVIEW.md`. The public submission remains a draft.
+PR #104 (`2390e44`) then deployed the processor-retention correction to Privacy
+and Terms; all main CI jobs, both Railway services, Vercel and live policy/HTTP
+checks passed. Provider evidence is in `docs/plugin/PRIVACY_REVIEW.md`. The public
+submission remains a draft.
+
+The subsequent narrow-screen fix is a separate, undeployed component 0.4.4
+candidate. It changes one mobile grid track and the resource cache revision,
+with three-video regression coverage. After deploying its API asset, refresh
+the installed app's tools and portal MCP scan to use
+`ui://vmf/workspace/0.4.4.html`, then open a new workspace request. Retrying an
+old failed card may retain stale message metadata. The portable ZIP remains
+0.4.3; no package files, consent, CSP, migration or Modal deployment change.
 
 Deploy the API (including its rebuilt workspace asset) and frontend privacy
 page together before requesting a new plugin review. Refresh tool metadata so

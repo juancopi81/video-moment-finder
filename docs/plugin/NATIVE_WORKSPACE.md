@@ -1,6 +1,27 @@
 # Native workspace
 
-## Privacy candidate 0.4.3 (2026-11-12)
+## Narrow-screen component 0.4.4 candidate (2026-11-12)
+
+The real ChatGPT workspace opened after refreshing the installed app's tools
+and making a new workspace request. A previously failed conversation card did
+not recover on retry. Playback, seeking to 28.66 seconds, native text search
+and cached search reuse passed. This checks the developer app's live component,
+not every packaged skill.
+
+A 390-pixel host viewport exposed horizontal clipping with three library videos:
+the component's 375-pixel body expanded to 516 pixels. The mobile grid now uses
+`minmax(0,1fr)` so the library scrolls internally without widening the page.
+Regression cases reproduce the old failure and check three videos, search,
+seeking and learning controls at 375, 390 and 768 pixels.
+
+The candidate resource is `ui://vmf/workspace/0.4.4.html`; the portable plugin
+archive remains 0.4.3 because its files and skills are unchanged. Deploy the API
+bundle, refresh the installed app's tools and the portal's MCP scan, then make a
+new workspace request before rechecking the narrow layout. This layout patch
+is not deployed. A resized desktop browser does not establish native phone-app
+behavior. Consent, CSP, dependencies, tariffs and retention are unchanged.
+
+## Deployed privacy component 0.4.3 (2026-11-12)
 
 Model-visible library/status records retain source ID, filename or YouTube
 reference, type and status. They omit creation times, signed playback links and
@@ -14,7 +35,8 @@ Resource cache revision is `ui://vmf/workspace/0.4.3.html`. Consent remains
 version 4; there is no migration, new dependency, tariff or CSP change. The
 browser fixture now uses the same metadata-only thumbnail contract for both
 search modes. Desktop and 390/768-pixel fixture checks pass; actual mobile
-ChatGPT remains a separate host check. This candidate is not deployed.
+ChatGPT remains a separate host check. PR #103 deployed this component; PR #104
+subsequently deployed the corrected processor-retention policies.
 See [Privacy review](PRIVACY_REVIEW.md) for the complete response inventory.
 
 ## Historical 0.4.2 moment search update (2026-10-09)
