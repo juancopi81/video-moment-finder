@@ -105,6 +105,13 @@ webhook documentation](https://docs.lemonsqueezy.com/help/webhooks/example-paylo
 - Desktop plus 390/768-pixel fixture tests verify search thumbnails supplied
   only in metadata, playback seeking, learning controls, no horizontal overflow
   and clean chat handoffs. They do not establish actual ChatGPT mobile behavior.
+- Dependency audit found six affected workspace packages. Bundle analysis
+  confirmed Zod was shipped; the other five were unused server-side transitive
+  packages. Updated existing Zod to 4.6.7 and refreshed those lockfile entries;
+  `npm audit` then reported zero vulnerabilities. See the [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+- GitHub's moving `ubuntu-latest` image switched to 26.04, which the pinned
+  Playwright release cannot install on. The browser-test job now explicitly
+  uses supported Ubuntu 24.04; no test is bypassed.
 
 ## Validation
 

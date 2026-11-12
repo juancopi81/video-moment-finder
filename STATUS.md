@@ -119,6 +119,9 @@ with safe errors. Expanded the privacy policy to cover actual nested data,
 OAuth, analytics, website billing notifications and enabled Railway/Sentry
 processors, without inventing retention deadlines. Updated review cases and
 category, and removed inactive-trial promotion from the portable README.
+The submission audit also updated the shipped Zod dependency and five affected
+transitive lockfile entries (`npm audit`: zero vulnerabilities), and pinned the
+browser CI runner to Ubuntu 24.04 after its moving default broke installation.
 
 Full local validation passed: 769 backend tests, 34 isolated PostgreSQL cases
 skipped, 15 archive, four workspace core, 27 browser and seven frontend checks,
