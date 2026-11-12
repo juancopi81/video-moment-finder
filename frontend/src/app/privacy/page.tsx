@@ -121,8 +121,10 @@ export default function PrivacyPage() {
             corresponding video. Direct upload remains the primary supported ingest path.
           </p>
           <p className="mt-2">
-            Example images uploaded for search are processed transiently to generate a query
-            embedding and are not retained after the request completes.
+            Example images uploaded for search are used to generate a query embedding and
+            are not added to your video library or saved in VMF&apos;s database or object
+            storage. Our processing provider, Modal, can retain function inputs and outputs
+            for up to seven days, as explained below.
           </p>
         </section>
 
@@ -226,11 +228,30 @@ export default function PrivacyPage() {
             the associated authorization or accounting records.
           </p>
           <p className="mt-2">
-            Search images are not retained after their request completes. Prepared learning
-            views are not persisted by VMF; copies in chats or exported files remain subject
-            to the receiving app&apos;s retention and your own file controls. Infrastructure
-            providers retain their technical logs and backups according to their configured
-            service retention policies, separately from VMF&apos;s application records.
+            Modal processes search text, example search images, extracted video frames,
+            audio, and transcript text through remote functions. Modal&apos;s published
+            retention policy states that function inputs and outputs, including generated
+            embeddings and transcription results, can be retained for up to seven days
+            before deletion. App, function, and container metadata remains for the lifetime
+            of our Modal account. On our current Starter plan, Modal retains app and
+            container logs for one day.
+            See{" "}
+            <a href="https://modal.com/docs/guide/security" className="text-accent hover:underline">
+              Modal&apos;s security and privacy documentation
+            </a>
+            . This provider retention is separate from the copies of indexed video data
+            that VMF keeps for your library.
+          </p>
+          <p className="mt-2">
+            Prepared learning views are not persisted in VMF&apos;s database; copies in chats
+            or exported files remain subject to the receiving app&apos;s retention and your
+            own file controls. Our current Sentry Developer plan retains new error events
+            for thirty days; events received under a different plan keep the retention
+            period that applied when they were received. Infrastructure providers retain technical logs and backups
+            according to their configured service policies, separately from VMF&apos;s
+            application records. A provider&apos;s log viewing window does not necessarily
+            mean all copies are permanently deleted at its end. Deleting active application
+            records does not immediately remove copies in provider backups.
           </p>
         </section>
 

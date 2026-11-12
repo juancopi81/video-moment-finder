@@ -109,7 +109,29 @@ Authoring rules:
 | 2026-10-09 | Phase 7 | Final production search and grounded chat fallback | Search/source/text handoff passed; recording next | Original reference preview rendered locally without a debit. One image query returned five visual candidates; selected 40-second source playback and the retrieved zero-vector canvas thumbnail passed. Repeated image search reused cache. The constrained image-only handoff identified the timestamp but reported missing image evidence and declined to invent a question; image-only grounding remains unverified. Loading the transcript once and selecting its 28-second passage produced one correct tutor question then waited, with no extra chat retrieval. Read-only ledger confirms five of ten authorized existing units, balance 2,069, and unchanged videos/jobs/grants/trial state. Recording instructions now use this verified source-text fallback. Saved portal-release cases, recording, declarations, trial activation, submission and publication remain gates. |
 | 2026-10-09 | Phase 7 | Visual explanation and current-version recording preparation | Grounded retrieval and four restored views passed; recording next | A second no-retrieval image probe still reported missing image content; its root cause remains unknown. The normal Explain this moment action retrieved one permitted thumbnail at 40 seconds, correctly read its heading/footer and explained the zero-vector exception. Actual exported guide, six cards, computed Playground and five-slide presentation were reopened together with free render_learning_view in the current 0.4.2 workspace and match the saved originals exactly. Citation seek-to-36, card reveal/advance, pin/change/zero-vector computations and slide notes/navigation passed again; one tutor question waits at 36 seconds. Read-only ledger records six of ten approved existing units, balance 2,068 and no new indexing/grants/trial. Search caches and original reference are retained for recording. Cached-image-only grounding, recorded learner feedback, the actual walkthrough video and saved portal-release cases remain unverified; no public submission or publication. |
 
-## Plugin privacy resubmission candidate — November 12, 2026
+## Plugin privacy deployment and retention verification — November 12, 2026
+
+Merged PR #103 at `04242b8` after passing CI; Railway API/worker and Vercel
+production deployments succeeded. Ten public HTTP checks and connected-tool
+privacy/search/transcript/frame/view checks passed. Uploaded 0.4.3 to the
+existing submission as an unsubmitted draft and refreshed its MCP OAuth access
+for discovery. The developer authorized one synthetic fixture upload; transfer,
+minimized completion response and one 500-unit ledger charge were verified.
+Processing readiness and final portal checks are tracked in
+`docs/plugin/PRIVACY_REVIEW.md`.
+
+Verified provider plans and Vercel deployment-retention selectors. Modal's
+documented seven-day function input/output retention contradicts the old claim
+that search images vanish after the request; the policy follow-up distinguishes
+VMF library storage from processor retention, adds current Modal/Sentry windows,
+and avoids claiming dashboard visibility windows prove permanent deletion.
+Supabase's Free backup screen and conflicting official backup guidance do not
+establish a physical purge deadline. Object headers verify ordinary thirty-day
+expiry and the existing January 4 reviewer exception. No retention settings,
+grants or tariffs changed. Full local checks passed again with the same counts
+as the preparation checkpoint below.
+
+### Initial privacy candidate preparation — November 12, 2026
 
 Prepared 0.4.3 after the portal showed 0.4.2 Changes required/Not published.
 Allowlisted MCP records and nested matches; removed creation times, unnecessary
@@ -127,9 +149,9 @@ Full local validation passed: 769 backend tests, 34 isolated PostgreSQL cases
 skipped, 15 archive, four workspace core, 27 browser and seven frontend checks,
 lint and production build. The browser suite includes 390/768-pixel privacy
 flows; it does not replace actual mobile-host checks. Existing demo playback
-and anonymous reviewer-fixture checksum passed. API/policy deployment, exact
-saved-release tests, portal scans and developer attestations remain before
-resubmission. No production data, retention, balances or publication changed.
+and anonymous reviewer-fixture checksum passed. At this preparation checkpoint,
+deployment, saved-release tests, portal scans and attestations were still pending;
+the later deployment/retention checkpoint above supersedes that status.
 See `docs/plugin/PRIVACY_REVIEW.md` for evidence and the response inventory.
 
 ## Weekly acquisition experiment — October 26, 2026
