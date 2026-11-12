@@ -12,7 +12,7 @@ export default function TermsPage() {
       <h1 className="font-heading text-4xl font-bold">
         Terms of Service
       </h1>
-      <p className="mt-2 text-sm text-zinc-500">Last updated: October 2, 2026</p>
+      <p className="mt-2 text-sm text-zinc-500">Last updated: November 12, 2026</p>
 
       <div className="mt-8 space-y-8 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
         <section>
@@ -128,8 +128,9 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold text-foreground">7. Intellectual Property</h2>
           <p className="mt-2">
             You retain all rights to the videos you submit. We do not claim ownership of your
-            content. The Service, its design, code, and AI models are the intellectual property of
-            Video Moment Finder. The source code for Video Moment Finder is licensed under the GNU
+            content. VMF&apos;s original service design and code are the intellectual property of
+            Video Moment Finder. Third-party software and AI models remain subject to their
+            respective owners&apos; rights and licenses. The source code for Video Moment Finder is licensed under the GNU
             Affero General Public License v3.0 (AGPLv3), while these Terms continue to govern your
             use of our hosted service at videomomentfinder.com.
           </p>
@@ -140,8 +141,11 @@ export default function TermsPage() {
           <p className="mt-2">
             Videos you submit are processed to extract frames and generate embeddings for search.
             Processed data (embeddings and thumbnails) is stored to enable search functionality.
-            Example images submitted for search are processed transiently and are not retained
-            after the request. See our Privacy Policy for details on data handling.
+            Example images submitted for search are not saved in VMF&apos;s library, database,
+            or object storage. Modal can retain function inputs and outputs for up to seven
+            days. See our{" "}
+            <a href="/privacy" className="text-accent hover:underline">Privacy Policy</a>
+            {" "}for processor retention and other data-handling details.
           </p>
         </section>
 

@@ -31,7 +31,7 @@ available; source material itself can contain personal information.
 | `upload_video` start | New video ID, temporary PUT URL, method/expiry, next step and instruction to omit Authorization | A necessary exception: the client needs this capability to transfer the explicitly requested file. No account ID or internal storage-key field. |
 | `upload_video` complete | Action/video ID and minimal completed video record | No signed URL, record-creation time or stored exception. |
 | `search_video` | Video ID/status and matches containing timestamp, similarity score, visual/spoken source and requested transcript excerpt | Signed thumbnail URLs only in `_meta.vmf.search_thumbnails`; no source playback URL or nested diagnostic fields. |
-| `search_video_image` | Same allowlisted match contract; tool is workspace-only | Same metadata-only thumbnails. Query image is transient, not added to the library. |
+| `search_video_image` | Same allowlisted match contract; tool is workspace-only | Same metadata-only thumbnails. Query image is not added to VMF's library; processor retention below still applies. |
 | `get_transcript` | Requested source ID, language and timestamped transcript segments | Explicit transcript projection; no account, authorization or processing records. |
 | `get_frames` | Source ID, resolution/fallback, requested/actual times, image-index mapping and actual images | Failed frames use a fixed message. No ffmpeg exception, filesystem path or signed URL in errors. |
 
@@ -131,7 +131,10 @@ webhook documentation](https://docs.lemonsqueezy.com/help/webhooks/example-paylo
   app bindings. It validates the actual ZIP but does not replace a portal scan.
 - Developer, support, privacy and terms pages are reachable. PR #103's policy
   is deployed; the processor-retention follow-up corrects its remaining
-  search-image retention claim.
+  search-image retention claim in both Privacy and Terms. The Terms also stop
+  claiming ownership of third-party AI models: the production code uses
+  [Qwen's model](https://huggingface.co/Qwen/Qwen3-VL-Embedding-2B) and
+  [OpenAI Whisper](https://github.com/openai/whisper/blob/main/LICENSE).
 - The existing [0.4.2 demo](https://youtu.be/0fsteByQf9g) loads and plays; duration
   is approximately 153 seconds. This was checked in the signed-in browser, not
   an anonymous session. It remains an earlier-version walkthrough, not evidence

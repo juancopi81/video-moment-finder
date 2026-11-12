@@ -247,7 +247,8 @@ export default function PrivacyPage() {
             or exported files remain subject to the receiving app&apos;s retention and your
             own file controls. Our current Sentry Developer plan retains new error events
             for thirty days; events received under a different plan keep the retention
-            period that applied when they were received. Infrastructure providers retain technical logs and backups
+            period that applied when they were received. Infrastructure providers retain
+            technical logs and backups
             according to their configured service policies, separately from VMF&apos;s
             application records. A provider&apos;s log viewing window does not necessarily
             mean all copies are permanently deleted at its end. Deleting active application
