@@ -182,11 +182,17 @@ export default function HomeContent() {
         request.send(uploadFile);
       });
 
+      // The storage transfer can outlast the token used to initialize it.
+      const completionToken = await getToken({ skipCache: true });
+      if (!completionToken) {
+        throw new Error("Please sign in to process a video.");
+      }
+
       const completeResponse = await fetch(`${API_URL}/api/v1/videos/upload/complete`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${completionToken}`,
         },
         body: JSON.stringify({
           video_id: initData.video_id,

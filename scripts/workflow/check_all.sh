@@ -23,7 +23,7 @@ echo "[check_all] Running frontend lint and build..."
 (
   cd "$ROOT_DIR/frontend"
   npm run lint
-  node tests/account-and-source-links.test.mjs
+  node --test tests/*.test.mjs
   npm run build
 )
 
